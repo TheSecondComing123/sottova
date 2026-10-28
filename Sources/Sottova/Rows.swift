@@ -188,7 +188,7 @@ struct AlbumTile: View {
                 Text(album.title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 Text([album.artist, album.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)

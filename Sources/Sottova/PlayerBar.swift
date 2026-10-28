@@ -61,28 +61,22 @@ struct PlayerBar: View {
                 .saturation(resting ? 0 : 1)
                 .animation(Theme.ambient, value: resting)
             VStack(alignment: .leading, spacing: 3) {
+                // in a gap the last piece stays, dimmed: the dots under the transport already say it's resting
                 Group {
-                    if let song, !resting {
+                    if let song {
                         LinkText(text: song.work) { navigate(.album(song.albumID)) }
                     } else {
-                        Text(resting ? "resting" : "nothing playing")
+                        Text("nothing playing")
                     }
                 }
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.text)
+                .foregroundStyle(resting ? Theme.faint : Theme.text)
                 .lineLimit(1)
 
-                TimelineView(.periodic(from: .now, by: 15)) { context in
-                    Group {
-                        if let song, !resting {
-                            LinkText(text: song.artist) { navigate(.artist(song.artist)) }
-                        } else {
-                            Text(controller.subline(at: context.date))
-                        }
-                    }
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.muted)
-                    .lineLimit(1)
+                if let song {
+                    LinkText(text: song.artist) { navigate(.artist(song.artist)) }
+                        .font(.system(size: 13))
+                        .foregroundStyle(resting ? Theme.faint : Theme.muted)
                 }
             }
             .animation(Theme.ambient, value: resting)
@@ -122,8 +116,8 @@ struct PlayerBar: View {
     }
 }
 
-/// Elapsed and total time with a thin line between. Once a second is enough: the label only changes that often,
-/// and animating the width would relayout at display rate for the whole track.
+/// Elapsed and total time around the track's fade shape, so every page shows the fades. During a gap the times
+/// step back and the shape becomes breathing dots on a bare line. The labels change once a second, so that's their rate.
 private struct ProgressLine: View {
     @Environment(Controller.self) private var controller
     @Environment(\.windowVisible) private var visible
@@ -131,44 +125,16 @@ private struct ProgressLine: View {
     var body: some View {
         let resting = controller.status == .resting
         TimelineView(.periodic(from: .now, by: controller.status == .playing && visible ? 1 : 60)) { _ in
-            ZStack {
-                if resting {
-                    HStack(spacing: 10) {
-                        line(fill: 0)
-                        Text("resting")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Theme.faint)
-                            .fixedSize()
-                        line(fill: 0)
-                    }
-                    .transition(.opacity)
-                } else {
-                    let track = controller.track
-                    let elapsed = track?.elapsed ?? 0
-                    let duration = track?.duration ?? 0
-                    HStack(spacing: 10) {
-                        time(elapsed)
-                        line(fill: duration > 0 ? min(elapsed / duration, 1) : 0)
-                        time(duration)
-                    }
-                    .transition(.opacity)
-                }
+            let track = controller.track
+            HStack(spacing: 10) {
+                time(track?.elapsed ?? 0)
+                Timeline(controller: controller, compact: true, visible: visible)
+                    .frame(height: 18)
+                time(track?.duration ?? 0)
             }
         }
-        .frame(height: 14)
         .opacity(controller.status == .idle ? 0 : 1)
         .animation(Theme.ambient, value: resting)
-    }
-
-    private func line(fill: Double) -> some View {
-        RoundedRectangle(cornerRadius: 2)
-            .fill(Theme.text.opacity(0.15))
-            .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.text)
-                    .scaleEffect(x: fill, anchor: .leading)
-            }
-            .frame(height: 4)
     }
 
     private func time(_ seconds: Double) -> some View {
@@ -177,6 +143,7 @@ private struct ProgressLine: View {
             .monospacedDigit()
             .foregroundStyle(Theme.faint)
             .frame(width: 36)
+            .opacity(controller.status == .resting ? 0 : 1)
     }
 }
 

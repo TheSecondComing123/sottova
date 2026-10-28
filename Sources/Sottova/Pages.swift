@@ -137,9 +137,8 @@ private struct Hero: View {
                     .lineLimit(1)
                 }
                 if !idle {
-                    Timeline(controller: controller, bars: 48, visible: visible)
-                        .frame(height: 56)
-                        .frame(maxWidth: 560)
+                    Timeline(controller: controller, visible: visible)
+                        .frame(height: 44)
                         .padding(.top, 8)
                         .transition(.opacity)
                 } else if controller.tracks.isEmpty {
@@ -239,10 +238,11 @@ private struct RecentTile: View {
     var body: some View {
         Tile(artwork: song.artwork, coverTitle: song.album, coverSubtitle: song.albumArtist, play: { controller.play([song]) }, open: { navigate(.album(song.albumID)) }) {
             VStack(alignment: .leading, spacing: 3) {
+                // a shelf is a lazy row sized from its first tiles; equal heights keep a later cover from being squeezed
                 Text(song.work)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                    .lineLimit(2)
+                    .lineLimit(2, reservesSpace: true)
                 Text(song.artist)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
