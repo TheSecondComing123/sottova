@@ -63,7 +63,7 @@ struct PlayerBar: View {
             VStack(alignment: .leading, spacing: 3) {
                 Group {
                     if let song, !resting {
-                        LinkText(text: song.title) { navigate(.album(song.albumID)) }
+                        LinkText(text: song.work) { navigate(.album(song.albumID)) }
                     } else {
                         Text(resting ? "resting" : "nothing playing")
                     }

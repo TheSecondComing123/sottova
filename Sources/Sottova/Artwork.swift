@@ -4,6 +4,7 @@ import SottovaCore
 
 /// Album art from the artwork cache, decoded off the main thread at the size it's drawn.
 /// A cached image appears on the first frame with no fade, so scrolling back never re-fades tiles.
+/// Without art, a cover large enough to read is set from its title instead; smaller ones stay an outlined square.
 struct Artwork: View {
     @MainActor static var store: ArtworkStore?
 
@@ -13,14 +14,18 @@ struct Artwork: View {
     var radius: CGFloat = 6
     var circle = false
     var outlined = false
+    var title: String?
+    var subtitle: String?
     @State private var image: CGImage?
 
-    init(key: String?, size: CGFloat? = nil, radius: CGFloat = 6, circle: Bool = false, outlined: Bool = false) {
+    init(key: String?, size: CGFloat? = nil, radius: CGFloat = 6, circle: Bool = false, outlined: Bool = false, title: String? = nil, subtitle: String? = nil) {
         self.key = key
         self.size = size
         self.radius = radius
         self.circle = circle
         self.outlined = outlined
+        self.title = title
+        self.subtitle = subtitle
         _image = State(initialValue: key.flatMap { Self.store?.cached(for: $0, maxPixel: Self.pixels(for: size)) })
     }
 
@@ -31,7 +36,7 @@ struct Artwork: View {
     var body: some View {
         let shape = circle ? AnyShape(.circle) : AnyShape(.rect(cornerRadius: radius))
         Rectangle()
-            .fill(Theme.hover)
+            .fill(image == nil ? Self.ground(for: title) : Theme.hover)
             .overlay {
                 if let image {
                     Image(decorative: image, scale: 2)
@@ -40,17 +45,15 @@ struct Artwork: View {
                         // a new image crossfades over the old one instead of flashing the placeholder
                         .id(ObjectIdentifier(image))
                         .transition(.opacity)
-                } else {
-                    Image(systemName: "music.note")
-                        .font(.system(size: (size ?? 120) * 0.3, weight: .light))
-                        .foregroundStyle(Theme.decor)
+                } else if let title, (size ?? .infinity) >= 56 {
+                    TypeCover(title: title, subtitle: subtitle, circle: circle)
                 }
             }
             .frame(width: size, height: size)
             .aspectRatio(1, contentMode: .fit)
             .clipShape(shape)
             .overlay {
-                if outlined {
+                if outlined || image == nil {
                     // keeps a black cover from dissolving into the black page
                     shape.stroke(Theme.border, lineWidth: 1)
                 }
@@ -71,11 +74,58 @@ struct Artwork: View {
             }
     }
 
+    /// A stable pick: String.hashValue changes every launch.
+    private static func ground(for title: String?) -> Color {
+        guard let title else { return Theme.hover }
+        let hash = title.unicodeScalars.reduce(UInt32(2166136261)) { ($0 ^ $1.value) &* 16777619 }
+        return Theme.covers[Int(hash % UInt32(Theme.covers.count))]
+    }
+
     /// Runs off the main actor and is skipped once the cell scrolls away, so a fast fling doesn't queue hundreds of decodes.
     @concurrent
     nonisolated private static func decode(_ store: ArtworkStore, _ key: String, _ pixels: Int) async -> CGImage? {
         guard !Task.isCancelled else { return nil }
         return store.image(for: key, maxPixel: pixels)
+    }
+}
+
+/// A cover set from type alone, low and to the left like a record sleeve with nothing to show but its name.
+private struct TypeCover: View {
+    let title: String
+    let subtitle: String?
+    let circle: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = geo.size.width
+            if circle {
+                // the name is already the caption under an artist's circle, so the circle carries initials
+                Text(title.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined())
+                    .font(.system(size: side * 0.3, weight: .light))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: side, height: side)
+            } else {
+                cover(side: side)
+            }
+        }
+    }
+
+    private func cover(side: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: side * 0.025) {
+            Text(title)
+                .font(.system(size: side * 0.105, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(Theme.text)
+                .lineLimit(3)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: side * 0.06))
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+            }
+        }
+        .padding(side * 0.08)
+        .frame(width: side, height: side, alignment: .bottomLeading)
     }
 }
 

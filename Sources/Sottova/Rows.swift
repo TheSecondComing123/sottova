@@ -107,7 +107,8 @@ private struct Title: View {
 
     var body: some View {
         let isCurrent = controller.current?.id == song.id && controller.status != .idle
-        Text(song.title)
+        // the catalog number trails the work in a quieter voice, as on a concert program
+        Text("\(song.work)\(Text(song.detail.map { "  \($0)" } ?? "").font(.system(size: 13)).foregroundStyle(Theme.faint))")
             .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
             .foregroundStyle(Theme.text)
             .lineLimit(1)
@@ -147,6 +148,8 @@ struct SongColumns: View {
 struct Tile<Label: View>: View {
     let artwork: String?
     var circle = false
+    var coverTitle: String?
+    var coverSubtitle: String?
     let play: () -> Void
     let open: () -> Void
     @ViewBuilder let label: Label
@@ -155,7 +158,7 @@ struct Tile<Label: View>: View {
 
     var body: some View {
         VStack(alignment: circle ? .center : .leading, spacing: 10) {
-            Artwork(key: artwork, radius: 8, circle: circle)
+            Artwork(key: artwork, radius: 8, circle: circle, title: coverTitle, subtitle: coverSubtitle)
                 .overlay(alignment: .bottomTrailing) {
                     PlayCircle(size: 44, action: play)
                         .padding(circle ? 4 : 10)
@@ -180,12 +183,12 @@ struct AlbumTile: View {
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        Tile(artwork: album.artwork, play: { controller.play(album.songs) }, open: { navigate(.album(album.id)) }) {
+        Tile(artwork: album.artwork, coverTitle: album.title, coverSubtitle: album.artist, play: { controller.play(album.songs) }, open: { navigate(.album(album.id)) }) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(album.title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Text([album.artist, album.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
@@ -206,7 +209,7 @@ struct ArtistTile: View {
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        Tile(artwork: artist.artwork, circle: true, play: { controller.play(artist.songs.shuffled()) }, open: { navigate(.artist(artist.name)) }) {
+        Tile(artwork: artist.artwork, circle: true, coverTitle: artist.name, play: { controller.play(artist.songs.shuffled()) }, open: { navigate(.artist(artist.name)) }) {
             VStack(spacing: 3) {
                 Text(artist.name)
                     .font(.system(size: 14, weight: .semibold))

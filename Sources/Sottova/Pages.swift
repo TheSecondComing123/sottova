@@ -34,26 +34,38 @@ private struct Shelf<Item: Identifiable, Cell: View>: View {
         .scrollIndicators(.never)
         .padding(.horizontal, -28)
     }
+
+    /// Whether `count` tiles run past a page `width` wide, so "Show All" only appears when some are out of sight.
+    /// 188 pt cells 4 apart, 18 pt insets, and the shelf bleeds 28 pt past the page on each side.
+    static func overflows(_ count: Int, in width: CGFloat) -> Bool {
+        36 + CGFloat(count) * 192 - 4 > width + 56
+    }
 }
 
 struct HomePage: View {
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
+    @State private var width: CGFloat = 0
 
     var body: some View {
+        // the hero already shows what's playing
+        let playing = controller.status == .idle ? nil : controller.current?.id
+        let recent = controller.recent.filter { $0.id != playing }
+        let albums = controller.catalog.albums
         PageScroll {
             Hero()
                 .padding(.bottom, 44)
-            if controller.recent.count >= 3 {
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            if recent.count >= 3 {
                 SectionTitle(title: "Recently Played")
                     .padding(.bottom, 8)
-                Shelf(items: controller.recent) { RecentTile(song: $0) }
+                Shelf(items: recent) { RecentTile(song: $0) }
                     .padding(.bottom, 32)
             }
-            if !controller.catalog.albums.isEmpty {
-                SectionTitle(title: "Albums", action: ("Show All", { navigate(.albums) }))
+            if !albums.isEmpty {
+                SectionTitle(title: "Albums", action: Shelf<Album, AlbumTile>.overflows(albums.count, in: width) ? ("Show All", { navigate(.albums) }) : nil)
                     .padding(.bottom, 8)
-                Shelf(items: Array(controller.catalog.albums.prefix(24))) { AlbumTile(album: $0) }
+                Shelf(items: Array(albums.prefix(24))) { AlbumTile(album: $0) }
             }
         }
     }
@@ -76,7 +88,8 @@ private struct Hero: View {
                 } else {
                     TimelineView(.periodic(from: .now, by: controller.status == .playing && visible ? 0.1 : 60)) { _ in
                         let gain = level
-                        Artwork(key: controller.current?.artwork, size: 232, radius: 10, outlined: true)
+                        Artwork(key: controller.current?.artwork, size: 232, radius: 10, outlined: true,
+                                title: controller.current?.album, subtitle: controller.current?.albumArtist)
                             .saturation(gain)
                             .opacity(0.5 + 0.5 * gain)
                             .animation(.linear(duration: 0.1), value: gain)
@@ -91,17 +104,26 @@ private struct Hero: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.muted)
                 }
-                Text(heading)
-                    .font(.system(size: 48, weight: resting ? .bold : .heavy))
-                    .tracking(-1.2)
-                    .foregroundStyle(resting ? Theme.faint : Theme.text)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.6)
-                    .contentTransition(.opacity)
+                // one size per title, the largest that fits on a line, instead of a scale factor that sizes every track differently
+                ViewThatFits(in: .horizontal) {
+                    ForEach([56, 44], id: \.self) { size in
+                        headingText(size: size).lineLimit(1)
+                    }
+                    headingText(size: 36).lineLimit(2)
+                }
+                .foregroundStyle(resting ? Theme.faint : Theme.text)
+                .contentTransition(.opacity)
+                if let detail = controller.current?.detail, !idle, !resting {
+                    Text(detail)
+                        .font(.system(size: 20, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(1)
+                }
                 if let song = controller.current, !idle {
                     Group {
                         if resting {
-                            Text("after \(song.title)")
+                            Text("after \(song.work)")
                         } else {
                             HStack(spacing: 6) {
                                 LinkText(text: song.artist) { navigate(.artist(song.artist)) }
@@ -148,8 +170,14 @@ private struct Hero: View {
         switch controller.status {
         case .idle: controller.tracks.isEmpty ? "Your music, with room to breathe" : Format.count(controller.tracks.count, "song")
         case .resting: "Resting"
-        case .playing, .paused: controller.current?.title ?? controller.title ?? "Starting"
+        case .playing, .paused: controller.current?.work ?? controller.title ?? "Starting"
         }
+    }
+
+    private func headingText(size: CGFloat) -> some View {
+        Text(heading)
+            .font(.system(size: size, weight: controller.status == .resting ? .semibold : .bold))
+            .tracking(-size * 0.022)
     }
 
     private func eyebrow(at date: Date) -> String {
@@ -158,7 +186,10 @@ private struct Hero: View {
             guard !controller.tracks.isEmpty else { return "sottova plays your library with silence between songs" }
             let total = controller.catalog.songs.reduce(0) { $0 + $1.duration }
             return "\(Format.length(total)) of music, \(Format.gaps(controller.settings)) between"
-        case .playing: return "now playing"
+        case .playing:
+            // concert-program order: composer, work, performer
+            guard let song = controller.current, song.albumArtist != song.artist else { return "now playing" }
+            return song.albumArtist
         case .paused: return "paused"
         case .resting: return controller.subline(at: date)
         }
@@ -179,7 +210,7 @@ private struct Mosaic: View {
     let albums: [Album]
 
     var body: some View {
-        let picks = albums.isEmpty ? [] : (0..<4).map { albums[$0 * albums.count / 4].artwork }
+        let picks = albums.isEmpty ? [] : (0..<4).map { albums[$0 * albums.count / 4] }
         Grid(horizontalSpacing: 2, verticalSpacing: 2) {
             GridRow {
                 cover(picks, 0)
@@ -194,8 +225,9 @@ private struct Mosaic: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
     }
 
-    private func cover(_ picks: [String?], _ i: Int) -> some View {
-        Artwork(key: picks.indices.contains(i) ? picks[i] : nil, size: 115, radius: 0)
+    private func cover(_ picks: [Album], _ i: Int) -> some View {
+        let album = picks.indices.contains(i) ? picks[i] : nil
+        return Artwork(key: album?.artwork, size: 115, radius: 0, title: album?.title)
     }
 }
 
@@ -205,12 +237,12 @@ private struct RecentTile: View {
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        Tile(artwork: song.artwork, play: { controller.play([song]) }, open: { navigate(.album(song.albumID)) }) {
+        Tile(artwork: song.artwork, coverTitle: song.album, coverSubtitle: song.albumArtist, play: { controller.play([song]) }, open: { navigate(.album(song.albumID)) }) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(song.title)
+                Text(song.work)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Text(song.artist)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
@@ -239,11 +271,13 @@ struct SongsPage: View {
     var body: some View {
         let songs = controller.catalog.songs
         PageScroll {
+            let art = songs.contains { $0.artwork != nil }
+            let albums = Set(songs.map(\.albumID)).count > 1
             PageHeader(title: "Songs", detail: "\(Format.count(songs.count, "song")), \(Format.length(songs.reduce(0) { $0 + $1.duration }))", songs: songs)
-            SongColumns()
+            SongColumns(showsArt: art, showsAlbum: albums)
             LazyVStack(spacing: 0) {
                 ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                    SongRow(song: song, number: index + 1) { controller.play(songs, from: index) }
+                    SongRow(song: song, number: index + 1, showsArt: art, showsAlbum: albums) { controller.play(songs, from: index) }
                 }
             }
         }
@@ -274,7 +308,7 @@ struct AlbumPage: View {
         if let album = controller.catalog.albumsByID[id] {
             PageScroll {
                 HStack(alignment: .bottom, spacing: 30) {
-                    Artwork(key: album.artwork, size: 232, radius: 10, outlined: true)
+                    Artwork(key: album.artwork, size: 232, radius: 10, outlined: true, title: album.title, subtitle: album.artist)
                     VStack(alignment: .leading, spacing: 10) {
                         Text("album")
                             .font(.system(size: 13, weight: .medium))
@@ -338,9 +372,10 @@ struct ArtistPage: View {
     var body: some View {
         if let artist = controller.catalog.artistsByName[name] {
             let songs = artist.songs
+            let art = songs.contains { $0.artwork != nil }
             PageScroll {
                 HStack(alignment: .bottom, spacing: 30) {
-                    Artwork(key: artist.artwork, size: 200, circle: true, outlined: true)
+                    Artwork(key: artist.artwork, size: 200, circle: true, outlined: true, title: artist.name)
                     VStack(alignment: .leading, spacing: 10) {
                         Text("artist")
                             .font(.system(size: 13, weight: .medium))
@@ -370,7 +405,7 @@ struct ArtistPage: View {
                     .padding(.bottom, 8)
                 LazyVStack(spacing: 0) {
                     ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                        SongRow(song: song, number: index + 1) { controller.play(songs, from: index) }
+                        SongRow(song: song, number: index + 1, showsArt: art) { controller.play(songs, from: index) }
                     }
                 }
             }
@@ -396,11 +431,12 @@ struct SearchPage: View {
             } else {
                 PageScroll {
                     if !songs.isEmpty {
+                        let art = songs.prefix(8).contains { $0.artwork != nil }
                         SectionTitle(title: "Songs")
                             .padding(.bottom, 8)
                         LazyVStack(spacing: 0) {
                             ForEach(Array(songs.prefix(8).enumerated()), id: \.element.id) { index, song in
-                                SongRow(song: song, number: index + 1) { controller.play(songs, from: index) }
+                                SongRow(song: song, number: index + 1, showsArt: art) { controller.play(songs, from: index) }
                             }
                         }
                         .padding(.bottom, 32)

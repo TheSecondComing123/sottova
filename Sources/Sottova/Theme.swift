@@ -14,6 +14,8 @@ enum Theme {
     static let faint = dynamic(0x7A7A7A, 0x6E6E6E)
     /// Not for text: timeline dots, unplayed bars, placeholders.
     static let decor = dynamic(0x5C5C5C, 0xA5A5A5)
+    /// Grounds for covers drawn from type, picked per album so a shelf of them isn't one flat tone.
+    static let covers = [dynamic(0x141414, 0xFFFFFF), dynamic(0x1A1A1A, 0xF0F0F0), dynamic(0x202020, 0xE6E6E6)]
 
     static let quick = Animation.easeOut(duration: 0.15)
     static let settle = Animation.spring(duration: 0.35, bounce: 0.12)
