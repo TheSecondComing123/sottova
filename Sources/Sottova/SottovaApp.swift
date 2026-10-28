@@ -10,6 +10,7 @@ struct SottovaApp: App {
     init() {
         let controller = controller
         AppDelegate.controller = controller
+        Artwork.store = controller.artwork
         // M1 kept a single folder path in defaults
         if let path = UserDefaults.standard.string(forKey: "folder") {
             controller.addFolders([URL(filePath: path)])
@@ -26,22 +27,22 @@ struct SottovaApp: App {
     }
 
     var body: some Scene {
+        Window("Sottova", id: "main") {
+            MainWindow()
+                .environment(controller)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1240, height: 800)
+        // otherwise every sottova:// link opens another window
+        .handlesExternalEvents(matching: [])
+
         MenuBarExtra {
             Panel(controller: controller)
+                .environment(controller)
         } label: {
             Image(systemName: controller.status.symbol)
         }
         .menuBarExtraStyle(.window)
-
-        Window("sottova", id: "now") {
-            NowWindow(controller: controller)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 620, height: 380)
-        .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
-        // otherwise every sottova:// link opens this window
-        .handlesExternalEvents(matching: [])
 
         Settings {
             SettingsView(controller: controller)

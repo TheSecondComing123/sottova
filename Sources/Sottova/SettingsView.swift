@@ -12,9 +12,6 @@ struct SettingsView: View {
             Tab("General", systemImage: "gearshape") { GeneralTab(controller: controller) }
         }
         .frame(width: 480, height: 400)
-        .tint(Mocha.accent(for: controller.title))
-        .onAppear { Dock.windowOpened(identifier: "Settings") }
-        .onDisappear { Dock.windowClosed() }
     }
 }
 

@@ -65,9 +65,9 @@ extension Controller {
 
     var libraryLine: String {
         guard !folders.isEmpty else { return "no folder yet" }
-        var parts = ["\(tracks.count) tracks"]
+        var parts = [Format.count(tracks.count, "song")]
         if pendingAnalysis > 0 {
-            parts.append("measuring loudness, \(pendingAnalysis) left")
+            parts.append("reading \(pendingAnalysis) more")
         }
         if !skippedFiles.isEmpty {
             parts.append("\(skippedFiles.count) skipped, format not supported")

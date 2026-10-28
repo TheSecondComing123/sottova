@@ -10,29 +10,29 @@ struct Panel: View {
     @State private var visible = false
 
     var body: some View {
-        let color = Mocha.accent(for: controller.title)
+        let color = Theme.text
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(controller.headline)
                     .font(.custom("Comic Mono", size: 17).bold())
-                    .foregroundStyle(controller.status == .playing ? color : Mocha.text)
+                    .foregroundStyle(controller.status == .playing ? color : Theme.text)
                     .lineLimit(1)
                 TimelineView(.periodic(from: .now, by: 15)) { context in
                     Text(controller.subline(at: context.date))
                         .font(.callout)
-                        .foregroundStyle(Mocha.subtext0)
+                        .foregroundStyle(Theme.muted)
                 }
             }
 
             Timeline(controller: controller, visible: visible)
                 .frame(height: 44)
                 .padding(12)
-                .glassEffect(.regular.tint(color.opacity(0.14)), in: .rect(cornerRadius: 14))
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
 
             if let problem = controller.problem {
                 Text(problem)
                     .font(.callout)
-                    .foregroundStyle(Color(hex: 0xF38BA8))
+                    .foregroundStyle(Color.red)
             }
 
             HStack {
@@ -44,7 +44,7 @@ struct Panel: View {
                 }
                 Spacer()
                 Menu {
-                    Button("open window") { openWindow(id: "now") }
+                    Button("open sottova") { openWindow(id: "main"); NSApp.activate() }
                     Divider()
                     Button("add folder…", action: addFolders)
                     if !controller.folders.isEmpty {
@@ -74,7 +74,7 @@ struct Panel: View {
 
             Text(controller.libraryLine)
                 .font(.caption)
-                .foregroundStyle(Mocha.overlay0)
+                .foregroundStyle(Theme.faint)
         }
         .padding(16)
         .frame(width: 320)
@@ -90,16 +90,16 @@ struct Panel: View {
                 withAnimation(.spring(duration: 0.35, bounce: 0.1)) { showsGap.toggle() }
             } label: {
                 HStack(spacing: 8) {
-                    Text(controller.settings.name).foregroundStyle(Mocha.subtext0)
+                    Text(controller.settings.name).foregroundStyle(Theme.muted)
                     Text(controller.settings.crossfade
                         ? "crossfade \(Int(controller.settings.crossfadeSec)) s"
                         : "\(duration(controller.settings.gapRange.lowerBound)) – \(duration(controller.settings.gapRange.upperBound))")
                         .monospacedDigit()
-                        .foregroundStyle(Mocha.text)
+                        .foregroundStyle(Theme.text)
                     Spacer()
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Mocha.overlay0)
+                        .foregroundStyle(Theme.faint)
                         .rotationEffect(.degrees(showsGap ? 180 : 0))
                 }
                 .contentShape(.rect)
@@ -132,8 +132,8 @@ struct Panel: View {
                     }
                 }
                 .font(.callout)
-                .foregroundStyle(Mocha.subtext0)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .foregroundStyle(Theme.muted)
+                .transition(.opacity)
             }
         }
     }
