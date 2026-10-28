@@ -205,9 +205,10 @@ private struct Hero: View {
             let songs = controller.catalog.songs
             return "\(Format.count(songs.count, "song")) · \(Format.length(songs.reduce(0) { $0 + $1.duration })) · \(Format.range(controller.settings)) between"
         case .playing:
-            // concert-program order: composer, work, performer
-            guard let song = controller.current, song.albumArtist != song.artist else { return "now playing" }
-            return song.albumArtist
+            // concert-program order: composer, work, performer. Without a composer tag, classical files carry the
+            // composer as album artist
+            guard let song = controller.current else { return "now playing" }
+            return song.composer ?? (song.albumArtist != song.artist ? song.albumArtist : "now playing")
         case .paused: return "paused"
         case .resting: return controller.subline(at: date)
         }

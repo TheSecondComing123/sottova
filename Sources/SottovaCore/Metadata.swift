@@ -26,6 +26,7 @@ enum Metadata {
         meta.artist = await string(.commonIdentifierArtist)
         meta.album = await string(.commonIdentifierAlbumName)
         meta.albumArtist = await string(.id3MetadataBand, .iTunesMetadataAlbumArtist, .vorbis("ALBUMARTIST"))
+        meta.composer = await string(.id3MetadataComposer, .iTunesMetadataComposer, .vorbis("COMPOSER"))
         meta.trackNumber = await number(.id3MetadataTrackNumber, .iTunesMetadataTrackNumber, .vorbis("TRACKNUMBER"))
         meta.discNumber = await number(.id3MetadataPartOfASet, .iTunesMetadataDiscNumber, .vorbis("DISCNUMBER"))
         // the common creation date is ID3's TDAT (day and month), and TYER, TDRC and ©day have no common key

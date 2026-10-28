@@ -59,6 +59,7 @@ struct MetadataTests {
             (.iTunesMetadataArtist, "Artist" as NSString, nil),
             (.iTunesMetadataAlbum, "Album" as NSString, nil),
             (.iTunesMetadataAlbumArtist, "Album Artist" as NSString, nil),
+            (.iTunesMetadataComposer, "Composer" as NSString, nil),
             (.iTunesMetadataTrackNumber, Data([0, 0, 0, 3, 0, 12, 0, 0]) as NSData, kCMMetadataBaseDataType_RawData),
             (.iTunesMetadataReleaseDate, "2019-05-01" as NSString, nil),
             (.iTunesMetadataCoverArt, cover as NSData, kCMMetadataBaseDataType_JPEG),
@@ -80,6 +81,7 @@ struct MetadataTests {
         #expect(meta.artist == "Artist")
         #expect(meta.album == "Album")
         #expect(meta.albumArtist == "Album Artist")
+        #expect(meta.composer == "Composer")
         #expect(meta.trackNumber == 3)
         #expect(meta.year == 2019)
         #expect(abs(meta.duration - 1) < 0.05)

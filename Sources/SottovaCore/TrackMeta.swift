@@ -5,6 +5,8 @@ public struct TrackMeta: Codable, Equatable, Sendable {
     public var artist: String?
     public var album: String?
     public var albumArtist: String?
+    /// Lets a playlist of many composers stay one album: the album artist can't carry the composer there.
+    public var composer: String?
     public var trackNumber: Int?
     public var discNumber: Int?
     public var year: Int?

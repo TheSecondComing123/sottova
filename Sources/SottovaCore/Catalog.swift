@@ -12,6 +12,7 @@ public struct Song: Identifiable, Hashable, Sendable {
     public let album: String
     public let albumID: String
     public let albumArtist: String
+    public let composer: String?
     public let trackNumber: Int?
     public let discNumber: Int?
     public let year: Int?
@@ -107,8 +108,9 @@ public struct Catalog: Sendable {
         let (work, detail) = splitWork(title)
         return Song(
             id: path, title: title, work: work, detail: detail, artist: artist, album: album, albumID: albumID, albumArtist: albumArtist,
+            composer: meta?.composer,
             trackNumber: meta?.trackNumber, discNumber: meta?.discNumber, year: meta?.year, duration: meta?.duration ?? 0,
-            artwork: meta?.artwork, searchKey: "\(title) \(artist) \(albumArtist) \(album)".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            artwork: meta?.artwork, searchKey: "\(title) \(artist) \(albumArtist) \(meta?.composer ?? "") \(album)".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
         )
     }
 
