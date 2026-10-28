@@ -31,11 +31,8 @@ struct PlayerBar: View {
                     .frame(minWidth: 220, maxWidth: 440)
             }
             Spacer(minLength: 12)
-            HStack(spacing: 10) {
-                presetMenu
-                Volume()
-            }
-            .frame(minWidth: 150, maxWidth: 280, alignment: .trailing)
+            Volume()
+                .frame(minWidth: 150, maxWidth: 280, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .frame(height: 84)
@@ -45,7 +42,7 @@ struct PlayerBar: View {
                 RoundedRectangle(cornerRadius: 10).fill(.ultraThinMaterial)
                 RoundedRectangle(cornerRadius: 10).fill(Theme.raised.opacity(0.85))
             } else {
-                RoundedRectangle(cornerRadius: 10).fill(Theme.raised.opacity(0.94))
+                RoundedRectangle(cornerRadius: 10).fill(Theme.raised)
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
@@ -82,38 +79,6 @@ struct PlayerBar: View {
             .animation(Theme.ambient, value: resting)
         }
     }
-
-    private var presetMenu: some View {
-        Menu {
-            ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
-                Button {
-                    controller.apply(preset)
-                } label: {
-                    if preset.name == controller.settings.name {
-                        Label(preset.name, systemImage: "checkmark")
-                    } else {
-                        Text(preset.name)
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "timer")
-                    .font(.system(size: 12, weight: .semibold))
-                Text(controller.settings.name)
-                    .font(.system(size: 13, weight: .medium))
-            }
-            .foregroundStyle(Theme.muted)
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .hoverable(radius: 6)
-        }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .help(Format.gaps(controller.settings))
-    }
 }
 
 /// Elapsed and total time around the track's fade shape, so every page shows the fades. During a gap the times
@@ -149,6 +114,9 @@ private struct ProgressLine: View {
 
 private struct Volume: View {
     @Environment(Controller.self) private var controller
+    @State private var hovering = false
+    @State private var dragging = false
+    private let width: CGFloat = 92
 
     var body: some View {
         @Bindable var controller = controller
@@ -157,10 +125,29 @@ private struct Volume: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.muted)
                 .frame(width: 18)
-            Slider(value: $controller.volume, in: 0...1)
-                .controlSize(.mini)
-                .tint(Theme.text)
-                .frame(width: 92)
+            // a plain line like the rest of the bar; the knob only shows when you reach for it
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2).fill(Theme.text.opacity(0.15)).frame(height: 4)
+                RoundedRectangle(cornerRadius: 2).fill(Theme.text).frame(width: width * controller.volume, height: 4)
+                Circle()
+                    .fill(Theme.text)
+                    .frame(width: 10, height: 10)
+                    .offset(x: width * controller.volume - 5)
+                    .opacity(hovering || dragging ? 1 : 0)
+            }
+            .frame(width: width, height: 16)
+            .contentShape(.rect)
+            .onHover { hovering = $0 }
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { drag in
+                    dragging = true
+                    controller.volume = min(max(drag.location.x / width, 0), 1)
+                }
+                .onEnded { _ in dragging = false })
+            .animation(Theme.quick, value: hovering || dragging)
+            .accessibilityRepresentation {
+                Slider(value: $controller.volume, in: 0...1) { Text("Volume") }
+            }
         }
         .help("volume")
     }

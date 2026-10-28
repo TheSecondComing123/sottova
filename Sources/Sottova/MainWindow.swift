@@ -26,7 +26,7 @@ struct MainWindow: View {
                 page
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 PlayerBar()
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
@@ -189,16 +189,17 @@ private struct Sidebar: View {
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 20)
                 Text(label)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 14, weight: selected ? .semibold : .medium))
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(selected ? Theme.background : Theme.muted)
+            // a quiet fill: the selection shouldn't outshine the play button and the title on the page
+            .foregroundStyle(selected ? Theme.text : Theme.muted)
             .padding(.horizontal, 12)
             .frame(height: 38)
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Theme.text)
+                        .fill(Theme.hover)
                         .matchedGeometryEffect(id: "pill", in: pill)
                 }
             }

@@ -169,6 +169,11 @@ enum Format {
         return minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
     }
 
+    /// Header art grows with the window, from 232 pt up to 320, so a wide window isn't a small square and a long gap.
+    static func heroArt(for width: CGFloat) -> CGFloat {
+        min(max(width * 0.2, 232), 320).rounded()
+    }
+
     static func count(_ n: Int, _ noun: String) -> String {
         "\(n.formatted()) \(noun)\(n == 1 ? "" : "s")"
     }

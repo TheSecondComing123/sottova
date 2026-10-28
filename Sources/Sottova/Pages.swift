@@ -14,6 +14,8 @@ private struct PageScroll<Content: View>: View {
             .padding(.top, 12)
             .padding(.bottom, 24)
         }
+        // rows fade out under the floating player bar instead of showing through the strip beneath it
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 }
 
@@ -77,6 +79,7 @@ private struct Hero: View {
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
     @Environment(\.windowVisible) private var visible
+    @State private var art: CGFloat = 232
 
     var body: some View {
         let idle = controller.status == .idle
@@ -84,11 +87,11 @@ private struct Hero: View {
         HStack(alignment: .bottom, spacing: 30) {
             Group {
                 if idle {
-                    Mosaic(albums: controller.catalog.albums)
+                    Mosaic(albums: controller.catalog.albums, side: art)
                 } else {
                     TimelineView(.periodic(from: .now, by: controller.status == .playing && visible ? 0.1 : 60)) { _ in
                         let gain = level
-                        Artwork(key: controller.current?.artwork, size: 232, radius: 10, outlined: true,
+                        Artwork(key: controller.current?.artwork, size: art, radius: 10, outlined: true,
                                 title: controller.current?.album, subtitle: controller.current?.albumArtist)
                             .saturation(gain)
                             .opacity(0.5 + 0.5 * gain)
@@ -96,7 +99,7 @@ private struct Hero: View {
                     }
                 }
             }
-            .frame(width: 232, height: 232)
+            .frame(width: art, height: art)
 
             VStack(alignment: .leading, spacing: 10) {
                 TimelineView(.periodic(from: .now, by: 15)) { context in
@@ -157,6 +160,9 @@ private struct Hero: View {
             }
         }
         .animation(Theme.ambient, value: controller.status)
+        // measured at the page's width, not the header's, which would depend on the art it sizes
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { art = Format.heroArt(for: $0) }
     }
 
     /// The envelope's gain right now: 0 in a gap, 1 while a track holds.
@@ -207,6 +213,7 @@ private struct Hero: View {
 /// Four covers from across the library, so the idle home shows your music instead of a placeholder.
 private struct Mosaic: View {
     let albums: [Album]
+    let side: CGFloat
 
     var body: some View {
         let picks = albums.isEmpty ? [] : (0..<4).map { albums[$0 * albums.count / 4] }
@@ -226,7 +233,7 @@ private struct Mosaic: View {
 
     private func cover(_ picks: [Album], _ i: Int) -> some View {
         let album = picks.indices.contains(i) ? picks[i] : nil
-        return Artwork(key: album?.artwork, size: 115, radius: 0, title: album?.title)
+        return Artwork(key: album?.artwork, size: (side - 2) / 2, radius: 0, title: album?.title)
     }
 }
 
@@ -303,12 +310,13 @@ struct AlbumPage: View {
     let id: String
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
+    @State private var art: CGFloat = 232
 
     var body: some View {
         if let album = controller.catalog.albumsByID[id] {
             PageScroll {
                 HStack(alignment: .bottom, spacing: 30) {
-                    Artwork(key: album.artwork, size: 232, radius: 10, outlined: true, title: album.title, subtitle: album.artist)
+                    Artwork(key: album.artwork, size: art, radius: 10, outlined: true, title: album.title, subtitle: album.artist)
                     VStack(alignment: .leading, spacing: 10) {
                         Text("album")
                             .font(.system(size: 13, weight: .medium))
@@ -323,11 +331,23 @@ struct AlbumPage: View {
                             LinkText(text: album.artist) { navigate(.artist(album.artist)) }
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(Theme.text)
-                            Text([album.year.map(String.init), Format.count(album.songs.count, "song"), Format.length(album.duration)]
+                            let paced = controller.settings.lengthWithGaps(count: album.songs.count, music: album.duration)
+                            Text([album.year.map(String.init), Format.count(album.songs.count, "song"), Format.length(album.duration),
+                                  paced > album.duration ? "about \(Format.length(paced)) with \(controller.settings.name) gaps" : nil]
                                 .compactMap { $0 }.joined(separator: " · "))
                                 .font(.system(size: 14))
                                 .foregroundStyle(Theme.muted)
                         }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { art = Format.heroArt(for: $0) }
+                .background(alignment: .top) {
+                    if let key = album.artwork {
+                        ArtWash(key: key)
+                            .frame(height: art + 200)
+                            .padding(.horizontal, -28)
+                            .padding(.top, -12)
                     }
                 }
                 .padding(.bottom, 28)
