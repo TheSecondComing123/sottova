@@ -50,7 +50,12 @@ struct SottovaApp: App {
 
         Settings {
             SettingsView(controller: controller)
+                // the rail runs up under the traffic lights, as the main window's sidebar does
+                .toolbar(removing: .title)
+                .toolbarBackground(.hidden, for: .windowToolbar)
+                .containerBackground(Theme.background, for: .window)
         }
+        .windowResizability(.contentSize)
     }
 }
 
