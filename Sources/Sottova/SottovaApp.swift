@@ -6,6 +6,8 @@ import SottovaCore
 struct SottovaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     private let controller = Controller()
+    /// Theme.palette is set before this changes, so re-keying the scenes below redraws them in the new colors.
+    @AppStorage("palette") private var palette = Palette.monochrome.id
 
     init() {
         let controller = controller
@@ -29,6 +31,7 @@ struct SottovaApp: App {
     var body: some Scene {
         Window("Sottova", id: "main") {
             MainWindow()
+                .id(palette)
                 .environment(controller)
         }
         .windowStyle(.hiddenTitleBar)
@@ -38,6 +41,7 @@ struct SottovaApp: App {
 
         MenuBarExtra {
             Panel(controller: controller)
+                .id(palette)
                 .environment(controller)
         } label: {
             Image(systemName: controller.status.symbol)

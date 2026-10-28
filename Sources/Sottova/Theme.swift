@@ -2,34 +2,77 @@ import AppKit
 import SwiftUI
 import SottovaCore
 
-/// Monochrome tokens for dark and light; album art is the only color. Dark values follow monochrome.st's CSS,
+/// Color tokens from the active palette, for dark and light. Monochrome's dark values follow monochrome.st's CSS,
 /// with text tokens raised to pass WCAG AA at 11–13 pt.
 enum Theme {
-    static let background = dynamic(0x0A0A0A, 0xF5F5F5)
-    static let raised = dynamic(0x141414, 0xFFFFFF)
-    static let hover = dynamic(0x1C1C1C, 0xEAEAEA)
-    static let border = dynamic(0x262626, 0xE0E0E0)
-    static let text = dynamic(0xF5F5F5, 0x0A0A0A)
-    static let muted = dynamic(0xA0A0A0, 0x525252)
-    static let faint = dynamic(0x7A7A7A, 0x6E6E6E)
+    /// Read every time a color draws; the scenes re-key on the palette's id, so a change rebuilds them and shows at once.
+    nonisolated(unsafe) static var palette = Palette.named(UserDefaults.standard.string(forKey: "palette"))
+
+    static let background = token(\.background)
+    static let raised = token(\.raised)
+    static let hover = token(\.hover)
+    static let border = token(\.border)
+    static let text = token(\.text)
+    static let muted = token(\.muted)
+    static let faint = token(\.faint)
     /// Not for text: timeline dots, unplayed bars, placeholders.
-    static let decor = dynamic(0x5C5C5C, 0xA5A5A5)
-    /// Grounds for covers drawn from type, picked per album so a shelf of them isn't one flat tone.
-    static let covers = [dynamic(0x141414, 0xFFFFFF), dynamic(0x1A1A1A, 0xF0F0F0), dynamic(0x202020, 0xE6E6E6)]
+    static let decor = token(\.decor)
+    static let primary = token(\.primary)
+    static let onPrimary = token(\.onPrimary)
+    static let coverInk = token(\.coverInk)
 
-    static let quick = Animation.easeOut(duration: 0.15)
-    static let settle = Animation.spring(duration: 0.35, bounce: 0.12)
-    static let page = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
-    /// System-driven changes (a track ending, a gap starting) ease slowly, like the audio does.
-    static let ambient = Animation.easeInOut(duration: 0.6)
-
-    private static func dynamic(_ dark: UInt32, _ light: UInt32) -> Color {
+    /// An item's own color, by its place in a fixed list (sections, presets). Monochrome has no accents, so it falls
+    /// back to the gray token the item used before.
+    static func accent(_ index: Int, or fallback: KeyPath<Palette.Tokens, UInt32> = \.text) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
-            rgb(appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light)
+            let tokens = tokens(appearance)
+            return rgb(tokens.accents.isEmpty ? tokens[keyPath: fallback] : tokens.accents[index % tokens.accents.count])
         })
     }
 
-    private static func rgb(_ hex: UInt32) -> NSColor {
+    /// An album's own color, stable across launches. Keyed by the album's title, as covers drawn from type are, so an
+    /// album's cover and its marks agree.
+    static func accent(for key: String?, or fallback: KeyPath<Palette.Tokens, UInt32> = \.text) -> Color {
+        accent(Int(stableHash(key ?? "")), or: fallback)
+    }
+
+    /// The ground for a cover drawn from type: grays in monochrome, the accents in a color palette.
+    static func coverGround(for key: String) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let covers = tokens(appearance).covers
+            return rgb(covers[Int(stableHash(key) % UInt32(covers.count))])
+        })
+    }
+
+    /// FNV-1a: String.hashValue changes every launch.
+    static func stableHash(_ text: String) -> UInt32 {
+        text.unicodeScalars.reduce(UInt32(2166136261)) { ($0 ^ $1.value) &* 16777619 }
+    }
+
+    static func select(_ id: String) {
+        palette = Palette.named(id)
+    }
+
+    static let quick = curve(0.2)
+    static let settle = Animation.spring(duration: 0.35, bounce: 0.12)
+    static let page = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
+    /// System-driven changes (a track ending, a gap starting) ease slowly, like the audio does.
+    static let ambient = curve(0.6)
+
+    /// One deceleration curve for everything that isn't a spring: quick to start, long to settle.
+    static func curve(_ duration: Double) -> Animation {
+        .timingCurve(0.32, 0.72, 0, 1, duration: duration)
+    }
+
+    private static func token(_ path: KeyPath<Palette.Tokens, UInt32>) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in rgb(tokens(appearance)[keyPath: path]) })
+    }
+
+    private static func tokens(_ appearance: NSAppearance) -> Palette.Tokens {
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? palette.dark : palette.light
+    }
+
+    static func rgb(_ hex: UInt32) -> NSColor {
         NSColor(srgbRed: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
     }
 }

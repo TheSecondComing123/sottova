@@ -37,7 +37,7 @@ struct Artwork: View {
         let shape = circle ? AnyShape(.circle) : AnyShape(.rect(cornerRadius: radius))
         Rectangle()
             // an artist without art is an outlined circle, lighter than an album's solid ground
-            .fill(image == nil ? (circle ? .clear : Self.ground(for: title)) : Theme.hover)
+            .fill(image == nil ? (circle ? .clear : Theme.coverGround(for: title ?? "")) : Theme.hover)
             .overlay {
                 if let image {
                     Image(decorative: image, scale: 2)
@@ -74,13 +74,6 @@ struct Artwork: View {
                 guard !Task.isCancelled else { return }
                 withAnimation(.easeOut(duration: 0.25)) { image = decoded }
             }
-    }
-
-    /// A stable pick: String.hashValue changes every launch.
-    private static func ground(for title: String?) -> Color {
-        guard let title else { return Theme.hover }
-        let hash = title.unicodeScalars.reduce(UInt32(2166136261)) { ($0 ^ $1.value) &* 16777619 }
-        return Theme.covers[Int(hash % UInt32(Theme.covers.count))]
     }
 
     /// Runs off the main actor and is skipped once the cell scrolls away, so a fast fling doesn't queue hundreds of decodes.
@@ -126,7 +119,7 @@ private struct TypeCover: View {
                 // the name is already the caption under an artist's circle, so the circle carries initials
                 Text(title.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined())
                     .font(.system(size: side * 0.17))
-                    .foregroundStyle(Theme.muted)
+                    .foregroundStyle(Theme.accent(for: title, or: \.muted))
                     .frame(width: side, height: side)
             } else {
                 cover(side: side)
@@ -139,12 +132,12 @@ private struct TypeCover: View {
             Text(title)
                 .font(.system(size: side * 0.105, weight: .semibold))
                 .tracking(-0.2)
-                .foregroundStyle(Theme.text)
+                .foregroundStyle(Theme.coverInk)
                 .lineLimit(3)
             if let subtitle {
                 Text(subtitle)
                     .font(.system(size: side * 0.06))
-                    .foregroundStyle(Theme.muted)
+                    .foregroundStyle(Theme.coverInk.opacity(0.7))
                     .lineLimit(1)
             }
         }
