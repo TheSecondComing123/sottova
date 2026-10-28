@@ -1,11 +1,7 @@
 #!/bin/bash
 set -e
 cd "$(dirname "$0")/.."
-swift build
-rm -rf .build/Sottova.app
-mkdir -p .build/Sottova.app/Contents/MacOS
-cp .build/debug/Sottova .build/Sottova.app/Contents/MacOS/
-cp Support/Info.plist .build/Sottova.app/Contents/
-codesign -f -s - .build/Sottova.app
+scripts/bundle.sh debug
+codesign -f -s - .build/debug/Sottova.app
 pkill -x Sottova || true
-open ${SOTTOVA_TEST_FILE:+--env "SOTTOVA_TEST_FILE=$SOTTOVA_TEST_FILE"} .build/Sottova.app
+open ${SOTTOVA_TEST_FILE:+--env "SOTTOVA_TEST_FILE=$SOTTOVA_TEST_FILE"} .build/debug/Sottova.app
