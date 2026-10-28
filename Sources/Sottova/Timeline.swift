@@ -6,9 +6,11 @@ import SottovaCore
 struct Timeline: View {
     let controller: Controller
     var bars = 32
+    /// The menu-bar panel's window stays alive while closed; animating it then cost about 10% CPU.
+    var visible = true
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: controller.status == .idle || controller.status == .paused)) { context in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !visible || controller.status == .idle || controller.status == .paused)) { context in
             Canvas { gc, size in
                 draw(in: gc, size: size, time: context.date.timeIntervalSinceReferenceDate)
             }

@@ -53,6 +53,7 @@ public final class Controller {
     @ObservationIgnored private var pausedForSleep = false
     @ObservationIgnored private var assertion: IOPMAssertionID?
     @ObservationIgnored private var ticker: Task<Void, Never>?
+    @ObservationIgnored private var lastTick: ContinuousClock.Instant?
     @ObservationIgnored private var analysis: Task<Void, Never>?
     @ObservationIgnored private var scanGeneration = 0
     @ObservationIgnored private var watcher: FolderWatcher?
@@ -85,22 +86,53 @@ public final class Controller {
         }
     }
 
-    /// Starts the 100 Hz envelope clock, media keys and the first scan. Tests skip this and call `advance` themselves.
+    /// Starts the envelope clock, media keys and the first scan. Tests skip this and call `advance` themselves.
     public func run() {
         guard ticker == nil else { return }
-        ticker = Task { [weak self] in
-            let clock = ContinuousClock()
-            var last = clock.now
-            while !Task.isCancelled {
-                try? await clock.sleep(for: .milliseconds(10))
-                let now = clock.now
-                self?.advance((now - last) / .seconds(1))
-                last = now
-            }
-        }
+        lastTick = .now
+        startTicker()
         nowPlaying = NowPlaying(controller: self)
         publish()
         rescan()
+    }
+
+    /// Ticks at 100 Hz only while a gain is moving. Holding a track, resting or paused it sleeps up to 500 ms,
+    /// which brought playback from about 2.5% CPU down to the 1% decoding floor.
+    private func startTicker() {
+        ticker?.cancel()
+        ticker = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let interval = self?.tickInterval else { return }
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled else { return }
+                self?.catchUp()
+            }
+        }
+    }
+
+    private var tickInterval: Duration {
+        guard status == .playing, machine.outgoing == nil, case .track(let track) = machine.phase else {
+            return status == .playing ? .milliseconds(10) : .milliseconds(500)
+        }
+        let holdLeft = track.outStart - 0.5 - track.elapsed
+        guard track.elapsed >= track.fadeIn, holdLeft > 0.01 else { return .milliseconds(10) }
+        return .milliseconds(Int(min(0.5, holdLeft) * 1000))
+    }
+
+    private func catchUp() {
+        guard let lastTick else { return }
+        let now = ContinuousClock.now
+        self.lastTick = now
+        advance((now - lastTick) / .seconds(1))
+    }
+
+    /// A skip or pause mid-hold must not wait for the slow tick: bring the clock up to now, act, then restart the clock.
+    private func command(_ event: Machine.Event) {
+        catchUp()
+        send(event)
+        if ticker != nil {
+            startTicker()
+        }
     }
 
     public func apply(_ preset: Settings) {
@@ -151,11 +183,11 @@ public final class Controller {
         case .idle:
             guard !tracks.isEmpty else { return }
             failures = 0
-            send(.start)
+            command(.start)
         case .paused:
-            send(.resume)
+            command(.resume)
         case .playing, .resting:
-            send(.pause)
+            command(.pause)
         }
     }
 
@@ -168,7 +200,7 @@ public final class Controller {
     }
 
     public func skip() {
-        send(.skip)
+        command(.skip)
     }
 
     /// sottova://play, pause, toggle, skip, preset/<name>
@@ -192,13 +224,13 @@ public final class Controller {
     public func systemWillSleep() {
         guard status == .playing || status == .resting else { return }
         pausedForSleep = true
-        send(.pause)
+        command(.pause)
     }
 
     public func systemDidWake() {
         guard pausedForSleep else { return }
         pausedForSleep = false
-        send(.resume)
+        command(.resume)
     }
 
     func advance(_ seconds: Double) {
@@ -430,7 +462,7 @@ public final class Controller {
     private func engineConfigurationChanged() {
         guard status == .playing else { return }
         needsReschedule = true
-        send(.pause)
+        command(.pause)
     }
 
     /// ponytail: only the current deck is rescheduled; a crossfade's outgoing track is dropped on a device change

@@ -7,6 +7,7 @@ struct Panel: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     @State private var showsGap = false
+    @State private var visible = false
 
     var body: some View {
         let color = Mocha.accent(for: controller.title)
@@ -23,7 +24,7 @@ struct Panel: View {
                 }
             }
 
-            Timeline(controller: controller)
+            Timeline(controller: controller, visible: visible)
                 .frame(height: 44)
                 .padding(12)
                 .glassEffect(.regular.tint(color.opacity(0.14)), in: .rect(cornerRadius: 14))
@@ -79,6 +80,8 @@ struct Panel: View {
         .frame(width: 320)
         .tint(color)
         .preferredColorScheme(.dark)
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 
     private var gapSection: some View {
