@@ -16,13 +16,13 @@ struct PlayerBar: View {
             nowPlaying
                 .frame(minWidth: 170, maxWidth: 280, alignment: .leading)
             Spacer(minLength: 12)
-            VStack(spacing: 6) {
-                HStack(spacing: 18) {
+            VStack(spacing: 8) {
+                HStack(spacing: 16) {
                     // balances the skip button so play sits on the progress line's center
-                    Color.clear.frame(width: 30, height: 30)
+                    Color.clear.frame(width: 32, height: 32)
                     PlayCircle(size: 36, playing: running) { controller.toggle() }
                         .disabled(controller.tracks.isEmpty)
-                    IconButton(systemImage: "forward.end.fill", help: controller.status == .resting ? "end the gap" : "skip", size: 30) {
+                    IconButton(icon: .skipForward, weight: .fill, help: controller.status == .resting ? "end the gap" : "skip", size: 32) {
                         controller.skip()
                     }
                     .disabled(controller.status == .idle)
@@ -31,45 +31,17 @@ struct PlayerBar: View {
                     .frame(minWidth: 220, maxWidth: 440)
             }
             Spacer(minLength: 12)
-            HStack(spacing: 14) {
-                modeMenu
-                Volume()
-            }
-            .frame(minWidth: 150, maxWidth: 280, alignment: .trailing)
+            // the mode lives in the sidebar; here it was the same thing twice
+            Volume()
+                .frame(minWidth: 150, maxWidth: 280, alignment: .trailing)
         }
-        .padding(.horizontal, 14)
-        .frame(height: 84)
+        .padding(.horizontal, 16)
+        .frame(height: 80)
         // opaque: through a translucent bar, the page scrolling underneath reads as stray marks
-        .background(Theme.raised, in: .rect(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
+        .background(Theme.raised, in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
         // on a near-black page a dark shadow reads as a glow; the border is enough there
         .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 12, y: 4)
-    }
-
-    /// How it's playing, beside the volume: the mode's glyph and name, with the others a click away.
-    private var modeMenu: some View {
-        Menu {
-            ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
-                Toggle(isOn: Binding(get: { controller.settings.name == preset.name }, set: { _ in controller.apply(preset) })) {
-                    Text("\(preset.name)  \(Format.range(preset))")
-                }
-            }
-        } label: {
-            HStack(spacing: 8) {
-                GapGlyph(settings: controller.settings)
-                Text(controller.settings.name)
-                    .font(.system(size: 13, weight: .medium))
-            }
-            .foregroundStyle(Theme.muted)
-            .padding(.horizontal, 8)
-            .frame(height: 28)
-            .hoverable(radius: 6)
-        }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .help(Format.gaps(controller.settings))
     }
 
     private var nowPlaying: some View {
@@ -82,7 +54,7 @@ struct PlayerBar: View {
                     .saturation(resting ? 0 : 1)
                     .animation(Theme.ambient, value: resting)
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 // in a gap the last piece stays, dimmed: the dots under the transport already say it's resting
                 Group {
                     if let song {
@@ -92,7 +64,7 @@ struct PlayerBar: View {
                         Text(controller.settings.name)
                     }
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(resting ? Theme.faint : Theme.text)
                 .lineLimit(1)
 
@@ -121,7 +93,7 @@ private struct ProgressLine: View {
         let resting = controller.status == .resting
         TimelineView(.periodic(from: .now, by: controller.status == .playing && visible ? 1 : 60)) { _ in
             let track = controller.track
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 time(track?.elapsed ?? 0)
                 Timeline(controller: controller, compact: true, visible: visible)
                     .frame(height: 10)
@@ -151,8 +123,7 @@ private struct Volume: View {
     var body: some View {
         @Bindable var controller = controller
         HStack(spacing: 8) {
-            Image(systemName: controller.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(.system(size: 12, weight: .semibold))
+            (controller.volume == 0 ? Ph.speakerSlash : Ph.speakerHigh).icon(size: 16)
                 .foregroundStyle(Theme.muted)
                 .frame(width: 18)
             // a plain line like the rest of the bar; the knob only shows when you reach for it

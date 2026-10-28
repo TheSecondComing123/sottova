@@ -16,7 +16,7 @@ struct SongRow: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Marker(song: song, number: number, hovering: hovering, play: play)
                 .frame(width: 28)
 
@@ -81,17 +81,15 @@ private struct Marker: View {
         let running = controller.status == .playing || controller.status == .resting
         if hovering {
             Button(action: isCurrent ? controller.toggle : play) {
-                Image(systemName: isCurrent && running ? "pause.fill" : "play.fill")
-                    .font(.system(size: 12))
+                (isCurrent && running ? Ph.pause : Ph.play).icon(.fill, size: 13)
                     .foregroundStyle(Theme.text)
             }
             .buttonStyle(PressStyle())
             .help(isCurrent ? (running ? "pause" : "play") : "play from here")
         } else if isCurrent {
             // still, on purpose: the animated .variableColor effect redrew at display rate and cost about 20% CPU
-            Image(systemName: "waveform")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.text)
+            Ph.waveform.icon(.bold, size: 15)
+                .foregroundStyle(Theme.accent(for: song.album))
         } else {
             Text("\(number)")
                 .font(.system(size: 13))
@@ -109,9 +107,33 @@ private struct Title: View {
         let isCurrent = controller.current?.id == song.id && controller.status != .idle
         // the catalog number trails the work in a quieter voice, as on a concert program
         Text("\(song.work)\(Text(song.detail.map { "  \($0)" } ?? "").font(.system(size: 13)).foregroundStyle(Theme.faint))")
-            .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
+            .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
             .foregroundStyle(Theme.text)
             .lineLimit(1)
+    }
+}
+
+/// A tile's title, led by a still waveform while something of it is playing. Still on purpose: the animated symbol
+/// effect redrew at display rate.
+struct NowPlayingTitle: View {
+    let text: String
+    let playing: Bool
+    /// Whose accent the mark takes.
+    var key: String?
+    var lines = 1
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if playing {
+                Ph.waveform.icon(.bold, size: 12)
+                    .foregroundStyle(Theme.accent(for: key))
+                    .accessibilityLabel("playing")
+            }
+            Text(text)
+                .lineLimit(lines, reservesSpace: lines > 1)
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(Theme.text)
     }
 }
 
@@ -121,7 +143,7 @@ struct SongColumns: View {
     var showsAlbum = true
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Text("#").frame(width: 28)
             if showsArt {
                 Color.clear.frame(width: 40, height: 1)
@@ -131,7 +153,7 @@ struct SongColumns: View {
             if showsAlbum {
                 Text("Album").frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
             }
-            Image(systemName: "clock").frame(width: 48, alignment: .trailing)
+            Ph.clock.icon(size: 14).frame(width: 48, alignment: .trailing)
         }
         .font(.system(size: 11, weight: .medium))
         .foregroundStyle(Theme.faint)
@@ -157,21 +179,22 @@ struct Tile<Label: View>: View {
     @State private var hovering = false
 
     var body: some View {
-        VStack(alignment: circle ? .center : .leading, spacing: 10) {
-            Artwork(key: artwork, radius: 8, circle: circle, title: coverTitle, subtitle: coverSubtitle)
+        VStack(alignment: circle ? .center : .leading, spacing: 12) {
+            Artwork(key: artwork, radius: 4, circle: circle, title: coverTitle, subtitle: coverSubtitle)
                 // a type cover repeats the label below it
                 .accessibilityHidden(true)
                 .overlay(alignment: .bottomTrailing) {
                     PlayCircle(size: 44, action: play)
-                        .padding(circle ? 4 : 10)
+                        .padding(circle ? 4 : 8)
                         .opacity(hovering ? 1 : 0)
                         .offset(y: hovering || reduceMotion ? 0 : 8)
-                        .animation(hovering ? Theme.settle : .easeOut(duration: 0.12), value: hovering)
+                        .animation(hovering ? Theme.settle : Theme.curve(0.12), value: hovering)
                 }
             label
         }
-        .padding(10)
-        .background(Theme.hover.opacity(hovering ? 1 : 0), in: .rect(cornerRadius: 10))
+        .padding(8)
+        // 12 outside, 12 − 8 = 4 on the art inside, so the two corners stay concentric
+        .background(Theme.hover.opacity(hovering ? 1 : 0), in: .rect(cornerRadius: 12))
         .animation(Theme.quick, value: hovering)
         .contentShape(.rect)
         .onHover { hovering = $0 }
@@ -191,11 +214,8 @@ struct AlbumTile: View {
 
     var body: some View {
         Tile(artwork: album.artwork, coverTitle: album.title, coverSubtitle: album.artist, play: { controller.play(album.songs) }, open: { navigate(.album(album.id)) }) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(album.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                NowPlayingTitle(text: album.title, playing: controller.sounding?.albumID == album.id, key: album.title)
                 Text([album.artist, album.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
@@ -217,11 +237,9 @@ struct ArtistTile: View {
 
     var body: some View {
         Tile(artwork: artist.artwork, circle: true, coverTitle: artist.name, play: { controller.play(artist.songs.shuffled()) }, open: { navigate(.artist(artist.name)) }) {
-            VStack(spacing: 3) {
-                Text(artist.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+            VStack(spacing: 2) {
+                NowPlayingTitle(text: artist.name, playing: controller.sounding.map { $0.artist == artist.name || $0.albumArtist == artist.name } ?? false,
+                                key: controller.sounding?.album)
                 Text(Format.count(artist.songs.count, "song"))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
@@ -261,10 +279,10 @@ struct PageHeader: View {
     let songs: [Song]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(title)
-                    .font(.system(size: 48, weight: .heavy))
+                    .font(.system(size: 48, weight: .bold))
                     .tracking(-1.2)
                     .foregroundStyle(Theme.text)
                 Text(detail)
@@ -286,13 +304,26 @@ struct PlayRow: View {
     @Environment(Controller.self) private var controller
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 16) {
             PlayCircle(size: 52) { controller.play(songs) }
-            IconButton(systemImage: "shuffle", help: "shuffle these", size: 40) {
-                controller.play(songs.shuffled())
+            // labeled, not a bare icon: it's a one-shot "play these shuffled", and alone the icon read as a toggle
+            // whose on and off looked the same
+            Button { controller.play(songs.shuffled()) } label: {
+                HStack(spacing: 8) {
+                    Ph.shuffle.icon(size: 16)
+                    Text("Shuffle")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 16)
+                .frame(height: 40)
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+                .hoverable(radius: 8)
             }
+            .buttonStyle(PressStyle(scale: 0.97))
+            .help("play these in random order")
         }
     }
 }
 
-let albumGrid = [GridItem(.adaptive(minimum: 168, maximum: 230), spacing: 14, alignment: .top)]
+let albumGrid = [GridItem(.adaptive(minimum: 168, maximum: 230), spacing: 16, alignment: .top)]

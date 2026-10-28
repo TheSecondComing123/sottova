@@ -64,7 +64,7 @@ struct Timeline: View {
         let played = CGFloat(track.position(at: track.elapsed)) * width
         var done = gc
         done.clip(to: Path(CGRect(x: 0, y: 0, width: played, height: height)))
-        done.fill(shape, with: .color(Theme.text))
+        done.fill(shape, with: .color(Theme.accent(for: controller.current?.album)))
         var ahead = gc
         ahead.clip(to: Path(CGRect(x: played, y: 0, width: width - played, height: height)))
         ahead.fill(shape, with: .color(Theme.text.opacity(0.18)))
@@ -84,7 +84,7 @@ struct Timeline: View {
         let played = CGFloat(track.position(at: track.elapsed)) * width
         var done = gc
         done.clip(to: Path(CGRect(x: 0, y: 0, width: played, height: middle * 2)))
-        done.fill(band, with: .color(Theme.text))
+        done.fill(band, with: .color(Theme.accent(for: controller.current?.album)))
         var ahead = gc
         ahead.clip(to: Path(CGRect(x: played, y: 0, width: width - played, height: middle * 2)))
         ahead.fill(band, with: .color(Theme.text.opacity(0.3)))
@@ -112,35 +112,5 @@ struct Timeline: View {
         shape.addLine(to: CGPoint(x: x0 + width, y: height))
         shape.closeSubpath()
         gc.fill(shape, with: .color(Theme.decor.opacity(0.3)))
-    }
-}
-
-/// A preset drawn as it sounds: two tracks' fades with its silence between, the gap wider the longer the average
-/// rest (log scale from 30 s to 20 min), the two overlapping for a crossfade. Takes its color from foregroundStyle.
-struct GapGlyph: View {
-    let settings: SottovaCore.Settings
-
-    var body: some View {
-        Canvas { gc, size in
-            let mound: CGFloat = 6, ramp: CGFloat = 2
-            let average = (settings.gapRange.lowerBound + settings.gapRange.upperBound) / 2
-            let gap = settings.crossfade ? -2 : 1 + 7 * CGFloat(log(max(average, 30) / 30) / log(40.0)).clamped(to: 0...1)
-            let x0 = (size.width - mound * 2 - gap) / 2
-            for x in [x0, x0 + mound + gap] {
-                var shape = Path()
-                shape.addLines([CGPoint(x: x, y: size.height), CGPoint(x: x + ramp, y: 0),
-                                CGPoint(x: x + mound - ramp, y: 0), CGPoint(x: x + mound, y: size.height)])
-                shape.closeSubpath()
-                gc.fill(shape, with: .foreground)
-            }
-        }
-        .frame(width: 20, height: 6)
-        .accessibilityHidden(true)
-    }
-}
-
-private extension CGFloat {
-    func clamped(to range: ClosedRange<CGFloat>) -> CGFloat {
-        Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
     }
 }

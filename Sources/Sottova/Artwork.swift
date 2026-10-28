@@ -72,7 +72,7 @@ struct Artwork: View {
                 }
                 let decoded = await Self.decode(store, key, pixels)
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.25)) { image = decoded }
+                withAnimation(Theme.curve(0.25)) { image = decoded }
             }
     }
 

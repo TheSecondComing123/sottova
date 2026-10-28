@@ -29,7 +29,7 @@ struct MainWindow: View {
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 PlayerBar()
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 16)
             }
         }
         .background(Theme.background)
@@ -68,7 +68,7 @@ struct MainWindow: View {
         }
         .id(query.isEmpty ? AnyHashable(route) : AnyHashable("search"))
         // the old page leaves fast, so the two never sit on top of each other at full strength
-        .transition(.asymmetric(insertion: .opacity, removal: .opacity.animation(.easeOut(duration: 0.08))))
+        .transition(.asymmetric(insertion: .opacity, removal: .opacity.animation(Theme.curve(0.08))))
     }
 
     private func go(to destination: Route) {
@@ -118,30 +118,30 @@ private struct Sidebar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var pill
 
-    private let items: [(Route, String, String)] = [
-        (.home, "Home", "house"),
-        (.songs, "Songs", "music.note"),
-        (.albums, "Albums", "square.stack"),
-        (.artists, "Artists", "music.microphone"),
+    private let items: [(Route, String, Ph)] = [
+        (.home, "Home", .house),
+        (.songs, "Songs", .musicNote),
+        (.albums, "Albums", .vinylRecord),
+        (.artists, "Artists", .microphoneStage),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // the wordmark sits on the same line as the search field; the traffic lights sit above it
             Text("sottova")
-                .font(.system(size: 22, weight: .heavy))
+                .font(.system(size: 22, weight: .bold))
                 .tracking(-0.6)
                 .foregroundStyle(Theme.text)
-                .padding(.horizontal, 22)
+                .padding(.horizontal, 24)
                 .frame(height: 66, alignment: .bottom)
-                .padding(.bottom, 18)
+                .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
                 .gesture(WindowDragGesture())
 
             VStack(spacing: 2) {
-                ForEach(items, id: \.0) { item, label, symbol in
-                    navRow(item, label, symbol)
+                ForEach(Array(items.enumerated()), id: \.element.0) { index, entry in
+                    navRow(entry.0, entry.1, entry.2, accent: index)
                 }
             }
             .padding(.horizontal, 12)
@@ -150,8 +150,8 @@ private struct Sidebar: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Theme.faint)
                 .padding(.horizontal, 24)
-                .padding(.top, 28)
-                .padding(.bottom, 6)
+                .padding(.top, 32)
+                .padding(.bottom, 8)
 
             VStack(spacing: 2) {
                 ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
@@ -176,29 +176,30 @@ private struct Sidebar: View {
             }
 
             VStack(spacing: 2) {
-                footerRow("Add Folder", "folder.badge.plus", action: addFolders)
-                footerRow("Settings", "gearshape") { openSettings() }
+                footerRow("Add folder", .folderPlus, action: controller.chooseFolders)
+                footerRow("Settings", .gearSix) { openSettings() }
             }
             .padding(.horizontal, 12)
-            .padding(.bottom, 14)
+            .padding(.bottom, 16)
         }
     }
 
-    private func navRow(_ item: Route, _ label: String, _ symbol: String) -> some View {
+    private func navRow(_ item: Route, _ label: String, _ icon: Ph, accent: Int) -> some View {
         let selected = section == item
         return Button { select(item) } label: {
             HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .medium))
+                // each section its own accent in a color palette; in monochrome it follows the label
+                icon.icon(size: 18)
+                    .foregroundStyle(Theme.accent(accent * 3, or: selected ? \.text : \.muted))
                     .frame(width: 20)
                 Text(label)
-                    .font(.system(size: 14, weight: selected ? .semibold : .medium))
+                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
                 Spacer(minLength: 0)
             }
             // a quiet fill: the selection shouldn't outshine the play button and the title on the page
             .foregroundStyle(selected ? Theme.text : Theme.muted)
             .padding(.horizontal, 12)
-            .frame(height: 38)
+            .frame(height: 40)
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: 8)
@@ -212,14 +213,23 @@ private struct Sidebar: View {
         .animation(reduceMotion ? Theme.quick : Theme.settle, value: section)
     }
 
+    /// Spread across the accents so neighbors differ: 2, 6, 10, 14…
+    private func presetAccent(_ preset: SottovaCore.Settings) -> Int {
+        2 + 4 * (SottovaCore.Settings.presets.firstIndex { $0.name == preset.name } ?? 4)
+    }
+
     private func presetRow(_ preset: SottovaCore.Settings) -> some View {
         let active = controller.settings.name == preset.name
         return Button { controller.apply(preset) } label: {
             HStack(spacing: 12) {
-                GapGlyph(settings: preset)
-                    .foregroundStyle(active ? Theme.text : Theme.faint)
+                // the active mode is marked in the icon column; the rows are type only, so the ranges carry the comparison
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Theme.accent(presetAccent(preset)))
+                    .frame(width: 2, height: 14)
+                    .opacity(active ? 1 : 0)
+                    .frame(width: 20)
                 Text(preset.name)
-                    .font(.system(size: 14, weight: active ? .semibold : .medium))
+                    .font(.system(size: 13, weight: active ? .semibold : .medium))
                     .foregroundStyle(active ? Theme.text : Theme.muted)
                     .fixedSize()
                 Spacer(minLength: 0)
@@ -242,11 +252,10 @@ private struct Sidebar: View {
         .help(Format.gaps(preset))
     }
 
-    private func footerRow(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+    private func footerRow(_ label: String, _ icon: Ph, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .medium))
+                icon.icon(size: 16)
                     .frame(width: 20)
                 Text(label)
                     .font(.system(size: 13, weight: .medium))
@@ -259,15 +268,6 @@ private struct Sidebar: View {
         }
         .buttonStyle(PressStyle(scale: 0.98))
     }
-
-    private func addFolders() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = true
-        guard panel.runModal() == .OK else { return }
-        controller.addFolders(panel.urls)
-    }
 }
 
 private struct TopBar: View {
@@ -279,24 +279,22 @@ private struct TopBar: View {
     @FocusState private var searching: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            arrow("chevron.left", enabled: canGoBack, help: "back", action: goBack)
-            arrow("chevron.right", enabled: canGoForward, help: "forward", action: goForward)
+        HStack(spacing: 12) {
+            arrow(.caretLeft, enabled: canGoBack, help: "back", action: goBack)
+            arrow(.caretRight, enabled: canGoForward, help: "forward", action: goForward)
 
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13, weight: .medium))
+                Ph.magnifyingGlass.icon(size: 16)
                     .foregroundStyle(Theme.muted)
                 TextField("search songs, albums, artists", text: $query)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.text)
                     .focused($searching)
                     .onExitCommand { query = ""; searching = false }
                 if !query.isEmpty {
                     Button { query = "" } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
+                        Ph.x.icon(.bold, size: 12)
                             .foregroundStyle(Theme.muted)
                     }
                     .buttonStyle(.plain)
@@ -318,13 +316,12 @@ private struct TopBar: View {
         }
         .padding(.horizontal, 24)
         .frame(height: 60)
-        .padding(.top, 6)
+        .padding(.top, 8)
     }
 
-    private func arrow(_ symbol: String, enabled: Bool, help: String, action: @escaping () -> Void) -> some View {
+    private func arrow(_ icon: Ph, enabled: Bool, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
+            icon.icon(.bold, size: 14)
                 .foregroundStyle(enabled ? Theme.text : Theme.decor)
                 .frame(width: 32, height: 32)
                 .background(Theme.raised, in: .circle)

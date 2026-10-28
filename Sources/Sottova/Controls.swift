@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SottovaCore
 
@@ -39,6 +40,23 @@ struct Controls: View {
 }
 
 extension Controller {
+    /// Asks for music folders. Activates first: from the menu-bar panel the open panel otherwise lands behind the
+    /// frontmost app.
+    func chooseFolders() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = true
+        NSApp.activate()
+        guard panel.runModal() == .OK else { return }
+        addFolders(panel.urls)
+    }
+
+    /// The song being heard or held: not during a gap, when the last one has finished.
+    var sounding: Song? {
+        status == .playing || status == .paused ? current : nil
+    }
+
     var headline: String {
         switch status {
         case .idle: "sottova"

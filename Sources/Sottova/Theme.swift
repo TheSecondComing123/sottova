@@ -97,6 +97,40 @@ extension Font {
     @MainActor private static var axisFonts: [String: Font] = [:]
 }
 
+/// Phosphor icons (MIT), vendored as SVGs in Support/Icons and copied into the app's Resources: the PhosphorSwift
+/// package ships an asset catalog, which `swift build` can't compile. Only the name-weight pairs in use are vendored.
+enum Ph: String {
+    case house, clock, shuffle, x, waveform, play, pause
+    case musicNote = "music-note", vinylRecord = "vinyl-record", microphoneStage = "microphone-stage"
+    case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
+    case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
+    case caretLeft = "caret-left", caretRight = "caret-right", skipForward = "skip-forward"
+    case folder, plus, minus, palette, arrowsClockwise = "arrows-clockwise"
+
+    enum IconWeight: String {
+        case duotone, bold, fill
+    }
+
+    /// Drawn as a template image, so it takes foregroundStyle like text; the duotone layer keeps its 20% alpha,
+    /// so the icon stays two grays of whatever color it's given.
+    @MainActor func icon(_ weight: IconWeight = .duotone, size: CGFloat) -> some View {
+        Image(nsImage: image(weight)).renderingMode(.template).resizable().frame(width: size, height: size)
+    }
+
+    @MainActor private func image(_ weight: IconWeight) -> NSImage {
+        let name = "\(rawValue)-\(weight.rawValue)"
+        if let cached = Self.images[name] { return cached }
+        guard let url = Bundle.main.url(forResource: name, withExtension: "svg", subdirectory: "Icons"),
+              let image = NSImage(contentsOf: url) else {
+            fatalError("\(name).svg is missing from the app's Resources/Icons; scripts/bundle.sh copies Support/Icons")
+        }
+        Self.images[name] = image
+        return image
+    }
+
+    @MainActor private static var images: [String: NSImage] = [:]
+}
+
 enum Route: Hashable {
     case home, songs, albums, artists
     case album(String)
@@ -186,14 +220,11 @@ struct PlayCircle: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: playing ? "pause.fill" : "play.fill")
-                .font(.system(size: size * 0.36, weight: .bold))
-                .contentTransition(.symbolEffect(.replace))
-                .foregroundStyle(Theme.background)
-                // the play triangle reads off-center at its geometric center
-                .offset(x: playing ? 0 : size * 0.03)
+            (playing ? Ph.pause : Ph.play).icon(.fill, size: size * 0.4)
+                // no nudge: Phosphor's triangle is already drawn right of its box's center, so it reads centered as is
+                .foregroundStyle(Theme.onPrimary)
                 .frame(width: size, height: size)
-                .background(Theme.text, in: .circle)
+                .background(Theme.primary, in: .circle)
                 .scaleEffect(hovering ? 1.05 : 1)
         }
         .buttonStyle(PressStyle())
@@ -205,15 +236,15 @@ struct PlayCircle: View {
 }
 
 struct IconButton: View {
-    let systemImage: String
+    let icon: Ph
+    var weight: Ph.IconWeight = .duotone
     var help: String
     var size: CGFloat = 32
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: size * 0.44, weight: .semibold))
+            icon.icon(weight, size: size * 0.5)
                 .foregroundStyle(Theme.muted)
                 .frame(width: size, height: size)
                 .hoverable(radius: size / 2)
