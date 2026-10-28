@@ -61,7 +61,7 @@ struct SongRow: View {
             Button("Play Next") { controller.playNext([song]) }
             Divider()
             Button("Go to Album") { navigate(.album(song.albumID)) }
-            Button("Go to Artist") { navigate(.artist(controller.catalog.artist(of: song))) }
+            Button("Go to Artist") { navigate(.artist(song.artist)) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) }
         }
     }

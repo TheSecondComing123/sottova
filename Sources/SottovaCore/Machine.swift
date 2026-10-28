@@ -34,6 +34,35 @@ public struct Track: Equatable, Sendable {
     func gain(_ curve: FadeCurve) -> Double {
         gain(at: elapsed, curve)
     }
+
+    /// Shares of the drawn width for each fade. At true scale an 8 s fade is 2% of an 8-minute piece and the shape reads as a flat bar.
+    static let fadeInShare = 0.12
+    static let fadeOutShare = 0.16
+
+    /// Where time t falls along the drawn track, 0...1: the fade-in takes 12%, the fade-out 16%, the hold what's left.
+    public func position(at t: Double) -> Double {
+        let (a, b, c) = landmarks
+        let hold = 1 - Self.fadeInShare - Self.fadeOutShare
+        if t <= a { return a > 0 ? Self.fadeInShare * max(t, 0) / a : 0 }
+        if t <= b { return Self.fadeInShare + hold * (t - a) / (b - a) }
+        return Self.fadeInShare + hold + Self.fadeOutShare * (c > b ? min((t - b) / (c - b), 1) : 1)
+    }
+
+    /// The inverse of position(at:), so a drawing can sample the envelope evenly across its width.
+    public func time(at position: Double) -> Double {
+        let (a, b, c) = landmarks
+        let p = min(max(position, 0), 1)
+        let holdEnd = 1 - Self.fadeOutShare
+        if p <= Self.fadeInShare { return a * p / Self.fadeInShare }
+        if p <= holdEnd { return a + (b - a) * (p - Self.fadeInShare) / (holdEnd - Self.fadeInShare) }
+        return b + (c - b) * (p - holdEnd) / Self.fadeOutShare
+    }
+
+    /// End of fade-in, start and end of fade-out, kept in order for very short tracks.
+    private var landmarks: (Double, Double, Double) {
+        let b = max(outStart, fadeIn)
+        return (fadeIn, b, max(outStart + outLength, b))
+    }
 }
 
 /// Pure playback logic: events in, effects out. All time is in seconds of unpaused playback.

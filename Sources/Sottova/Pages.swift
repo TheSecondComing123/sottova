@@ -104,7 +104,7 @@ private struct Hero: View {
                             Text("after \(song.title)")
                         } else {
                             HStack(spacing: 6) {
-                                LinkText(text: song.artist) { navigate(.artist(controller.catalog.artist(of: song))) }
+                                LinkText(text: song.artist) { navigate(.artist(song.artist)) }
                                 Text("·")
                                 LinkText(text: song.album) { navigate(.album(song.albumID)) }
                             }

@@ -21,6 +21,12 @@ public struct Settings: Equatable, Sendable {
         min(gapMin, gapMax)...max(gapMin, gapMax)
     }
 
+    /// How long `count` tracks take with an average gap between each pair, for "about 2 h with gaps".
+    public func lengthWithGaps(count: Int, music: Double) -> Double {
+        guard !crossfade, count > 1 else { return music }
+        return music + (gapRange.lowerBound + gapRange.upperBound) / 2 * Double(count - 1)
+    }
+
     public static let presets: [Settings] = [
         preset("Minecraft", gap: 600...1200, fadeIn: 6, fadeOut: 8),
         preset("Sparse", gap: 180...480, fadeIn: 6, fadeOut: 8),

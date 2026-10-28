@@ -16,6 +16,8 @@ public final class Controller {
     public private(set) var catalog = Catalog()
     public private(set) var current: Song?
     public private(set) var recent: [Song] = []
+    /// What played today, oldest first, for drawing the day as a score.
+    public private(set) var today: [Play] = []
     public var volume = UserDefaults.standard.object(forKey: "volume") as? Double ?? 1 {
         didSet {
             UserDefaults.standard.set(volume, forKey: "volume")
@@ -102,6 +104,7 @@ public final class Controller {
             shuffler.recent = PlayRecord.recentFiles(in: storage.appending(path: "plays.jsonl"))
         }
         loadLibrary()
+        refreshToday()
     }
 
     /// Starts the envelope clock, media keys and the first scan. Tests skip this and call `advance` themselves.
@@ -575,6 +578,13 @@ public final class Controller {
         } catch {
             problem = "couldn't write the play log: \(error.localizedDescription)"
         }
+        refreshToday()
+    }
+
+    // ponytail: rereads the whole log once per track; a year of daily listening is about 1 MB
+    private func refreshToday() {
+        guard let url = storage?.appending(path: "plays.jsonl") else { return }
+        today = PlayRecord.plays(PlayRecord.read(url), durations: library.entries.compactMapValues { $0.meta?.duration }, on: .now)
     }
 
     /// The engine is paused during gaps, so nothing else stops idle sleep there.

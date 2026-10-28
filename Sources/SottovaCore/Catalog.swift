@@ -4,6 +4,10 @@ public struct Song: Identifiable, Hashable, Sendable {
     /// The file path.
     public let id: String
     public let title: String
+    /// The title before its catalog number: "Polonaise in G-flat major" of "Polonaise in G-flat major, B. 36".
+    public let work: String
+    /// Catalog number and nickname, as a concert program sets them: "B. 13 · “Adieu”". nil for most non-classical titles.
+    public let detail: String?
     public let artist: String
     public let album: String
     public let albumID: String
@@ -34,9 +38,10 @@ public struct Artist: Identifiable, Hashable, Sendable {
     /// The artist name.
     public let id: String
     public let albums: [Album]
+    /// A performer's own tracks, or every track on a composer's (album artist's) albums.
+    public let songs: [Song]
 
     public var name: String { id }
-    public var songs: [Song] { albums.flatMap(\.songs) }
     public var artwork: String? { albums.first { $0.artwork != nil }?.artwork }
 }
 
@@ -69,14 +74,18 @@ public struct Catalog: Sendable {
         }
         albumsByID = Dictionary(uniqueKeysWithValues: albums.map { ($0.id, $0) })
 
-        artists = Dictionary(grouping: albums, by: \.artist).map { Artist(id: $0, albums: $1) }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        // classical tags put the composer in album artist and the performer in artist: both get a page
+        var byName: [String: [Album]] = [:]
+        for album in albums {
+            for name in Set([album.artist] + album.songs.map(\.artist)) {
+                byName[name, default: []].append(album)
+            }
+        }
+        artists = byName.map { name, albums in
+            Artist(id: name, albums: albums, songs: albums.flatMap { $0.artist == name ? $0.songs : $0.songs.filter { $0.artist == name } })
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         artistsByName = Dictionary(uniqueKeysWithValues: artists.map { ($0.name, $0) })
-    }
-
-    /// The artist page a song belongs to: its album's artist, which may be "Various Artists".
-    public func artist(of song: Song) -> String {
-        albumsByID[song.albumID]?.artist ?? song.albumArtist
     }
 
     private static func song(path: String, meta: TrackMeta?) -> Song {
@@ -94,11 +103,21 @@ public struct Catalog: Sendable {
             albumID = "\(album.lowercased())\u{1F}\(folder.path)"
         }
         let title = meta?.title ?? url.deletingPathExtension().lastPathComponent
+        let (work, detail) = splitWork(title)
         return Song(
-            id: path, title: title, artist: artist, album: album, albumID: albumID, albumArtist: albumArtist,
+            id: path, title: title, work: work, detail: detail, artist: artist, album: album, albumID: albumID, albumArtist: albumArtist,
             trackNumber: meta?.trackNumber, discNumber: meta?.discNumber, year: meta?.year, duration: meta?.duration ?? 0,
-            artwork: meta?.artwork, searchKey: "\(title) \(artist) \(album)".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            artwork: meta?.artwork, searchKey: "\(title) \(artist) \(albumArtist) \(album)".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
         )
+    }
+
+    /// Splits at the comma before a catalog number (Op., B., BWV, K., D., Hob., ...) and sets a quoted nickname after a dot.
+    static func splitWork(_ title: String) -> (work: String, detail: String?) {
+        guard let cut = title.firstMatch(of: /, (?=(?:Op\.?|op\.|BWV|BI|B\.|KV|K\.|D\.|Hob\.|S\.|WoO|KK|L\.|RV|HWV) ?\d)/) else {
+            return (title, nil)
+        }
+        let detail = title[cut.range.upperBound...].replacing(/\s*["“]([^"”]+)["”]/) { " · “\($0.1)”" }
+        return (String(title[..<cut.range.lowerBound]), String(detail))
     }
 
     private static func libraryOrder(_ a: Song, _ b: Song) -> Bool {

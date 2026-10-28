@@ -75,7 +75,7 @@ struct PlayerBar: View {
                 TimelineView(.periodic(from: .now, by: 15)) { context in
                     Group {
                         if let song, !resting {
-                            LinkText(text: song.artist) { navigate(.artist(controller.catalog.artist(of: song))) }
+                            LinkText(text: song.artist) { navigate(.artist(song.artist)) }
                         } else {
                             Text(controller.subline(at: context.date))
                         }
