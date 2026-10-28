@@ -14,10 +14,15 @@ struct Shuffler {
         }
         let index = bag.lastIndex { !blocked.contains($0) }!
         let pick = bag.remove(at: index)
-        recent.append(pick)
-        if recent.count > 2 * n {
-            recent.removeFirst(recent.count - n)
-        }
+        note(pick)
         return pick
+    }
+
+    /// Records a track the listener picked, so shuffle doesn't bring it back right after.
+    mutating func note(_ path: String) {
+        recent.append(path)
+        if recent.count > 200 {
+            recent.removeFirst(recent.count - 100)
+        }
     }
 }

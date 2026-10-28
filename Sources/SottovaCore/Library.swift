@@ -12,6 +12,7 @@ struct Library: Codable {
         var size: Int
         var modified: Date
         var loudness: Loudness?
+        var meta: TrackMeta?
         var unplayable = false
     }
 
@@ -32,7 +33,7 @@ struct Library: Codable {
     }
 
     var pending: [String] {
-        entries.filter { $0.value.loudness == nil && !$0.value.unplayable }.keys.sorted()
+        entries.filter { ($0.value.loudness == nil || $0.value.meta == nil) && !$0.value.unplayable }.keys.sorted()
     }
 
     /// Keeps cached loudness for files whose size and mtime didn't change; drops files that are gone.

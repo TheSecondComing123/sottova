@@ -13,6 +13,16 @@ public final class Controller {
     public private(set) var skippedFiles: [URL] = []
     public private(set) var pendingAnalysis = 0
     public private(set) var problem: String?
+    public private(set) var catalog = Catalog()
+    public private(set) var current: Song?
+    public private(set) var recent: [Song] = []
+    public var volume = UserDefaults.standard.object(forKey: "volume") as? Double ?? 1 {
+        didSet {
+            UserDefaults.standard.set(volume, forKey: "volume")
+            engine.mainMixerNode.outputVolume = Float(volume)
+        }
+    }
+    public let artwork: ArtworkStore?
     public var settings: Settings {
         didSet {
             // editing any field of a preset turns it into Custom; this re-enters didSet once
@@ -59,11 +69,18 @@ public final class Controller {
     @ObservationIgnored private var watcher: FolderWatcher?
     @ObservationIgnored private var watchedPaths: [String] = []
     @ObservationIgnored private var nowPlaying: NowPlaying?
+    /// Songs the listener picked, played in order before shuffle takes over again.
+    @ObservationIgnored private var queue: [String] = []
+    @ObservationIgnored private var lastCatalogBuild = Date.distantPast
+    @ObservationIgnored private var catalogEntries: [String: Library.Entry] = [:]
+    @ObservationIgnored private var catalogGeneration = 0
+    @ObservationIgnored private var saving: Task<Void, Never>?
 
     /// `storage` holds library.json, profile.json, status.json and plays.jsonl; tests pass nil to keep nothing on disk.
     public init(engine: AVAudioEngine = AVAudioEngine(), storage: URL? = .applicationSupportDirectory.appending(path: "Sottova")) {
         self.engine = engine
         self.storage = storage
+        artwork = storage.map { _ in ArtworkStore(directory: .cachesDirectory.appending(path: "Sottova/Artwork")) }
         let profile = Self.loadProfile(from: storage) ?? Settings.presets.first { $0.name == "Short" }!
         settings = profile
         machine = Machine(settings: profile)
@@ -80,10 +97,11 @@ public final class Controller {
         _ = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.engineConfigurationChanged() }
         }
-        loadLibrary()
+        engine.mainMixerNode.outputVolume = Float(volume)
         if let storage {
             shuffler.recent = PlayRecord.recentFiles(in: storage.appending(path: "plays.jsonl"))
         }
+        loadLibrary()
     }
 
     /// Starts the envelope clock, media keys and the first scan. Tests skip this and call `advance` themselves.
@@ -137,6 +155,23 @@ public final class Controller {
 
     public func apply(_ preset: Settings) {
         settings = preset
+    }
+
+    /// Plays these songs in order from `index`, with the usual fades and gaps, then goes back to shuffling everything.
+    public func play(_ songs: [Song], from index: Int = 0) {
+        guard songs.indices.contains(index) else { return }
+        queue = songs[index...].map(\.id)
+        if status == .idle {
+            failures = 0
+            command(.start)
+        } else {
+            // fades the current track out over a second (resuming it for that second if paused); from a gap it starts right away
+            command(.skip)
+        }
+    }
+
+    public func playNext(_ songs: [Song]) {
+        queue.insert(contentsOf: songs.map(\.id), at: 0)
     }
 
     public func addFolders(_ urls: [URL]) {
@@ -254,6 +289,31 @@ public final class Controller {
         tracks = library.playable.map { URL(filePath: $0) }
         skippedFiles = library.unplayable.map { URL(filePath: $0) }
         pendingAnalysis = library.pending.count
+        rebuildCatalog()
+    }
+
+    /// Grouping 20k songs takes ~80 ms, so it runs off the main actor, and only when the entries actually changed.
+    private func rebuildCatalog() {
+        let entries = library.entries
+        guard entries != catalogEntries else { return }
+        catalogEntries = entries
+        lastCatalogBuild = .now
+        catalogGeneration += 1
+        let generation = catalogGeneration
+        Task {
+            let built = await Task.detached(priority: .userInitiated) { Catalog(entries: entries) }.value
+            guard generation == catalogGeneration else { return }
+            catalog = built
+            if let path = file?.url.path {
+                current = catalog.songsByID[path]
+            }
+            refreshRecent()
+        }
+    }
+
+    private func refreshRecent() {
+        var seen = Set<String>()
+        recent = shuffler.recent.reversed().filter { seen.insert($0).inserted }.prefix(12).compactMap { catalog.songsByID[$0] }
     }
 
     private func send(_ event: Machine.Event) {
@@ -318,7 +378,11 @@ public final class Controller {
     }
 
     private func startNextTrack() {
-        guard let path = shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng) else {
+        let queued = queue.isEmpty ? nil : queue.removeFirst()
+        if let queued {
+            shuffler.note(queued)
+        }
+        guard let path = queued ?? shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng) else {
             send(.stop)
             return
         }
@@ -336,7 +400,9 @@ public final class Controller {
             // tracks not analyzed yet play at a provisional −6 dB
             let gainDb = library.entries[path]?.loudness?.gainDb(target: settings.targetLufs, ceiling: settings.ceilingDbtp) ?? -6
             trackGain = pow(10, gainDb / 20)
-            title = url.deletingPathExtension().lastPathComponent
+            current = catalog.songsByID[path]
+            title = current?.title ?? url.deletingPathExtension().lastPathComponent
+            refreshRecent()
             startedAt = Date()
             failures = 0
             problem = nil
@@ -355,26 +421,36 @@ public final class Controller {
     }
 
     private func analyzePending() {
-        let pending = library.pending
+        let pending = library.pending.map { ($0, library.entries[$0]?.loudness == nil) }
         guard analysis == nil, !pending.isEmpty else { return }
+        let store = artwork
         analysis = Task {
-            await withTaskGroup(of: (String, Loudness?).self) { group in
+            await withTaskGroup(of: (String, TrackMeta?, Loudness?).self) { group in
                 var queue = pending[...]
                 func addNext() {
-                    guard let path = queue.popFirst() else { return }
-                    group.addTask(priority: .utility) { (path, try? Loudness.measure(URL(filePath: path))) }
+                    guard let next = queue.popFirst() else { return }
+                    let (path, needsLoudness) = next
+                    group.addTask(priority: .utility) {
+                        let url = URL(filePath: path)
+                        guard let meta = try? await Metadata.read(url, artwork: store) else { return (path, nil, nil) }
+                        let loudness = needsLoudness ? try? Loudness.measure(url) : nil
+                        // a file that opened but couldn't be measured still counts as unplayable
+                        return needsLoudness && loudness == nil ? (path, nil, nil) : (path, meta, loudness)
+                    }
                 }
                 for _ in 0..<Self.analysisWidth {
                     addNext()
                 }
                 var unsaved = 0
-                for await (path, loudness) in group {
+                for await (path, meta, loudness) in group {
                     if library.entries[path] != nil {
-                        if let loudness {
-                            library.entries[path]?.loudness = loudness
+                        if let meta {
+                            library.entries[path]?.meta = meta
+                            if let loudness {
+                                library.entries[path]?.loudness = loudness
+                            }
                         } else {
                             library.entries[path]?.unplayable = true
-                            refreshTracks()
                         }
                     }
                     pendingAnalysis = max(0, pendingAnalysis - 1)
@@ -383,11 +459,15 @@ public final class Controller {
                         saveLibrary()
                         unsaved = 0
                     }
+                    // tags arrive one file at a time; regroup albums at most once a second
+                    if Date.now.timeIntervalSince(lastCatalogBuild) > 1 {
+                        refreshTracks()
+                    }
                     addNext()
                 }
             }
             saveLibrary()
-            pendingAnalysis = library.pending.count
+            refreshTracks()
             analysis = nil
             // files may have arrived while this pass ran
             analyzePending()
@@ -433,12 +513,23 @@ public final class Controller {
         refreshTracks()
     }
 
+    /// Encoding a 20k-entry library takes ~100 ms, so it happens off the main actor, one save after another.
     private func saveLibrary() {
         guard let url = storage?.appending(path: "library.json") else { return }
-        do {
-            try library.save(to: url)
-        } catch {
-            problem = "couldn't save the library: \(error.localizedDescription)"
+        let snapshot = library
+        saving = Task { [previous = saving] in
+            await previous?.value
+            let failure = await Task.detached(priority: .utility) { () -> String? in
+                do {
+                    try snapshot.save(to: url)
+                    return nil
+                } catch {
+                    return error.localizedDescription
+                }
+            }.value
+            if let failure {
+                problem = "couldn't save the library: \(failure)"
+            }
         }
     }
 
