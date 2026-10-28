@@ -14,7 +14,8 @@ struct Timeline: View {
     var body: some View {
         let resting = controller.status == .resting
         // only the breathing dots need frames; while playing the played part grows a few points a second
-        TimelineView(.animation(minimumInterval: resting ? (compact ? 1 / 15 : 1 / 30) : 0.5,
+        // the hero and the bar share one rate, so a gap redraws the window 15 times a second, not 45
+        TimelineView(.animation(minimumInterval: resting ? 1 / 15 : 0.5,
                                 paused: !visible || controller.status == .idle || controller.status == .paused)) { context in
             Canvas { gc, size in
                 draw(in: gc, size: size, time: context.date.timeIntervalSinceReferenceDate)
@@ -29,7 +30,7 @@ struct Timeline: View {
 
         if compact {
             if resting {
-                dots(in: gc, from: size.width * 0.3, width: size.width * 0.4, y: height + 0.5, time: time, breathing: true)
+                dots(in: gc, around: size.width / 2, y: height + 0.5, time: time, breathing: true)
             } else if let track = controller.track {
                 envelope(track, in: gc, width: size.width, height: height, resting: false)
             }
@@ -39,7 +40,7 @@ struct Timeline: View {
         if let track = controller.track {
             envelope(track, in: gc, width: trackWidth, height: height, resting: resting)
         }
-        dots(in: gc, from: trackWidth, width: size.width * 0.18, y: height + 0.5, time: time, breathing: resting)
+        dots(in: gc, around: trackWidth + size.width * 0.09, y: height + 0.5, time: time, breathing: resting)
         nextFadeIn(in: gc, from: size.width * 0.9, width: size.width * 0.1, height: height)
     }
 
@@ -68,17 +69,17 @@ struct Timeline: View {
     }
 
     /// The silence: dots on the baseline that breathe while resting, a slow wave rather than a countdown.
-    private func dots(in gc: GraphicsContext, from x0: CGFloat, width: CGFloat, y: CGFloat, time: Double, breathing: Bool) {
-        let r: CGFloat = 1.5
+    private func dots(in gc: GraphicsContext, around center: CGFloat, y: CGFloat, time: Double, breathing: Bool) {
+        let r: CGFloat = 2.5
         for i in 0..<5 {
-            let x = x0 + width * (CGFloat(i) + 0.5) / 5
-            let opacity = breathing ? 0.35 + 0.65 * max(0, sin(time * 1.6 - Double(i) * 0.7)) : 0.6
-            gc.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
-                    with: .color((breathing ? Theme.text : Theme.decor).opacity(opacity)))
+            // a 60 pt cluster, 15 pt apart: spread wider, five dots read as dust
+            let x = center + CGFloat(i - 2) * 15
+            let opacity = breathing ? 0.3 + 0.7 * max(0, sin(time * 1.6 - Double(i) * 0.7)) : 0.6
+            gc.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(Theme.muted.opacity(opacity)))
         }
     }
 
-    /// The next track is unknown: only the start of its fade-in, trailing off at the edge.
+    /// The next track is unknown: only the start of its fade-in, cut off at the edge.
     private func nextFadeIn(in gc: GraphicsContext, from x0: CGFloat, width: CGFloat, height: CGFloat) {
         var shape = Path()
         shape.move(to: CGPoint(x: x0, y: height))
@@ -88,7 +89,6 @@ struct Timeline: View {
         }
         shape.addLine(to: CGPoint(x: x0 + width, y: height))
         shape.closeSubpath()
-        gc.fill(shape, with: .linearGradient(Gradient(colors: [Theme.decor.opacity(0.6), Theme.decor.opacity(0)]),
-                                             startPoint: CGPoint(x: x0, y: 0), endPoint: CGPoint(x: x0 + width, y: 0)))
+        gc.fill(shape, with: .color(Theme.decor.opacity(0.3)))
     }
 }

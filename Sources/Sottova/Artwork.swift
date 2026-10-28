@@ -36,7 +36,8 @@ struct Artwork: View {
     var body: some View {
         let shape = circle ? AnyShape(.circle) : AnyShape(.rect(cornerRadius: radius))
         Rectangle()
-            .fill(image == nil ? Self.ground(for: title) : Theme.hover)
+            // an artist without art is an outlined circle, lighter than an album's solid ground
+            .fill(image == nil ? (circle ? .clear : Self.ground(for: title)) : Theme.hover)
             .overlay {
                 if let image {
                     Image(decorative: image, scale: 2)
@@ -58,7 +59,8 @@ struct Artwork: View {
                     shape.stroke(Theme.border, lineWidth: 1)
                 }
             }
-            .task(id: key) {
+            // the size is part of the identity: header art that grows with the window decodes again, sharper
+            .task(id: "\(key ?? "")@\(Self.pixels(for: size))") {
                 guard let key, let store = Self.store else {
                     image = nil
                     return
@@ -90,7 +92,7 @@ struct Artwork: View {
 }
 
 /// The cover blurred into a wash behind a page header, so the page's only color still comes from the art.
-/// A 64 pt decode scaled up is plenty: the blur removes every detail anyway.
+/// A 64 pt decode, blurred at that size and then scaled up: the same look as blurring the big layer, at a fraction of the pixels.
 struct ArtWash: View {
     let key: String
     @Environment(\.colorScheme) private var colorScheme
@@ -99,9 +101,9 @@ struct ArtWash: View {
         GeometryReader { geo in
             let side = max(geo.size.width, geo.size.height)
             Artwork(key: key, size: 64, radius: 0)
+                .blur(radius: 60 * 64 / side, opaque: true)
                 .scaleEffect(side / 64, anchor: .topLeading)
                 .frame(width: side, height: side, alignment: .topLeading)
-                .blur(radius: 60, opaque: true)
                 .opacity(colorScheme == .dark ? 0.45 : 0.3)
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
                 .clipped()
@@ -123,7 +125,7 @@ private struct TypeCover: View {
             if circle {
                 // the name is already the caption under an artist's circle, so the circle carries initials
                 Text(title.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined())
-                    .font(.system(size: side * 0.3, weight: .light))
+                    .font(.system(size: side * 0.17))
                     .foregroundStyle(Theme.muted)
                     .frame(width: side, height: side)
             } else {
@@ -147,7 +149,8 @@ private struct TypeCover: View {
             }
         }
         .padding(side * 0.08)
-        .frame(width: side, height: side, alignment: .bottomLeading)
+        // top left, where the hover play button in the opposite corner can't cover it
+        .frame(width: side, height: side, alignment: .topLeading)
     }
 }
 

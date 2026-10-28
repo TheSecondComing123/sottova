@@ -165,12 +165,15 @@ private struct Sidebar: View {
 
             Spacer()
 
-            Text(controller.libraryLine)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Theme.faint)
-                .lineLimit(2)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 8)
+            // only when there's news: the song count alone is already on the Songs page
+            if controller.folders.isEmpty || controller.pendingAnalysis > 0 || !controller.skippedFiles.isEmpty {
+                Text(controller.libraryLine)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.faint)
+                    .lineLimit(2)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 8)
+            }
 
             VStack(spacing: 2) {
                 footerRow("Add Folder", "folder.badge.plus", action: addFolders)

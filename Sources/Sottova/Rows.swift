@@ -75,7 +75,6 @@ private struct Marker: View {
     let hovering: Bool
     let play: () -> Void
     @Environment(Controller.self) private var controller
-    @Environment(\.windowVisible) private var visible
 
     var body: some View {
         let isCurrent = controller.current?.id == song.id && controller.status != .idle
@@ -89,10 +88,10 @@ private struct Marker: View {
             .buttonStyle(PressStyle())
             .help(isCurrent ? (running ? "pause" : "play") : "play from here")
         } else if isCurrent {
+            // still, on purpose: the animated .variableColor effect redrew at display rate and cost about 20% CPU
             Image(systemName: "waveform")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.text)
-                .symbolEffect(.variableColor.iterative, isActive: controller.status == .playing && visible)
         } else {
             Text("\(number)")
                 .font(.system(size: 13))
@@ -160,6 +159,8 @@ struct Tile<Label: View>: View {
     var body: some View {
         VStack(alignment: circle ? .center : .leading, spacing: 10) {
             Artwork(key: artwork, radius: 8, circle: circle, title: coverTitle, subtitle: coverSubtitle)
+                // a type cover repeats the label below it
+                .accessibilityHidden(true)
                 .overlay(alignment: .bottomTrailing) {
                     PlayCircle(size: 44, action: play)
                         .padding(circle ? 4 : 10)
@@ -221,7 +222,7 @@ struct ArtistTile: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
-                Text(Format.count(artist.albums.count, "album"))
+                Text(Format.count(artist.songs.count, "song"))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
             }

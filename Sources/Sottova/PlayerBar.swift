@@ -46,35 +46,43 @@ struct PlayerBar: View {
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: colorScheme == .dark ? 18 : 12, y: colorScheme == .dark ? 8 : 4)
+        // on a near-black page a dark shadow reads as a glow; the border is enough there
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 12, y: 4)
     }
 
     private var nowPlaying: some View {
         let song = controller.status == .idle ? nil : controller.current
         let resting = controller.status == .resting
         return HStack(spacing: 12) {
-            Artwork(key: song?.artwork, size: 52, radius: 6)
-                .opacity(resting ? 0.45 : 1)
-                .saturation(resting ? 0 : 1)
-                .animation(Theme.ambient, value: resting)
+            if song != nil {
+                Artwork(key: song?.artwork, size: 52, radius: 6)
+                    .opacity(resting ? 0.45 : 1)
+                    .saturation(resting ? 0 : 1)
+                    .animation(Theme.ambient, value: resting)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 // in a gap the last piece stays, dimmed: the dots under the transport already say it's resting
                 Group {
                     if let song {
                         LinkText(text: song.work) { navigate(.album(song.albumID)) }
                     } else {
-                        Text("nothing playing")
+                        // nothing to show yet but how it will play
+                        Text(controller.settings.name)
                     }
                 }
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(resting ? Theme.faint : Theme.text)
                 .lineLimit(1)
 
-                if let song {
-                    LinkText(text: song.artist) { navigate(.artist(song.artist)) }
-                        .font(.system(size: 13))
-                        .foregroundStyle(resting ? Theme.faint : Theme.muted)
+                Group {
+                    if let song {
+                        LinkText(text: song.artist) { navigate(.artist(song.artist)) }
+                    } else {
+                        Text(Format.gaps(controller.settings))
+                    }
                 }
+                .font(.system(size: 13))
+                .foregroundStyle(resting ? Theme.faint : Theme.muted)
             }
             .animation(Theme.ambient, value: resting)
         }

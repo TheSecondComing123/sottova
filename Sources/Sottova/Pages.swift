@@ -67,8 +67,15 @@ struct HomePage: View {
             if recent.count >= 3 {
                 SectionTitle(title: "Recently Played")
                     .padding(.bottom, 8)
-                Shelf(items: recent) { RecentTile(song: $0) }
-                    .padding(.bottom, 32)
+                Group {
+                    // one album's cover five times reads as a pattern; the titles are what differ
+                    if Set(recent.map(\.albumID)).count == 1 {
+                        RecentList(songs: Array(recent.prefix(6)))
+                    } else {
+                        Shelf(items: recent) { RecentTile(song: $0) }
+                    }
+                }
+                .padding(.bottom, 32)
             }
             if !albums.isEmpty {
                 SectionTitle(title: "Albums", action: Shelf<Album, AlbumTile>.overflows(albums.count, in: width) ? ("Show All", { navigate(.albums) }) : nil)
@@ -86,6 +93,7 @@ private struct Hero: View {
     @Environment(\.navigate) private var navigate
     @Environment(\.windowVisible) private var visible
     @State private var art: CGFloat = 232
+    @State private var column: CGFloat = 0
 
     var body: some View {
         let idle = controller.status == .idle
@@ -95,7 +103,7 @@ private struct Hero: View {
                 if idle {
                     Mosaic(albums: controller.catalog.albums, side: art)
                 } else {
-                    TimelineView(.periodic(from: .now, by: controller.status == .playing && visible ? 0.1 : 60)) { _ in
+                    TimelineView(FadeSchedule(track: controller.track, taken: .now, active: controller.status == .playing && visible)) { _ in
                         let gain = level
                         Artwork(key: controller.current?.artwork, size: art, radius: 10, outlined: true,
                                 title: controller.current?.album, subtitle: controller.current?.albumArtist)
@@ -114,18 +122,12 @@ private struct Hero: View {
                         .foregroundStyle(Theme.muted)
                 }
                 // the title thins with the sound: it fades out to a light weight, rests there, and fills in with the next track
-                TimelineView(.periodic(from: .now, by: controller.status == .playing && visible ? 0.1 : 60)) { _ in
+                TimelineView(FadeSchedule(track: controller.track, taken: .now, active: controller.status == .playing && visible)) { _ in
                     let gain = idle ? 1 : level
-                    // one size per title, the largest that fits on a line, instead of a scale factor that sizes every track
-                    // differently; sized from the bold cut so the size holds while the weight moves
-                    ViewThatFits(in: .horizontal) {
-                        ForEach([56, 44], id: \.self) { size in
-                            heading(size: size, gain: gain).lineLimit(1)
-                        }
-                        heading(size: 36, gain: gain).lineLimit(2)
-                    }
-                    .foregroundStyle(Theme.text)
-                    .opacity(0.35 + 0.65 * gain)
+                    // rounded to steps of 10 so a held track, at gain 1, skips the title's body on every tick
+                    HeroTitle(text: heading, weight: (20 + 50 * gain).rounded() * 10, size: HeroTitle.size(for: heading, in: column))
+                        .equatable()
+                        .opacity(resting ? 0.5 : 1)
                 }
                 .contentTransition(.opacity)
                 if let detail = controller.current?.detail, !idle, !resting {
@@ -170,6 +172,9 @@ private struct Hero: View {
                     .padding(.top, 6)
                 }
             }
+            // the column takes all the width beside the art, so its width never depends on the title it sizes
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { column = $0 }
         }
         .animation(Theme.ambient, value: controller.status)
         // measured at the page's width, not the header's, which would depend on the art it sizes
@@ -185,32 +190,20 @@ private struct Hero: View {
 
     private var heading: String {
         switch controller.status {
-        case .idle: controller.tracks.isEmpty ? "Your music, with room to breathe" : Format.count(controller.tracks.count, "song")
+        // idle, the headline is how you'll listen; the library's size is a detail
+        case .idle: controller.tracks.isEmpty ? "Your music, with room to breathe" : controller.settings.name
         case .resting: "Resting"
         case .playing, .paused: controller.current?.work ?? controller.title ?? "Starting"
         }
     }
 
-    private func heading(size: CGFloat, gain: Double) -> some View {
-        headingText(size: size, weight: 700)
-            .hidden()
-            .overlay(alignment: .topLeading) {
-                headingText(size: size, weight: 200 + 500 * gain)
-            }
-    }
-
-    private func headingText(size: CGFloat, weight: Double) -> some View {
-        Text(heading)
-            .font(.system(size: size, axisWeight: weight))
-            .tracking(-size * 0.022)
-    }
 
     private func eyebrow(at date: Date) -> String {
         switch controller.status {
         case .idle:
             guard !controller.tracks.isEmpty else { return "sottova plays your library with silence between songs" }
-            let total = controller.catalog.songs.reduce(0) { $0 + $1.duration }
-            return "\(Format.length(total)) of music, \(Format.gaps(controller.settings)) between"
+            let songs = controller.catalog.songs
+            return "\(Format.count(songs.count, "song")) · \(Format.length(songs.reduce(0) { $0 + $1.duration })) · \(Format.range(controller.settings)) between"
         case .playing:
             // concert-program order: composer, work, performer
             guard let song = controller.current, song.albumArtist != song.artist else { return "now playing" }
@@ -241,16 +234,20 @@ private struct TodayScore: View {
     var body: some View {
         let music = plays.reduce(0) { $0 + $1.played }
         let quiet = plays.reduce(0) { $0 + $1.gapAfter }
-        VStack(alignment: .leading, spacing: 10) {
+        let width = CGFloat(music + quiet) * scale + 1
+        HStack(alignment: .bottom, spacing: 20) {
+            // as wide as the day so far, and scrolling, latest at the right, once the day outgrows the page
             ScrollView(.horizontal) {
                 Canvas { gc, size in draw(in: gc, size: size) }
-                    .frame(width: CGFloat(music + quiet) * scale + 1, height: 48)
+                    .frame(width: width, height: 32)
             }
             .scrollIndicators(.never)
             .defaultScrollAnchor(.trailing)
+            .frame(maxWidth: width)
             Text("\(Format.count(plays.count, "piece")), \(Format.length(music)) of music, \(Format.length(quiet)) of quiet")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.muted)
+                .fixedSize()
         }
     }
 
@@ -271,9 +268,61 @@ private struct TodayScore: View {
             }
             shape.addLine(to: CGPoint(x: x + width, y: height))
             shape.closeSubpath()
-            gc.fill(shape, with: .color(Theme.muted))
+            gc.fill(shape, with: .color(Theme.text.opacity(0.25)))
             x += width + CGFloat(play.gapAfter) * scale
         }
+    }
+}
+
+/// Every 0.1 s while a fade moves the gain, at most once a second through the hold: at 10 Hz a held track re-laid
+/// out the hero for nothing, about 8% CPU. The second-long steps still catch a skip's early fade-out.
+private struct FadeSchedule: TimelineSchedule {
+    let track: Track?
+    /// When `track` was read; its elapsed time runs on from there while playing.
+    let taken: Date
+    let active: Bool
+
+    func entries(from start: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        var next = start
+        return AnyIterator {
+            defer {
+                if active, let track {
+                    let t = track.elapsed + next.timeIntervalSince(taken)
+                    let holding = t >= track.fadeIn && t < track.outStart
+                    next += holding ? max(0.1, min(1, track.outStart - t)) : 0.1
+                } else {
+                    next += 60
+                }
+            }
+            return next
+        }
+    }
+}
+
+/// The title thins with the sound: it fades out to a light weight, rests there, and fills in with the next track.
+/// One size per title, the largest that fits on a line, instead of a scale factor that sizes every track differently.
+private struct HeroTitle: View, Equatable {
+    let text: String
+    let weight: Double
+    let size: CGFloat
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: size, axisWeight: weight))
+            .tracking(-size * 0.022)
+            .lineLimit(size < 44 ? 2 : 1)
+            .foregroundStyle(Theme.text)
+    }
+
+    /// The largest of 56 and 44 pt whose bold cut fits `width` on one line, else 36 on two. Measured here rather than
+    /// with ViewThatFits, which answered the stacks' 0 and ∞ width probes with different heights and kept the window
+    /// re-laying out about 1,700 times a second. Bold is the widest the title gets, so the size holds while the weight moves.
+    static func size(for text: String, in width: CGFloat) -> CGFloat {
+        for size: CGFloat in [56, 44] {
+            let bold = NSFont.systemFont(ofSize: size, weight: .bold)
+            if (text as NSString).size(withAttributes: [.font: bold, .kern: -size * 0.022]).width <= width { return size }
+        }
+        return 36
     }
 }
 
@@ -331,6 +380,36 @@ private struct RecentTile: View {
                     .lineLimit(1)
             }
         }
+    }
+}
+
+private struct RecentList: View {
+    let songs: [Song]
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], alignment: .leading, spacing: 2) {
+            ForEach(songs) { song in
+                Button { controller.play([song]) } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(song.work)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                        Text([song.detail, song.artist].compactMap { $0 }.joined(separator: " · "))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .hoverable()
+                }
+                .buttonStyle(PressStyle(scale: 0.98))
+            }
+        }
+        .padding(.horizontal, -10)
+        .frame(maxWidth: 900, alignment: .leading)
     }
 }
 
@@ -573,3 +652,4 @@ private struct Missing: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
