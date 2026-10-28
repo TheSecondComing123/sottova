@@ -4,10 +4,12 @@ import SottovaCore
 
 @main
 struct SottovaApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     private let controller = Controller()
 
     init() {
         let controller = controller
+        AppDelegate.controller = controller
         // M1 kept a single folder path in defaults
         if let path = UserDefaults.standard.string(forKey: "folder") {
             controller.addFolders([URL(filePath: path)])
@@ -38,6 +40,21 @@ struct SottovaApp: App {
         .defaultSize(width: 620, height: 380)
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
+        // otherwise every sottova:// link opens this window
+        .handlesExternalEvents(matching: [])
+
+        Settings {
+            SettingsView(controller: controller)
+        }
+    }
+}
+
+/// sottova:// links arrive here; SwiftUI's onOpenURL needs a window scene, and the panel isn't one until opened.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor static var controller: Controller?
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        urls.forEach { Self.controller?.open($0) }
     }
 }
 

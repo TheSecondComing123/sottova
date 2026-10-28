@@ -39,13 +39,7 @@ struct NowWindow: View {
         .tint(color)
         .preferredColorScheme(.dark)
         .containerBackground(.thinMaterial, for: .window)
-        // a Dock icon only while this window is open; the menu bar stays home
-        .onAppear {
-            NSApp.setActivationPolicy(.regular)
-            NSApp.activate()
-        }
-        .onDisappear {
-            NSApp.setActivationPolicy(.accessory)
-        }
+        .onAppear { Dock.windowOpened(identifier: "now") }
+        .onDisappear { Dock.windowClosed() }
     }
 }

@@ -5,6 +5,7 @@ import SottovaCore
 struct Panel: View {
     @Bindable var controller: Controller
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @State private var showsGap = false
 
     var body: some View {
@@ -53,6 +54,7 @@ struct Panel: View {
                         }
                     }
                     Divider()
+                    Button("settings…") { openSettings() }
                     Button("quit sottova") { NSApplication.shared.terminate(nil) }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -85,8 +87,10 @@ struct Panel: View {
                 withAnimation(.spring(duration: 0.35, bounce: 0.1)) { showsGap.toggle() }
             } label: {
                 HStack(spacing: 8) {
-                    Text("gap").foregroundStyle(Mocha.subtext0)
-                    Text("\(duration(controller.settings.gapRange.lowerBound)) – \(duration(controller.settings.gapRange.upperBound))")
+                    Text(controller.settings.name).foregroundStyle(Mocha.subtext0)
+                    Text(controller.settings.crossfade
+                        ? "crossfade \(Int(controller.settings.crossfadeSec)) s"
+                        : "\(duration(controller.settings.gapRange.lowerBound)) – \(duration(controller.settings.gapRange.upperBound))")
                         .monospacedDigit()
                         .foregroundStyle(Mocha.text)
                     Spacer()
@@ -101,6 +105,11 @@ struct Panel: View {
 
             if showsGap {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                    GridRow {
+                        Text("preset")
+                        PresetPicker(controller: controller)
+                            .labelsHidden()
+                    }
                     GridRow {
                         Text("shortest")
                         Slider(value: $controller.settings.gapMin, in: 0...1200, step: 30)
@@ -124,10 +133,6 @@ struct Panel: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-    }
-
-    private func duration(_ seconds: Double) -> String {
-        seconds < 60 ? "\(Int(seconds)) s" : String(format: "%g min", seconds / 60)
     }
 
     private func addFolders() {
