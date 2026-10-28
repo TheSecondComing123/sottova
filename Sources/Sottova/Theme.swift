@@ -34,6 +34,19 @@ enum Theme {
     }
 }
 
+extension Font {
+    /// SF Pro anywhere on its weight axis (1–1000, bold is 700), so a title can thin continuously with the sound
+    /// instead of stepping between named weights. Optical size follows the point size, as the named weights do.
+    static func system(size: CGFloat, axisWeight: Double) -> Font {
+        let weight = 0x7767_6874, opticalSize = 0x6F70_737A
+        let base = NSFont.systemFont(ofSize: size)
+        let descriptor = base.fontDescriptor.addingAttributes([
+            NSFontDescriptor.AttributeName(kCTFontVariationAttribute as String): [weight: axisWeight, opticalSize: Double(size)],
+        ])
+        return Font(NSFont(descriptor: descriptor, size: size) ?? base)
+    }
+}
+
 enum Route: Hashable {
     case home, songs, albums, artists
     case album(String)

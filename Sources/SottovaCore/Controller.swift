@@ -104,7 +104,6 @@ public final class Controller {
             shuffler.recent = PlayRecord.recentFiles(in: storage.appending(path: "plays.jsonl"))
         }
         loadLibrary()
-        refreshToday()
     }
 
     /// Starts the envelope clock, media keys and the first scan. Tests skip this and call `advance` themselves.
@@ -311,6 +310,8 @@ public final class Controller {
                 current = catalog.songsByID[path]
             }
             refreshRecent()
+            // today's plays take their lengths from the tags, which may only just have been read
+            refreshToday()
         }
     }
 

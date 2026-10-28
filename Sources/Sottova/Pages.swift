@@ -58,6 +58,12 @@ struct HomePage: View {
             Hero()
                 .padding(.bottom, 44)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            if !controller.today.isEmpty {
+                SectionTitle(title: "Today")
+                    .padding(.bottom, 10)
+                TodayScore(plays: controller.today)
+                    .padding(.bottom, 36)
+            }
             if recent.count >= 3 {
                 SectionTitle(title: "Recently Played")
                     .padding(.bottom, 8)
@@ -107,14 +113,20 @@ private struct Hero: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.muted)
                 }
-                // one size per title, the largest that fits on a line, instead of a scale factor that sizes every track differently
-                ViewThatFits(in: .horizontal) {
-                    ForEach([56, 44], id: \.self) { size in
-                        headingText(size: size).lineLimit(1)
+                // the title thins with the sound: it fades out to a light weight, rests there, and fills in with the next track
+                TimelineView(.periodic(from: .now, by: controller.status == .playing && visible ? 0.1 : 60)) { _ in
+                    let gain = idle ? 1 : level
+                    // one size per title, the largest that fits on a line, instead of a scale factor that sizes every track
+                    // differently; sized from the bold cut so the size holds while the weight moves
+                    ViewThatFits(in: .horizontal) {
+                        ForEach([56, 44], id: \.self) { size in
+                            heading(size: size, gain: gain).lineLimit(1)
+                        }
+                        heading(size: 36, gain: gain).lineLimit(2)
                     }
-                    headingText(size: 36).lineLimit(2)
+                    .foregroundStyle(Theme.text)
+                    .opacity(0.35 + 0.65 * gain)
                 }
-                .foregroundStyle(resting ? Theme.faint : Theme.text)
                 .contentTransition(.opacity)
                 if let detail = controller.current?.detail, !idle, !resting {
                     Text(detail)
@@ -179,9 +191,17 @@ private struct Hero: View {
         }
     }
 
-    private func headingText(size: CGFloat) -> some View {
+    private func heading(size: CGFloat, gain: Double) -> some View {
+        headingText(size: size, weight: 700)
+            .hidden()
+            .overlay(alignment: .topLeading) {
+                headingText(size: size, weight: 200 + 500 * gain)
+            }
+    }
+
+    private func headingText(size: CGFloat, weight: Double) -> some View {
         Text(heading)
-            .font(.system(size: size, weight: controller.status == .resting ? .semibold : .bold))
+            .font(.system(size: size, axisWeight: weight))
             .tracking(-size * 0.022)
     }
 
@@ -210,14 +230,70 @@ private struct Hero: View {
     }
 }
 
+/// The day as a score: each piece at its true length with its fades, and the quiet after it as bare line.
+/// Only finished plays are drawn, so a gap still running is never measured out.
+private struct TodayScore: View {
+    let plays: [Play]
+    @Environment(Controller.self) private var controller
+    /// Ten points a minute: an hour of listening is 600 pt, so the latest pieces sit at the right and older ones scroll.
+    private let scale: CGFloat = 1 / 6
+
+    var body: some View {
+        let music = plays.reduce(0) { $0 + $1.played }
+        let quiet = plays.reduce(0) { $0 + $1.gapAfter }
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal) {
+                Canvas { gc, size in draw(in: gc, size: size) }
+                    .frame(width: CGFloat(music + quiet) * scale + 1, height: 48)
+            }
+            .scrollIndicators(.never)
+            .defaultScrollAnchor(.trailing)
+            Text("\(Format.count(plays.count, "piece")), \(Format.length(music)) of music, \(Format.length(quiet)) of quiet")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.muted)
+        }
+    }
+
+    private func draw(in gc: GraphicsContext, size: CGSize) {
+        let height = size.height - 1
+        let curve = controller.settings.curve
+        let fadeIn = max(controller.settings.fadeIn, 0.1), fadeOut = max(controller.settings.fadeOut, 0.1)
+        gc.fill(Path(CGRect(x: 0, y: height, width: size.width, height: 1)), with: .color(Theme.border))
+        var x: CGFloat = 0
+        for play in plays {
+            let width = CGFloat(play.played) * scale
+            var shape = Path()
+            shape.move(to: CGPoint(x: x, y: height))
+            for dx in stride(from: 0, through: width, by: 1) {
+                let t = Double(dx / scale)
+                let gain = min(curve.fadeIn(t / fadeIn), curve.fadeIn((play.played - t) / fadeOut))
+                shape.addLine(to: CGPoint(x: x + dx, y: height - CGFloat(gain) * height))
+            }
+            shape.addLine(to: CGPoint(x: x + width, y: height))
+            shape.closeSubpath()
+            gc.fill(shape, with: .color(Theme.muted))
+            x += width + CGFloat(play.gapAfter) * scale
+        }
+    }
+}
+
 /// Four covers from across the library, so the idle home shows your music instead of a placeholder.
 private struct Mosaic: View {
     let albums: [Album]
     let side: CGFloat
 
     var body: some View {
-        let picks = albums.isEmpty ? [] : (0..<4).map { albums[$0 * albums.count / 4] }
-        Grid(horizontalSpacing: 2, verticalSpacing: 2) {
+        if albums.count < 4 {
+            // four of the same cover would read as a pattern, not a library
+            Artwork(key: albums.first?.artwork, size: side, radius: 10, outlined: true, title: albums.first?.title, subtitle: albums.first?.artist)
+        } else {
+            grid
+        }
+    }
+
+    private var grid: some View {
+        let picks = (0..<4).map { albums[$0 * albums.count / 4] }
+        return Grid(horizontalSpacing: 2, verticalSpacing: 2) {
             GridRow {
                 cover(picks, 0)
                 cover(picks, 1)
@@ -232,8 +308,7 @@ private struct Mosaic: View {
     }
 
     private func cover(_ picks: [Album], _ i: Int) -> some View {
-        let album = picks.indices.contains(i) ? picks[i] : nil
-        return Artwork(key: album?.artwork, size: (side - 2) / 2, radius: 0, title: album?.title)
+        Artwork(key: picks[i].artwork, size: (side - 2) / 2, radius: 0, title: picks[i].title)
     }
 }
 
