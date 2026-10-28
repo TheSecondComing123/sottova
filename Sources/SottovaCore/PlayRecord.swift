@@ -7,6 +7,16 @@ struct PlayRecord: Codable {
     var skipped: Bool
     var gapAfterSec: Double
 
+    /// The last files played, oldest first, so avoid-last-N survives a relaunch.
+    static func recentFiles(in url: URL, count: Int = 20) -> [String] {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return text.split(separator: "\n").suffix(count).compactMap {
+            try? decoder.decode(PlayRecord.self, from: Data($0.utf8)).file
+        }
+    }
+
     func append(to url: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
