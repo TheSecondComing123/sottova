@@ -60,6 +60,16 @@ struct LoudnessTests {
         #expect(abs(try Loudness.measure(url).lufs - stereo.lufs) < 0.01)
     }
 
+    /// A FLAC with 128-frame blocks, which Apple's decoder rejects. AVAudioFile.framePosition raised an Objective-C
+    /// exception on it and took the whole app down; it has to come back as a thrown error so the file is marked unplayable.
+    @Test func undecodableFileThrowsInsteadOfCrashing() throws {
+        let flac = Data(base64Encoded: "ZkxhQ4AAACIAgACAAAARAAARCsRDcAAAAgRTp/suwr1bNbpVYFZUhouE//hpHAB/bgAAAAAAAAAAR8P/+GkcAX97AAAAAAAAAAArY//4aRwCf0QAAAAAAAAAAJ6D//hpHAN/UQAAAAAAAAAA8iP/+GkcBANJAAAAAAAAAADLsA==")!
+        let url = FileManager.default.temporaryDirectory.appending(path: "sottova-128-\(UUID().uuidString).flac")
+        try flac.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(throws: (any Error).self) { try Loudness.measure(url) }
+    }
+
     @Test func gainTakesTheStricterOfLoudnessAndPeak() {
         #expect(Loudness(lufs: -10, truePeakDb: -0.5).gainDb() == -8)
         #expect(Loudness(lufs: -25, truePeakDb: -3).gainDb() == 2)

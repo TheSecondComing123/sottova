@@ -35,9 +35,14 @@ public struct Loudness: Codable, Equatable, Sendable {
         }
 
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 65_536)!
-        while file.framePosition < file.length {
-            try file.read(into: buffer)
+        // counts frames instead of asking framePosition: on a file the decoder rejects, framePosition raises an
+        // Objective-C exception no Swift code can catch, while read(into:) throws. Reading past the end throws too,
+        // so each read asks for no more than what's left.
+        var remaining = file.length
+        while remaining > 0 {
+            try file.read(into: buffer, frameCount: AVAudioFrameCount(min(remaining, Int64(buffer.frameCapacity))))
             guard buffer.frameLength > 0 else { break }
+            remaining -= Int64(buffer.frameLength)
             try check(ebur128_add_frames_float(state, buffer.floatChannelData![0], Int(buffer.frameLength)))
         }
 
