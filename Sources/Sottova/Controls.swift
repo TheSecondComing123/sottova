@@ -64,8 +64,14 @@ extension Controller {
     }
 
     var libraryLine: String {
-        guard !tracks.isEmpty || !skippedFiles.isEmpty else { return "no folder yet" }
-        let skipped = skippedFiles.isEmpty ? "" : " · \(skippedFiles.count) skipped, format not supported"
-        return "\(tracks.count) tracks\(skipped)"
+        guard !folders.isEmpty else { return "no folder yet" }
+        var parts = ["\(tracks.count) tracks"]
+        if pendingAnalysis > 0 {
+            parts.append("measuring loudness, \(pendingAnalysis) left")
+        }
+        if !skippedFiles.isEmpty {
+            parts.append("\(skippedFiles.count) skipped, format not supported")
+        }
+        return parts.joined(separator: " · ")
     }
 }

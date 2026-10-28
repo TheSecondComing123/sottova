@@ -35,7 +35,7 @@ struct Panel: View {
 
             HStack {
                 if controller.tracks.isEmpty {
-                    Button("choose folder…", action: chooseFolder)
+                    Button("add a music folder…", action: addFolders)
                         .buttonStyle(.glassProminent)
                 } else {
                     Controls(controller: controller)
@@ -43,7 +43,15 @@ struct Panel: View {
                 Spacer()
                 Menu {
                     Button("open window") { openWindow(id: "now") }
-                    Button("choose folder…", action: chooseFolder)
+                    Divider()
+                    Button("add folder…", action: addFolders)
+                    if !controller.folders.isEmpty {
+                        Menu("remove folder") {
+                            ForEach(controller.folders, id: \.self) { folder in
+                                Button(folder.lastPathComponent) { controller.removeFolder(folder) }
+                            }
+                        }
+                    }
                     Divider()
                     Button("quit sottova") { NSApplication.shared.terminate(nil) }
                 } label: {
@@ -122,14 +130,14 @@ struct Panel: View {
         seconds < 60 ? "\(Int(seconds)) s" : String(format: "%g min", seconds / 60)
     }
 
-    private func chooseFolder() {
+    private func addFolders() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
+        panel.allowsMultipleSelection = true
         // an accessory app's open panel otherwise lands behind the frontmost app
         NSApp.activate()
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        UserDefaults.standard.set(url.path, forKey: "folder")
-        Task { await controller.load(folder: url) }
+        guard panel.runModal() == .OK else { return }
+        controller.addFolders(panel.urls)
     }
 }

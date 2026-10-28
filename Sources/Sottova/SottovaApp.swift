@@ -8,10 +8,12 @@ struct SottovaApp: App {
 
     init() {
         let controller = controller
-        controller.run()
+        // M1 kept a single folder path in defaults
         if let path = UserDefaults.standard.string(forKey: "folder") {
-            Task { await controller.load(folder: URL(filePath: path)) }
+            controller.addFolders([URL(filePath: path)])
+            UserDefaults.standard.removeObject(forKey: "folder")
         }
+        controller.run()
         let center = NSWorkspace.shared.notificationCenter
         _ = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { controller.systemWillSleep() }
