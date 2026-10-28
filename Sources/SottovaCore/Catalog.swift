@@ -42,7 +42,8 @@ public struct Artist: Identifiable, Hashable, Sendable {
     public let songs: [Song]
 
     public var name: String { id }
-    public var artwork: String? { albums.first { $0.artwork != nil }?.artwork }
+    /// Only from the artist's own albums: a performer on a composer's album shouldn't wear the composer's portrait.
+    public var artwork: String? { albums.first { $0.artist == id && $0.artwork != nil }?.artwork }
 }
 
 /// Songs grouped into albums and artists, rebuilt from the library cache whenever it changes.
@@ -113,10 +114,11 @@ public struct Catalog: Sendable {
 
     /// Splits at the comma before a catalog number (Op., B., BWV, K., D., Hob., ...) and sets a quoted nickname after a dot.
     static func splitWork(_ title: String) -> (work: String, detail: String?) {
-        guard let cut = title.firstMatch(of: /, (?=(?:Op\.?|op\.|BWV|BI|B\.|KV|K\.|D\.|Hob\.|S\.|WoO|KK|L\.|RV|HWV) ?\d)/) else {
+        // Hoboken and Kobylańska numbers start with a roman numeral: "Hob. XVI:52", "KK IVa/16"
+        guard let cut = title.firstMatch(of: /, (?=(?:Op\.?|op\.|BWV|BI|B\.|KV|K\.|D\.|S\.|WoO|L\.|RV|HWV) ?\d|(?:Hob\.|KK) ?[IVX\d])/) else {
             return (title, nil)
         }
-        let detail = title[cut.range.upperBound...].replacing(/\s*["“]([^"”]+)["”]/) { " · “\($0.1)”" }
+        let detail = title[cut.range.upperBound...].replacing(/,?\s*["“]([^"”]+)["”]/) { " · “\($0.1)”" }
         return (String(title[..<cut.range.lowerBound]), String(detail))
     }
 

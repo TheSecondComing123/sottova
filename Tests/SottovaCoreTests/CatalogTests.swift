@@ -11,6 +11,9 @@ struct CatalogTests {
         ("Prelude and Fugue in C major, BWV 846", "Prelude and Fugue in C major", "BWV 846"),
         ("Piano Sonata No. 11 in A major, K. 331", "Piano Sonata No. 11 in A major", "K. 331"),
         ("Andante spianato & Grande polonaise brillante, Op.22", "Andante spianato & Grande polonaise brillante", "Op.22"),
+        ("Symphony No. 9 in D minor, Op. 125, \"Choral\"", "Symphony No. 9 in D minor", "Op. 125 · “Choral”"),
+        ("Piano Sonata in E-flat major, Hob. XVI:52", "Piano Sonata in E-flat major", "Hob. XVI:52"),
+        ("Polonaise in B-flat major, KK IVa/1", "Polonaise in B-flat major", "KK IVa/1"),
     ])
     func splitsClassicalTitles(title: String, work: String, detail: String) {
         let split = Catalog.splitWork(title)
@@ -92,31 +95,40 @@ struct EnvelopeTests {
 struct TodayTests {
     private let day = Date(timeIntervalSince1970: 1_793_000_000)
 
-    private func record(_ file: String, at offset: Double, skipped: Bool = false, gap: Double) -> PlayRecord {
-        PlayRecord(file: file, startedAt: day.addingTimeInterval(offset), skipped: skipped, gapAfterSec: gap)
+    private func record(_ file: String, at offset: Double, skipped: Bool = false, gap: Double, heard: Double? = nil) -> PlayRecord {
+        PlayRecord(file: file, startedAt: day.addingTimeInterval(offset), skipped: skipped, gapAfterSec: gap, heardSec: heard)
     }
 
-    @Test func derivesWhatWasHeardFromStartTimes() {
+    @Test func usesWhatWasHeard() {
         let plays = PlayRecord.plays([
-            record("a", at: 0, gap: 200),
-            // the gap was ended early: 300 s of music, 50 s of quiet
-            record("b", at: 350, skipped: true, gap: 120),
-            // skipped 100 s in, then the full 120 s gap
-            record("c", at: 570, gap: 90),
-        ], durations: ["a": 300, "b": 400, "c": 250], on: day)
-        #expect(plays.map(\.played) == [300, 100, 250])
-        #expect(plays.map(\.gapAfter) == [50, 120, 0])
+            record("a", at: 0, gap: 200, heard: 300),
+            // the gap was ended early: 50 s of quiet
+            record("b", at: 350, skipped: true, gap: 0, heard: 30),
+            // the last play of the day was skipped too, and still counts only what was heard
+            record("c", at: 380, skipped: true, gap: 0, heard: 12),
+        ], on: day) { _ in 400 }
+        #expect(plays.map(\.played) == [300, 30, 12])
+        #expect(plays.map(\.gapAfter) == [50, 0, 0])
+    }
+
+    @Test func olderLinesFallBackToTheTrackLength() {
+        let plays = PlayRecord.plays([record("a", at: 0, gap: 200), record("b", at: 100, gap: 0)], on: day) { _ in 300 }
+        // b started before a could have finished, so a was cut short
+        #expect(plays.map(\.played) == [100, 300])
     }
 
     @Test func aQuitDoesNotCountAsQuiet() {
-        let plays = PlayRecord.plays([record("a", at: 0, gap: 200), record("b", at: 5000, gap: 0)],
-                                     durations: ["a": 300, "b": 300], on: day)
+        let plays = PlayRecord.plays([record("a", at: 0, gap: 200, heard: 300), record("b", at: 5000, gap: 0, heard: 300)], on: day) { _ in 300 }
         #expect(plays[0].gapAfter == 200)
     }
 
+    @Test func skipsPlaysWithNothingToDraw() {
+        let plays = PlayRecord.plays([record("gone", at: 0, gap: 0), record("a", at: 10, gap: 0, heard: 5)], on: day) { _ in nil }
+        #expect(plays.map(\.file) == ["a"])
+    }
+
     @Test func keepsOnlyThatDay() {
-        let plays = PlayRecord.plays([record("old", at: -86_400 * 2, gap: 0), record("a", at: 0, gap: 0)],
-                                     durations: ["a": 10, "old": 10], on: day)
+        let plays = PlayRecord.plays([record("old", at: -86_400 * 2, gap: 0, heard: 10), record("a", at: 0, gap: 0, heard: 10)], on: day) { _ in 10 }
         #expect(plays.map(\.file) == ["a"])
     }
 

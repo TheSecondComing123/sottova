@@ -59,6 +59,8 @@ public final class Controller {
     @ObservationIgnored private var trackGain = 1.0
     @ObservationIgnored private var outgoingGain = 1.0
     @ObservationIgnored private var lastTrack: Track?
+    /// plays.jsonl, read once at launch and appended to after, so drawing today never rereads the file.
+    @ObservationIgnored private var playLog: [PlayRecord] = []
     @ObservationIgnored private var startedAt = Date()
     @ObservationIgnored private var failures = 0
     @ObservationIgnored private var needsReschedule = false
@@ -101,7 +103,9 @@ public final class Controller {
         }
         engine.mainMixerNode.outputVolume = Float(volume)
         if let storage {
-            shuffler.recent = PlayRecord.recentFiles(in: storage.appending(path: "plays.jsonl"))
+            playLog = PlayRecord.read(storage.appending(path: "plays.jsonl"))
+            // avoid-last-N survives a relaunch
+            shuffler.recent = playLog.suffix(20).map(\.file)
         }
         loadLibrary()
     }
@@ -573,19 +577,19 @@ public final class Controller {
 
     private func log(skipped: Bool, gap: Double) {
         guard let url = storage?.appending(path: "plays.jsonl"), let file else { return }
-        let record = PlayRecord(file: file.url.path, startedAt: startedAt, skipped: skipped, gapAfterSec: gap)
+        let record = PlayRecord(file: file.url.path, startedAt: startedAt, skipped: skipped, gapAfterSec: gap, heardSec: lastTrack?.elapsed)
         do {
             try record.append(to: url)
         } catch {
             problem = "couldn't write the play log: \(error.localizedDescription)"
         }
+        playLog.append(record)
         refreshToday()
     }
 
-    // ponytail: rereads the whole log once per track; a year of daily listening is about 1 MB
     private func refreshToday() {
-        guard let url = storage?.appending(path: "plays.jsonl") else { return }
-        today = PlayRecord.plays(PlayRecord.read(url), durations: library.entries.compactMapValues { $0.meta?.duration }, on: .now)
+        let songs = catalog.songsByID
+        today = PlayRecord.plays(playLog, on: .now) { songs[$0]?.duration }
     }
 
     /// The engine is paused during gaps, so nothing else stops idle sleep there.

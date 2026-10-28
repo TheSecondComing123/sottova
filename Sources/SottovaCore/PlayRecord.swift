@@ -6,11 +6,8 @@ struct PlayRecord: Codable {
     var startedAt: Date
     var skipped: Bool
     var gapAfterSec: Double
-
-    /// The last files played, oldest first, so avoid-last-N survives a relaunch.
-    static func recentFiles(in url: URL, count: Int = 20) -> [String] {
-        read(url, last: count).map(\.file)
-    }
+    /// Seconds of the track that played. Older lines don't have it.
+    var heardSec: Double?
 
     static func read(_ url: URL, last count: Int = .max) -> [PlayRecord] {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
@@ -22,19 +19,16 @@ struct PlayRecord: Codable {
     }
 
     /// The plays that started on `day`, with how much of each was heard and how long the quiet after it really lasted.
-    /// The log has start times and the planned gap, not lengths: a finished track counts in full, a skipped one gets
-    /// the time until the next start minus its gap, and a gap never counts longer than planned (the app may have quit).
-    static func plays(_ records: [PlayRecord], durations: [String: Double], on day: Date, calendar: Calendar = .current) -> [Play] {
+    /// Lines from before heardSec was logged fall back to the track's length, or the time until the next start if that's
+    /// shorter. A gap never counts longer than planned: the time until the next start can include a pause or a quit.
+    static func plays(_ records: [PlayRecord], on day: Date, calendar: Calendar = .current, duration: (String) -> Double?) -> [Play] {
         let records = records.filter { calendar.isDate($0.startedAt, inSameDayAs: day) }
-        return records.indices.map { i in
+        return records.indices.compactMap { i in
             let record = records[i]
-            let duration = durations[record.file] ?? 0
-            guard i + 1 < records.count else {
-                return Play(file: record.file, startedAt: record.startedAt, played: duration, gapAfter: 0)
-            }
-            let span = records[i + 1].startedAt.timeIntervalSince(record.startedAt)
-            let played = min(duration, max(0, record.skipped ? span - record.gapAfterSec : span))
-            return Play(file: record.file, startedAt: record.startedAt, played: played, gapAfter: min(max(0, span - played), record.gapAfterSec))
+            let next = i + 1 < records.count ? records[i + 1].startedAt.timeIntervalSince(record.startedAt) : nil
+            guard let played = record.heardSec ?? duration(record.file).map({ min($0, next ?? $0) }), played > 0 else { return nil }
+            let gap = next.map { min(max(0, $0 - played), record.gapAfterSec) } ?? 0
+            return Play(file: record.file, startedAt: record.startedAt, played: played, gapAfter: gap)
         }
     }
 
