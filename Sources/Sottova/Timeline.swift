@@ -25,17 +25,19 @@ struct Timeline: View {
 
     private func draw(in gc: GraphicsContext, size: CGSize, time: Double) {
         let resting = controller.status == .resting
-        let height = size.height - 1
-        gc.fill(Path(CGRect(x: 0, y: height, width: size.width, height: 1)), with: .color(Theme.border))
-
         if compact {
+            // a hairline that swells to 4 pt while the track holds and thins out through its fades
+            let middle = size.height / 2
+            gc.fill(Path(CGRect(x: 0, y: middle - 0.5, width: size.width, height: 1)), with: .color(Theme.border))
             if resting {
-                dots(in: gc, around: size.width / 2, y: height + 0.5, time: time, breathing: true)
+                dots(in: gc, around: size.width / 2, y: middle, time: time, breathing: true)
             } else if let track = controller.track {
-                envelope(track, in: gc, width: size.width, height: height, resting: false)
+                stroke(track, in: gc, width: size.width, middle: middle)
             }
             return
         }
+        let height = size.height - 1
+        gc.fill(Path(CGRect(x: 0, y: height, width: size.width, height: 1)), with: .color(Theme.border))
         let trackWidth = size.width * 0.7
         if let track = controller.track {
             envelope(track, in: gc, width: trackWidth, height: height, resting: resting)
@@ -68,6 +70,26 @@ struct Timeline: View {
         ahead.fill(shape, with: .color(Theme.text.opacity(0.18)))
     }
 
+    private func stroke(_ track: Track, in gc: GraphicsContext, width: CGFloat, middle: CGFloat) {
+        let curve = controller.settings.curve
+        var top: [CGPoint] = []
+        for x in stride(from: 0, through: width, by: 2) {
+            let gain = track.gain(at: track.time(at: Double(x / width)), curve)
+            top.append(CGPoint(x: x, y: middle - 2 * CGFloat(gain)))
+        }
+        var band = Path()
+        band.addLines(top)
+        band.addLines(top.reversed().map { CGPoint(x: $0.x, y: 2 * middle - $0.y) })
+        band.closeSubpath()
+        let played = CGFloat(track.position(at: track.elapsed)) * width
+        var done = gc
+        done.clip(to: Path(CGRect(x: 0, y: 0, width: played, height: middle * 2)))
+        done.fill(band, with: .color(Theme.text))
+        var ahead = gc
+        ahead.clip(to: Path(CGRect(x: played, y: 0, width: width - played, height: middle * 2)))
+        ahead.fill(band, with: .color(Theme.text.opacity(0.3)))
+    }
+
     /// The silence: dots on the baseline that breathe while resting, a slow wave rather than a countdown.
     private func dots(in gc: GraphicsContext, around center: CGFloat, y: CGFloat, time: Double, breathing: Bool) {
         let r: CGFloat = 2.5
@@ -90,5 +112,35 @@ struct Timeline: View {
         shape.addLine(to: CGPoint(x: x0 + width, y: height))
         shape.closeSubpath()
         gc.fill(shape, with: .color(Theme.decor.opacity(0.3)))
+    }
+}
+
+/// A preset drawn as it sounds: two tracks' fades with its silence between, the gap wider the longer the average
+/// rest (log scale from 30 s to 20 min), the two overlapping for a crossfade. Takes its color from foregroundStyle.
+struct GapGlyph: View {
+    let settings: SottovaCore.Settings
+
+    var body: some View {
+        Canvas { gc, size in
+            let mound: CGFloat = 6, ramp: CGFloat = 2
+            let average = (settings.gapRange.lowerBound + settings.gapRange.upperBound) / 2
+            let gap = settings.crossfade ? -2 : 1 + 7 * CGFloat(log(max(average, 30) / 30) / log(40.0)).clamped(to: 0...1)
+            let x0 = (size.width - mound * 2 - gap) / 2
+            for x in [x0, x0 + mound + gap] {
+                var shape = Path()
+                shape.addLines([CGPoint(x: x, y: size.height), CGPoint(x: x + ramp, y: 0),
+                                CGPoint(x: x + mound - ramp, y: 0), CGPoint(x: x + mound, y: size.height)])
+                shape.closeSubpath()
+                gc.fill(shape, with: .foreground)
+            }
+        }
+        .frame(width: 20, height: 6)
+        .accessibilityHidden(true)
+    }
+}
+
+private extension CGFloat {
+    func clamped(to range: ClosedRange<CGFloat>) -> CGFloat {
+        Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
     }
 }

@@ -59,8 +59,6 @@ struct HomePage: View {
                 .padding(.bottom, 44)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             if !controller.today.isEmpty {
-                SectionTitle(title: "Today")
-                    .padding(.bottom, 10)
                 TodayScore(plays: controller.today)
                     .padding(.bottom, 36)
             }
@@ -224,53 +222,120 @@ private struct Hero: View {
     }
 }
 
-/// The day as a score: each piece at its true length with its fades, and the quiet after it as bare line.
-/// Only finished plays are drawn, so a gap still running is never measured out.
+/// The day as a score on a clock: each piece where it started, at its length, with its fades; the quiet Sottova
+/// left after it as dots on the line; time it wasn't listening as bare line. Hover names a piece.
 private struct TodayScore: View {
     let plays: [Play]
     @Environment(Controller.self) private var controller
-    /// Ten points a minute: an hour of listening is 600 pt, so the latest pieces sit at the right and older ones scroll.
-    private let scale: CGFloat = 1 / 6
+    @State private var hovered: Int?
+    /// Eight points a minute: an hour is 480 pt, so the latest hours sit at the right and earlier ones scroll.
+    private let perMinute: CGFloat = 8
+    private let band: CGFloat = 28
 
     var body: some View {
         let music = plays.reduce(0) { $0 + $1.played }
         let quiet = plays.reduce(0) { $0 + $1.gapAfter }
-        let width = CGFloat(music + quiet) * scale + 1
-        HStack(alignment: .bottom, spacing: 20) {
-            // as wide as the day so far, and scrolling, latest at the right, once the day outgrows the page
-            ScrollView(.horizontal) {
-                Canvas { gc, size in draw(in: gc, size: size) }
-                    .frame(width: width, height: 32)
+        // the clock moves even when nothing ends, so the right edge stays now
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let start = Calendar.current.dateInterval(of: .hour, for: plays.first?.startedAt ?? context.date)?.start ?? context.date
+            let width = x(context.date, from: start) + 1
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    SectionTitle(title: "Today")
+                    Spacer()
+                    Group {
+                        if let hovered, plays.indices.contains(hovered), let song = controller.catalog.songsByID[plays[hovered].file] {
+                            Text("\(song.work) · \(song.artist) · \(plays[hovered].startedAt.formatted(date: .omitted, time: .shortened))")
+                        } else {
+                            Text("\(Format.count(plays.count, "piece")) · \(Format.length(music)) of music · \(Format.length(quiet)) of quiet")
+                        }
+                    }
+                    .font(.system(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+                }
+                ScrollView(.horizontal) {
+                    Canvas { gc, size in draw(in: gc, size: size, start: start, now: context.date) }
+                        .frame(width: width, height: band + 18)
+                        .onContinuousHover { phase in
+                            guard case .active(let point) = phase else { hovered = nil; return }
+                            hovered = plays.firstIndex {
+                                let x0 = x($0.startedAt, from: start)
+                                return (x0...x0 + max(CGFloat($0.played) / 60 * perMinute, 2)).contains(point.x)
+                            }
+                        }
+                }
+                .scrollIndicators(.never)
+                .defaultScrollAnchor(.trailing)
+                .frame(maxWidth: width, alignment: .leading)
             }
-            .scrollIndicators(.never)
-            .defaultScrollAnchor(.trailing)
-            .frame(maxWidth: width)
-            Text("\(Format.count(plays.count, "piece")), \(Format.length(music)) of music, \(Format.length(quiet)) of quiet")
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.muted)
-                .fixedSize()
         }
     }
 
-    private func draw(in gc: GraphicsContext, size: CGSize) {
-        let height = size.height - 1
-        let curve = controller.settings.curve
-        let fadeIn = max(controller.settings.fadeIn, 0.1), fadeOut = max(controller.settings.fadeOut, 0.1)
-        gc.fill(Path(CGRect(x: 0, y: height, width: size.width, height: 1)), with: .color(Theme.border))
-        var x: CGFloat = 0
-        for play in plays {
-            let width = CGFloat(play.played) * scale
-            var shape = Path()
-            shape.move(to: CGPoint(x: x, y: height))
-            for dx in stride(from: 0, through: width, by: 1) {
-                let t = Double(dx / scale)
-                let gain = min(curve.fadeIn(t / fadeIn), curve.fadeIn((play.played - t) / fadeOut))
-                shape.addLine(to: CGPoint(x: x + dx, y: height - CGFloat(gain) * height))
+    private func x(_ date: Date, from start: Date) -> CGFloat {
+        CGFloat(date.timeIntervalSince(start)) / 60 * perMinute
+    }
+
+    private func draw(in gc: GraphicsContext, size: CGSize, start: Date, now: Date) {
+        let base = band
+        gc.fill(Path(CGRect(x: 0, y: base, width: size.width, height: 1)), with: .color(Theme.border))
+
+        // hours: a tick and a label under the line
+        var hour = start
+        while hour <= now {
+            let hx = x(hour, from: start)
+            gc.fill(Path(CGRect(x: hx, y: base + 1, width: 1, height: 4)), with: .color(Theme.border))
+            gc.draw(Text(hour.formatted(.dateTime.hour()).lowercased()).font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.faint),
+                    at: CGPoint(x: hx + 3, y: base + 4), anchor: .topLeading)
+            hour += 3600
+        }
+
+        for (i, play) in plays.enumerated() {
+            let x0 = x(play.startedAt, from: start)
+            let x1 = x0 + CGFloat(play.played) / 60 * perMinute
+            piece(in: gc, from: x0, to: x1, base: base, emphasis: hovered == i)
+            quiet(in: gc, from: x1, to: x1 + CGFloat(play.gapAfter) / 60 * perMinute, base: base)
+        }
+
+        // what's happening right now: the piece still playing, or the quiet after the last one
+        guard let last = plays.last else { return }
+        let lastEnd = x(last.startedAt, from: start) + CGFloat(last.played) / 60 * perMinute
+        let nowX = x(now, from: start)
+        switch controller.status {
+        case .playing, .paused:
+            if let track = controller.track {
+                piece(in: gc, from: max(nowX - CGFloat(track.elapsed) / 60 * perMinute, lastEnd), to: nowX, base: base, emphasis: true, open: true)
             }
-            shape.addLine(to: CGPoint(x: x + width, y: height))
-            shape.closeSubpath()
-            gc.fill(shape, with: .color(Theme.text.opacity(0.25)))
-            x += width + CGFloat(play.gapAfter) * scale
+        case .resting:
+            quiet(in: gc, from: lastEnd, to: nowX, base: base)
+        case .idle:
+            break
+        }
+    }
+
+    /// The fades at their true length, but at least 2 pt so a piece never reads as a slab. `open` leaves the end
+    /// unfaded: a piece still playing hasn't faded out yet.
+    private func piece(in gc: GraphicsContext, from x0: CGFloat, to x1: CGFloat, base: CGFloat, emphasis: Bool, open: Bool = false) {
+        guard x1 > x0 else { return }
+        let rampIn = min(max(CGFloat(controller.settings.fadeIn) / 60 * perMinute, 2), (x1 - x0) / 2)
+        let rampOut = open ? 0 : min(max(CGFloat(controller.settings.fadeOut) / 60 * perMinute, 2), (x1 - x0) / 2)
+        let top = base - band + 4
+        var outline = Path()
+        outline.addLines([CGPoint(x: x0, y: base), CGPoint(x: x0 + rampIn, y: top), CGPoint(x: x1 - rampOut, y: top), CGPoint(x: x1, y: open ? top : base)])
+        var shape = outline
+        shape.addLine(to: CGPoint(x: x1, y: base))
+        shape.closeSubpath()
+        gc.fill(shape, with: .color(Theme.text.opacity(emphasis ? 0.22 : 0.08)))
+        gc.stroke(outline, with: .color(emphasis ? Theme.text : Theme.muted), lineWidth: 1)
+    }
+
+    /// Sottova's silence, drawn the way the gaps are everywhere else: dots on the line.
+    private func quiet(in gc: GraphicsContext, from x0: CGFloat, to x1: CGFloat, base: CGFloat) {
+        var x = x0 + 4
+        while x < x1 - 2 {
+            gc.fill(Path(ellipseIn: CGRect(x: x - 1, y: base - 1.5, width: 2, height: 2)), with: .color(Theme.faint))
+            x += 6
         }
     }
 }

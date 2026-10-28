@@ -216,21 +216,20 @@ private struct Sidebar: View {
         let active = controller.settings.name == preset.name
         return Button { controller.apply(preset) } label: {
             HStack(spacing: 12) {
-                Circle()
-                    .fill(active ? Theme.text : Theme.decor)
-                    .frame(width: 6, height: 6)
-                    .frame(width: 20)
+                GapGlyph(settings: preset)
+                    .foregroundStyle(active ? Theme.text : Theme.faint)
                 Text(preset.name)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 14, weight: active ? .semibold : .medium))
                     .foregroundStyle(active ? Theme.text : Theme.muted)
                     .fixedSize()
                 Spacer(minLength: 0)
-                if active {
+                // every row, so the modes compare at a glance; a crossfade has no range, and its glyph shows the overlap
+                if !preset.crossfade {
                     Text(Format.range(preset))
                         .lineLimit(1)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.faint)
-                        .transition(.opacity)
+                        .monospacedDigit()
+                        .foregroundStyle(active ? Theme.muted : Theme.faint)
                 }
             }
             .padding(.horizontal, 12)

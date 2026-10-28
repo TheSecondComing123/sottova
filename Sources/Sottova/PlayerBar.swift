@@ -31,23 +31,45 @@ struct PlayerBar: View {
                     .frame(minWidth: 220, maxWidth: 440)
             }
             Spacer(minLength: 12)
-            Volume()
-                .frame(minWidth: 150, maxWidth: 280, alignment: .trailing)
+            HStack(spacing: 14) {
+                modeMenu
+                Volume()
+            }
+            .frame(minWidth: 150, maxWidth: 280, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .frame(height: 84)
-        .background {
-            // in light mode a material reads darker than the page, so the bar looks sunk instead of raised
-            if colorScheme == .dark {
-                RoundedRectangle(cornerRadius: 10).fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 10).fill(Theme.raised.opacity(0.85))
-            } else {
-                RoundedRectangle(cornerRadius: 10).fill(Theme.raised)
-            }
-        }
+        // opaque: through a translucent bar, the page scrolling underneath reads as stray marks
+        .background(Theme.raised, in: .rect(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
         // on a near-black page a dark shadow reads as a glow; the border is enough there
         .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 12, y: 4)
+    }
+
+    /// How it's playing, beside the volume: the mode's glyph and name, with the others a click away.
+    private var modeMenu: some View {
+        Menu {
+            ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
+                Toggle(isOn: Binding(get: { controller.settings.name == preset.name }, set: { _ in controller.apply(preset) })) {
+                    Text("\(preset.name)  \(Format.range(preset))")
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                GapGlyph(settings: controller.settings)
+                Text(controller.settings.name)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundStyle(Theme.muted)
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .hoverable(radius: 6)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help(Format.gaps(controller.settings))
     }
 
     private var nowPlaying: some View {
@@ -102,7 +124,7 @@ private struct ProgressLine: View {
             HStack(spacing: 10) {
                 time(track?.elapsed ?? 0)
                 Timeline(controller: controller, compact: true, visible: visible)
-                    .frame(height: 18)
+                    .frame(height: 10)
                 time(track?.duration ?? 0)
             }
         }
