@@ -5,11 +5,11 @@ public struct Loudness: Codable, Equatable, Sendable {
     public var lufs: Double
     public var truePeakDb: Double
 
-    /// ReplayGain 2.0's −18 LUFS reference, with loudgain's −1 dBTP ceiling.
-    public var gainDb: Double {
+    /// Defaults are ReplayGain 2.0's −18 LUFS reference with loudgain's −1 dBTP ceiling.
+    public func gainDb(target: Double = -18, ceiling: Double = -1) -> Double {
         // digital silence measures −∞; leave it alone
         guard lufs.isFinite, truePeakDb.isFinite else { return 0 }
-        return min(-18 - lufs, -1 - truePeakDb)
+        return min(target - lufs, ceiling - truePeakDb)
     }
 
     struct Failure: LocalizedError {
@@ -28,6 +28,10 @@ public struct Loudness: Codable, Equatable, Sendable {
         defer {
             var pointer: UnsafeMutablePointer<ebur128_state>? = state
             ebur128_destroy(&pointer)
+        }
+        // the decks play mono on both speakers at full level, so measure it that way
+        if format.channelCount == 1 {
+            try check(ebur128_set_channel(state, 0, Int32(EBUR128_DUAL_MONO.rawValue)))
         }
 
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 65_536)!

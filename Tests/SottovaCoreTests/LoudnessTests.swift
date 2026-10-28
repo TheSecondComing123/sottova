@@ -47,10 +47,23 @@ struct LoudnessTests {
         #expect(measured.truePeakDb >= expected - 0.4 && measured.truePeakDb <= expected + 0.2, "case \(number): \(measured.truePeakDb) dBTP")
     }
 
+    /// Mono plays on both speakers at full level, so it measures 3 dB louder than one channel alone.
+    @Test func monoIsMeasuredAsDualMono() throws {
+        let samples = (0..<Int(20 * Self.rate)).map { Float(pow(10, -23.0 / 20) * sin(2 * .pi * 1000 * Double($0) / Self.rate)) }
+        let format = AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 1)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))!
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        buffer.floatChannelData![0].update(from: samples, count: samples.count)
+        let url = FileManager.default.temporaryDirectory.appending(path: "sottova-mono.caf")
+        try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
+        let stereo = try Loudness.measure(stereoFile(samples, name: "mono-reference"))
+        #expect(abs(try Loudness.measure(url).lufs - stereo.lufs) < 0.01)
+    }
+
     @Test func gainTakesTheStricterOfLoudnessAndPeak() {
-        #expect(Loudness(lufs: -10, truePeakDb: -0.5).gainDb == -8)
-        #expect(Loudness(lufs: -25, truePeakDb: -3).gainDb == 2)
-        #expect(Loudness(lufs: -.infinity, truePeakDb: -.infinity).gainDb == 0)
+        #expect(Loudness(lufs: -10, truePeakDb: -0.5).gainDb() == -8)
+        #expect(Loudness(lufs: -25, truePeakDb: -3).gainDb() == 2)
+        #expect(Loudness(lufs: -.infinity, truePeakDb: -.infinity).gainDb() == 0)
     }
 
     private func stereoFile(_ samples: [Float], name: String) throws -> URL {

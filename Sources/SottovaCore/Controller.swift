@@ -15,22 +15,37 @@ public final class Controller {
     public private(set) var problem: String?
     public var settings: Settings {
         didSet {
+            // editing any field of a preset turns it into Custom; this re-enters didSet once
+            if settings.name != "Custom", !settings.matchesPreset {
+                settings.name = "Custom"
+            }
             machine.settings = settings
-            UserDefaults.standard.set(try? JSONEncoder().encode(settings), forKey: "settings")
+            saveProfile()
         }
+    }
+    public var keepsMacAwake = UserDefaults.standard.object(forKey: "keepsMacAwake") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(keepsMacAwake, forKey: "keepsMacAwake")
+            keepAwake(keepsMacAwake && (status == .playing || status == .resting))
+        }
+    }
+    public var acceptsURLs = UserDefaults.standard.object(forKey: "acceptsURLs") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(acceptsURLs, forKey: "acceptsURLs") }
     }
 
     @ObservationIgnored private let engine: AVAudioEngine
-    @ObservationIgnored private let deck = AVAudioPlayerNode()
-    @ObservationIgnored private let mixer = AVAudioMixerNode()
-    @ObservationIgnored private let logURL: URL?
-    @ObservationIgnored private let libraryURL: URL?
+    @ObservationIgnored private let players = [AVAudioPlayerNode(), AVAudioPlayerNode()]
+    @ObservationIgnored private let mixers = [AVAudioMixerNode(), AVAudioMixerNode()]
+    /// Which deck plays the current track; the other one only carries a crossfade's outgoing track.
+    @ObservationIgnored private var active = 0
+    @ObservationIgnored private let storage: URL?
     @ObservationIgnored var library = Library()
     @ObservationIgnored private var machine: Machine
     @ObservationIgnored private var shuffler = Shuffler()
     @ObservationIgnored private var rng = SystemRandomNumberGenerator()
     @ObservationIgnored private var file: AVAudioFile?
     @ObservationIgnored private var trackGain = 1.0
+    @ObservationIgnored private var outgoingGain = 1.0
     @ObservationIgnored private var lastTrack: Track?
     @ObservationIgnored private var startedAt = Date()
     @ObservationIgnored private var failures = 0
@@ -42,28 +57,35 @@ public final class Controller {
     @ObservationIgnored private var scanGeneration = 0
     @ObservationIgnored private var watcher: FolderWatcher?
     @ObservationIgnored private var watchedPaths: [String] = []
+    @ObservationIgnored private var nowPlaying: NowPlaying?
 
-    /// `storage` holds library.json and plays.jsonl; tests pass nil to keep nothing on disk.
+    /// `storage` holds library.json, profile.json, status.json and plays.jsonl; tests pass nil to keep nothing on disk.
     public init(engine: AVAudioEngine = AVAudioEngine(), storage: URL? = .applicationSupportDirectory.appending(path: "Sottova")) {
-        let saved = UserDefaults.standard.data(forKey: "settings").flatMap { try? JSONDecoder().decode(Settings.self, from: $0) }
-        settings = saved ?? Settings()
-        machine = Machine(settings: saved ?? Settings())
         self.engine = engine
-        logURL = storage?.appending(path: "plays.jsonl")
-        libraryURL = storage?.appending(path: "library.json")
-        engine.attach(deck)
-        engine.attach(mixer)
-        engine.connect(mixer, to: engine.mainMixerNode, format: nil)
+        self.storage = storage
+        let profile = Self.loadProfile(from: storage) ?? Settings.presets.first { $0.name == "Short" }!
+        settings = profile
+        machine = Machine(settings: profile)
+        // Both decks are wired once with a fixed format; the player converts each file to it.
+        // A player connected while the engine runs starts late, by about 8% of the time the engine has been running.
+        let deckFormat = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+        for (player, mixer) in zip(players, mixers) {
+            engine.attach(player)
+            engine.attach(mixer)
+            engine.connect(mixer, to: engine.mainMixerNode, format: nil)
+            engine.connect(player, to: mixer, format: deckFormat)
+            mixer.outputVolume = 0
+        }
         _ = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.engineConfigurationChanged() }
         }
         loadLibrary()
-        if let logURL {
-            shuffler.recent = PlayRecord.recentFiles(in: logURL)
+        if let storage {
+            shuffler.recent = PlayRecord.recentFiles(in: storage.appending(path: "plays.jsonl"))
         }
     }
 
-    /// Starts the 100 Hz envelope clock and the first scan. Tests skip this and call `advance` themselves.
+    /// Starts the 100 Hz envelope clock, media keys and the first scan. Tests skip this and call `advance` themselves.
     public func run() {
         guard ticker == nil else { return }
         ticker = Task { [weak self] in
@@ -76,7 +98,13 @@ public final class Controller {
                 last = now
             }
         }
+        nowPlaying = NowPlaying(controller: self)
+        publish()
         rescan()
+    }
+
+    public func apply(_ preset: Settings) {
+        settings = preset
     }
 
     public func addFolders(_ urls: [URL]) {
@@ -131,8 +159,34 @@ public final class Controller {
         }
     }
 
+    public func play() {
+        if status == .idle || status == .paused { toggle() }
+    }
+
+    public func pause() {
+        if status == .playing || status == .resting { toggle() }
+    }
+
     public func skip() {
         send(.skip)
+    }
+
+    /// sottova://play, pause, toggle, skip, preset/<name>
+    public func open(_ url: URL) {
+        guard acceptsURLs, url.scheme == "sottova" else { return }
+        switch url.host()?.lowercased() {
+        case "play": play()
+        case "pause": pause()
+        case "toggle": toggle()
+        case "skip": skip()
+        case "preset":
+            let name = url.lastPathComponent.lowercased()
+            if let preset = Settings.presets.first(where: { $0.name.lowercased() == name }) {
+                apply(preset)
+            }
+        default:
+            break
+        }
     }
 
     public func systemWillSleep() {
@@ -152,7 +206,11 @@ public final class Controller {
     }
 
     var deckGain: Float {
-        mixer.outputVolume
+        mixers[active].outputVolume
+    }
+
+    var mixerVolumes: [Float] {
+        mixers.map(\.outputVolume)
     }
 
     /// The playing track, or the last one during a gap. Not observed: it changes 100 times a second, so views poll it.
@@ -177,23 +235,36 @@ public final class Controller {
         guard new != status else { return }
         status = new
         nextTrackAt = machine.restRemaining.map { Date(timeIntervalSinceNow: $0) }
-        keepAwake(new == .playing || new == .resting)
+        keepAwake(keepsMacAwake && (new == .playing || new == .resting))
+        publish()
     }
 
     private func perform(_ effect: Machine.Effect) {
+        let deck = players[active]
         switch effect {
         case .startNextTrack:
             startNextTrack()
         case .setGain(let gain):
             // above 1 boosts: measured on macOS 26 despite the documented 0–1 range, and covered by RenderTests
-            mixer.outputVolume = Float(gain * trackGain)
+            mixers[active].outputVolume = Float(gain * trackGain)
         case .stopTrack(let skipped):
             deck.stop()
+            log(skipped: skipped, gap: machine.restRemaining ?? 0)
             // Apple recommends pausing an idle engine; it also drops coreaudiod's sleep assertion, hence keepAwake
-            engine.pause()
-            log(skipped: skipped)
+            if machine.outgoing == nil {
+                engine.pause()
+            }
+        case .handOff:
+            log(skipped: false, gap: 0)
+            outgoingGain = trackGain
+            active = 1 - active
+        case .setOutgoingGain(let gain):
+            mixers[1 - active].outputVolume = Float(gain * outgoingGain)
+        case .stopOutgoing:
+            players[1 - active].stop()
+            mixers[1 - active].outputVolume = 0
         case .pausePlayback:
-            deck.pause()
+            players.forEach { $0.pause() }
             engine.pause()
         case .resumePlayback:
             do {
@@ -205,32 +276,40 @@ public final class Controller {
             if needsReschedule {
                 reschedule()
             }
-            deck.play()
+            if case .track = machine.phase {
+                deck.play()
+            }
+            if machine.outgoing != nil {
+                players[1 - active].play()
+            }
         }
     }
 
     private func startNextTrack() {
-        guard let path = shuffler.next(from: tracks.map(\.path), using: &rng) else {
+        guard let path = shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng) else {
             send(.stop)
             return
         }
         let url = URL(filePath: path)
+        let deck = players[active]
         do {
             let file = try AVAudioFile(forReading: url)
             deck.stop()
-            mixer.outputVolume = 0
-            engine.connect(deck, to: mixer, format: file.processingFormat)
+            mixers[active].outputVolume = 0
             try engine.start()
             deck.scheduleFile(file, at: nil, completionHandler: nil)
+            deck.prepare(withFrameCount: 8192)
             deck.play()
             self.file = file
             // tracks not analyzed yet play at a provisional −6 dB
-            trackGain = pow(10, (library.entries[path]?.loudness?.gainDb ?? -6) / 20)
+            let gainDb = library.entries[path]?.loudness?.gainDb(target: settings.targetLufs, ceiling: settings.ceilingDbtp) ?? -6
+            trackGain = pow(10, gainDb / 20)
             title = url.deletingPathExtension().lastPathComponent
             startedAt = Date()
             failures = 0
             problem = nil
             send(.trackStarted(duration: Double(file.length) / file.processingFormat.sampleRate))
+            publish()
         } catch {
             failures += 1
             // ponytail: gives up after as many failures in a row as there are tracks, not after trying each one
@@ -291,27 +370,60 @@ public final class Controller {
         return max(1, Int(cores) - 1)
     }
 
-    private func loadLibrary() {
-        guard let libraryURL else { return }
+    private static func loadProfile(from storage: URL?) -> Settings? {
+        guard let url = storage?.appending(path: "profile.json"), let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(Settings.self, from: data)
+    }
+
+    private func saveProfile() {
+        guard let url = storage?.appending(path: "profile.json") else { return }
         do {
-            library = try Library.load(from: libraryURL)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try encoder.encode(settings).write(to: url, options: .atomic)
+        } catch {
+            problem = "couldn't save the profile: \(error.localizedDescription)"
+        }
+    }
+
+    private func loadLibrary() {
+        guard let url = storage?.appending(path: "library.json") else { return }
+        do {
+            library = try Library.load(from: url)
         } catch {
             // keep the unreadable file for inspection instead of overwriting it on the next save
-            let aside = libraryURL.appendingPathExtension("broken")
+            let aside = url.appendingPathExtension("broken")
             try? FileManager.default.removeItem(at: aside)
-            try? FileManager.default.moveItem(at: libraryURL, to: aside)
+            try? FileManager.default.moveItem(at: url, to: aside)
             problem = "couldn't read the library, moved it to library.json.broken and started fresh: \(error.localizedDescription)"
         }
         refreshTracks()
     }
 
     private func saveLibrary() {
-        guard let libraryURL else { return }
+        guard let url = storage?.appending(path: "library.json") else { return }
         do {
-            try library.save(to: libraryURL)
+            try library.save(to: url)
         } catch {
             problem = "couldn't save the library: \(error.localizedDescription)"
         }
+    }
+
+    /// Writes status.json and posts a distributed notification, for status-bar plugins and hotkey tools.
+    private func publish() {
+        nowPlaying?.update(status: status, title: title, track: lastTrack)
+        guard ticker != nil, let url = storage?.appending(path: "status.json") else { return }
+        var info: [String: Any] = ["status": "\(status)", "preset": settings.name]
+        if let title { info["title"] = title }
+        if let nextTrackAt { info["nextTrackAt"] = ISO8601DateFormatter().string(from: nextTrackAt) }
+        do {
+            try JSONSerialization.data(withJSONObject: info, options: [.sortedKeys]).write(to: url, options: .atomic)
+        } catch {
+            problem = "couldn't write status.json: \(error.localizedDescription)"
+        }
+        // userInfo only arrives because the app isn't sandboxed
+        DistributedNotificationCenter.default().postNotificationName(.init("com.alanbagel.sottova.status"), object: nil, userInfo: info, deliverImmediately: true)
     }
 
     /// The engine stops and drops scheduled audio on a device change, so pause and pick up from the same frame on resume.
@@ -321,20 +433,22 @@ public final class Controller {
         send(.pause)
     }
 
+    /// ponytail: only the current deck is rescheduled; a crossfade's outgoing track is dropped on a device change
     private func reschedule() {
         needsReschedule = false
         guard let file, case .track(let track) = machine.phase else { return }
+        let deck = players[active]
         let start = AVAudioFramePosition(track.elapsed * file.processingFormat.sampleRate)
         guard start < file.length else { return }
         deck.stop()
         deck.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(file.length - start), at: nil, completionHandler: nil)
     }
 
-    private func log(skipped: Bool) {
-        guard let logURL, let file else { return }
-        let record = PlayRecord(file: file.url.path, startedAt: startedAt, skipped: skipped, gapAfterSec: machine.restRemaining ?? 0)
+    private func log(skipped: Bool, gap: Double) {
+        guard let url = storage?.appending(path: "plays.jsonl"), let file else { return }
+        let record = PlayRecord(file: file.url.path, startedAt: startedAt, skipped: skipped, gapAfterSec: gap)
         do {
-            try record.append(to: logURL)
+            try record.append(to: url)
         } catch {
             problem = "couldn't write the play log: \(error.localizedDescription)"
         }

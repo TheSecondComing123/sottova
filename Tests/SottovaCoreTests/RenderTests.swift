@@ -31,10 +31,10 @@ struct RenderTests {
         controller.refreshTracks()
         controller.toggle()
 
-        // The mixer spreads mono to both speakers at −3 dB each. That keeps the summed loudness
-        // equal to the mono file's own BS.1770 measurement, which normalization relies on.
+        // The decks are wired stereo, so mono plays at full level on both speakers.
+        // Loudness measures mono as dual mono to match.
         let scale = pow(10, gainDb / 20)
-        let expected = Double(Self.level) * (channels == 1 ? 0.5.squareRoot() : 1) * scale
+        let expected = Double(Self.level) * scale
         let buffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 480)!
         var previous = 0.0
         var worst = 0.0
@@ -58,6 +58,46 @@ struct RenderTests {
         #expect(!held.isEmpty && held.allSatisfy { abs($0 - expected) < 1e-4 })
         #expect(controller.status == .resting)
         #expect(!engine.isRunning)
+    }
+
+    /// Continuous preset: both decks sound during the overlap and the session never rests.
+    @Test func crossfadeOverlapsTwoDecks() throws {
+        let engine = AVAudioEngine()
+        try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
+        let controller = Controller(engine: engine, storage: nil)
+        var settings = Settings.presets.first { $0.name == "Continuous" }!
+        settings.fadeIn = 1
+        settings.crossfadeSec = 1
+        controller.settings = settings
+        let url = try constantFile(channels: 2, seconds: 3)
+        controller.library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10))
+        controller.refreshTracks()
+        controller.toggle()
+
+        let buffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 480)!
+        // the mixer smooths a volume change over about 20 ms, so a block can still carry the volume from two blocks back
+        var history = [controller.mixerVolumes.map(Double.init), controller.mixerVolumes.map(Double.init)]
+        var worst = 0.0
+        var overlapBlocks = 0
+        for _ in 0..<800 {
+            let volumes = controller.mixerVolumes.map(Double.init)
+            #expect(try engine.renderOffline(480, to: buffer) == .success)
+            let window = history + [volumes]
+            // the same constant signal on both decks adds in amplitude
+            let low = Double(Self.level) * (0..<2).map { deck in window.map { $0[deck] }.min()! }.reduce(0, +)
+            let high = Double(Self.level) * (0..<2).map { deck in window.map { $0[deck] }.max()! }.reduce(0, +)
+            let level = rms(buffer)
+            worst = max(worst, low - level, level - high)
+            if volumes.allSatisfy({ $0 > 0.3 }) {
+                overlapBlocks += 1
+            }
+            #expect(controller.status == .playing)
+            history = [history[1], volumes]
+            controller.advance(480 / Self.rate)
+        }
+        print("crossfade: worst miss \(worst), overlap blocks \(overlapBlocks)")
+        #expect(worst < 1e-4)
+        #expect(overlapBlocks > 50)
     }
 
     private func constantFile(channels: AVAudioChannelCount, seconds: Double) throws -> URL {

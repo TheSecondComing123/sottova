@@ -1,19 +1,5 @@
 import Foundation
 
-public struct Settings: Codable, Equatable, Sendable {
-    public var gapMin = 30.0
-    public var gapMax = 120.0
-    public var fadeIn = 4.0
-    public var fadeOut = 6.0
-    public var curve = FadeCurve.quartic
-
-    public init() {}
-
-    public var gapRange: ClosedRange<Double> {
-        min(gapMin, gapMax)...max(gapMin, gapMax)
-    }
-}
-
 public enum PlaybackStatus: Sendable {
     case idle, playing, resting, paused
 }
@@ -26,6 +12,9 @@ public struct Track: Equatable, Sendable {
     public internal(set) var outLength: Double
     var outFrom = 1.0
     var skipping = false
+    /// Crossfade halves use sin/cos so the overlap keeps constant power.
+    var equalPowerIn = false
+    var equalPowerOut = false
 
     var finished: Bool {
         elapsed >= outStart + outLength || elapsed >= duration
@@ -34,9 +23,12 @@ public struct Track: Equatable, Sendable {
     /// Envelope gain at any point of the track, so the UI can draw the whole shape.
     public func gain(at t: Double, _ curve: FadeCurve) -> Double {
         if t >= outStart {
-            return outFrom * curve.fadeOut(outLength > 0 ? (t - outStart) / outLength : 1)
+            let p = outLength > 0 ? min((t - outStart) / outLength, 1) : 1
+            return outFrom * (equalPowerOut ? cos(.pi / 2 * p) : curve.fadeOut(p))
         }
-        return fadeIn > 0 ? curve.fadeIn(t / fadeIn) : 1
+        guard fadeIn > 0 else { return 1 }
+        let p = min(max(t / fadeIn, 0), 1)
+        return equalPowerIn ? sin(.pi / 2 * p) : curve.fadeIn(p)
     }
 
     func gain(_ curve: FadeCurve) -> Double {
@@ -59,11 +51,16 @@ struct Machine: Sendable {
 
     enum Effect: Equatable {
         case startNextTrack, setGain(Double), stopTrack(skipped: Bool), pausePlayback, resumePlayback
+        /// Crossfade: the current deck keeps fading out as the outgoing one; the next track starts on the other deck.
+        case handOff, setOutgoingGain(Double), stopOutgoing
     }
 
     var settings: Settings
     private(set) var phase = Phase.idle
     private(set) var paused = false
+    /// The track fading out under the next one during a crossfade.
+    private(set) var outgoing: Track?
+    private var crossfadeNext = false
     private var rng: SplitMix64
 
     init(settings: Settings, seed: UInt64 = .random(in: .min ... .max)) {
@@ -85,7 +82,27 @@ struct Machine: Sendable {
         return gap - elapsed
     }
 
+    private var hasAudio: Bool {
+        if case .track = phase { return true }
+        return outgoing != nil
+    }
+
     mutating func handle(_ event: Event) -> [Effect] {
+        var effects: [Effect] = []
+        if case .tick(let dt) = event, !paused, var track = outgoing {
+            track.elapsed += dt
+            if track.finished {
+                outgoing = nil
+                effects.append(.stopOutgoing)
+            } else {
+                outgoing = track
+                effects.append(.setOutgoingGain(track.gain(settings.curve)))
+            }
+        }
+        return effects + handleCurrent(event)
+    }
+
+    private mutating func handleCurrent(_ event: Event) -> [Effect] {
         switch (event, phase) {
         case (.start, .idle):
             phase = .loading
@@ -94,13 +111,23 @@ struct Machine: Sendable {
         case (.stop, _):
             phase = .idle
             paused = false
+            outgoing = nil
+            crossfadeNext = false
             return []
 
         case (.trackStarted(let duration), .loading):
             // each fade gets at most half of a short track
-            let fadeIn = min(settings.fadeIn, duration / 2)
-            let fadeOut = min(settings.fadeOut, duration / 2)
-            phase = .track(Track(duration: duration, fadeIn: fadeIn, outStart: duration - fadeOut, outLength: fadeOut))
+            let crossfadeLength = min(settings.crossfadeSec, duration / 2)
+            let fadeIn = crossfadeNext ? crossfadeLength : min(settings.fadeIn, duration / 2)
+            let fadeOut = settings.crossfade ? crossfadeLength : min(settings.fadeOut, duration / 2)
+            // A mixer whose input runs out freezes its volume ramp and finishes it when that deck's next track starts.
+            // Ending the crossfade 30 ms before the audio lets the mixer land on 0 while it still has input.
+            let tail = settings.crossfade ? min(0.03, duration / 4) : 0
+            var track = Track(duration: duration, fadeIn: fadeIn, outStart: duration - fadeOut - tail, outLength: fadeOut)
+            track.equalPowerIn = crossfadeNext
+            track.equalPowerOut = settings.crossfade
+            crossfadeNext = false
+            phase = .track(track)
             return paused ? [.setGain(0), .pausePlayback] : [.setGain(0)]
 
         case (.trackFailed, .loading):
@@ -108,19 +135,18 @@ struct Machine: Sendable {
 
         case (.pause, _) where !paused && phase != .idle:
             paused = true
-            if case .track = phase { return [.pausePlayback] }
-            return []
+            return hasAudio ? [.pausePlayback] : []
 
         case (.resume, _) where paused:
             paused = false
-            if case .track = phase { return [.resumePlayback] }
-            return []
+            return hasAudio ? [.resumePlayback] : []
 
         case (.skip, .track(var track)) where !track.skipping:
             track.outFrom = track.gain(settings.curve)
             track.outStart = track.elapsed
             track.outLength = min(1, track.duration - track.elapsed)
             track.skipping = true
+            track.equalPowerOut = false
             phase = .track(track)
             let wasPaused = paused
             paused = false
@@ -133,6 +159,13 @@ struct Machine: Sendable {
 
         case (.tick(let dt), .track(var track)) where !paused:
             track.elapsed += dt
+            if track.equalPowerOut, settings.crossfade, track.elapsed >= track.outStart {
+                // the next track starts underneath while this one keeps fading on the other deck
+                outgoing = track
+                crossfadeNext = true
+                phase = .loading
+                return [.handOff, .startNextTrack]
+            }
             guard track.finished else {
                 phase = .track(track)
                 return [.setGain(track.gain(settings.curve))]
