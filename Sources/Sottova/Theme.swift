@@ -103,11 +103,14 @@ struct LinkText: View {
     @State private var hovering = false
 
     var body: some View {
-        Text(text)
-            .underline(hovering)
-            .lineLimit(1)
-            .onHover { hovering = $0 }
-            .onTapGesture(perform: action)
+        // a button rather than a tap gesture, so VoiceOver can follow the link
+        Button(action: action) {
+            Text(text)
+                .underline(hovering)
+                .lineLimit(1)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 

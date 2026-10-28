@@ -55,6 +55,7 @@ struct SongRow: View {
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: play)
+        .accessibilityAction(named: "Play", play)
         .draggable(URL(filePath: song.id))
         .contextMenu {
             Button("Play", action: play)
@@ -174,6 +175,11 @@ struct Tile<Label: View>: View {
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(perform: open)
+        // a tap gesture and a hover-only play button are invisible to VoiceOver: one labeled element with both actions
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default, open)
+        .accessibilityAction(named: "Play", play)
     }
 }
 
