@@ -20,8 +20,8 @@ final class Router {
     var typing = false
     /// The album or playlist whose cover is being chosen, shown as a sheet.
     var coverFor: CoverTarget?
-    /// The album or playlist getting a "start at" alarm.
-    var alarmFor: CoverTarget?
+    /// The alarm being set or changed, shown as a sheet.
+    var alarm: AlarmRequest?
 
     func go(to destination: Route) {
         query = ""
@@ -94,6 +94,7 @@ struct SottovaCommands: Commands {
             Button("Songs") { router.go(to: .songs) }.keyboardShortcut("2")
             Button("Albums") { router.go(to: .albums) }.keyboardShortcut("3")
             Button("Artists") { router.go(to: .artists) }.keyboardShortcut("4")
+            Button("Alarms") { router.go(to: .alarms) }.keyboardShortcut("5")
             Divider()
             Button("Search") {
                 openWindow(id: "main")

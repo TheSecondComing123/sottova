@@ -62,7 +62,7 @@ struct MainWindow: View {
         .onAppear(perform: watchMouseButtons)
         // at the window, never inside a lazy row that could be recycled with the sheet open
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
-        .sheet(item: Binding(get: { router.alarmFor }, set: { router.alarmFor = $0 })) { AlarmSheet(target: $0) }
+        .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
     }
 
     @ViewBuilder
@@ -76,6 +76,7 @@ struct MainWindow: View {
                 case .songs: SongsPage()
                 case .albums: AlbumsPage()
                 case .artists: ArtistsPage()
+                case .alarms: AlarmsPage()
                 case .album(let id): AlbumPage(id: id)
                 case .artist(let name): ArtistPage(name: name)
                 case .playlist(let id): PlaylistPage(id: id)
@@ -162,6 +163,7 @@ private struct Sidebar: View {
         (.songs, "Songs", .musicNote),
         (.albums, "Albums", .vinylRecord),
         (.artists, "Artists", .microphoneStage),
+        (.alarms, "Alarms", .alarm),
     ]
 
     var body: some View {
@@ -457,7 +459,7 @@ private struct PlaylistRow: View {
                 select()
             }
             Button("Choose cover…") { router.coverFor = .playlist(playlist.id) }
-            Button("Start at…") { router.alarmFor = .playlist(playlist.id) }
+            Button("Start at…") { router.alarm = .new(.playlist(playlist.id)) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) }
             Divider()
             Button("Move to Trash") {

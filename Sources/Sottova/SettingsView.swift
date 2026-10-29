@@ -515,17 +515,7 @@ private struct SquareSwitch: ToggleStyle {
             HStack(spacing: 16) {
                 configuration.label
                 Spacer(minLength: 0)
-                ZStack(alignment: configuration.isOn ? .trailing : .leading) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(configuration.isOn ? Theme.text : Theme.hover)
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border))
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(configuration.isOn ? Theme.background : Theme.muted)
-                        .frame(width: 16, height: 16)
-                        .padding(3)
-                }
-                .frame(width: 40, height: 22)
-                .animation(Theme.settle, value: configuration.isOn)
+                SwitchKnob(on: configuration.isOn)
             }
             .padding(12)
             .background(Theme.raised, in: .rect(cornerRadius: 12))
@@ -534,6 +524,25 @@ private struct SquareSwitch: ToggleStyle {
         }
         .buttonStyle(PressStyle(scale: 0.99))
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
+    }
+}
+
+/// The switch itself, square like the rest of the app, without a card around it.
+struct SwitchKnob: View {
+    let on: Bool
+
+    var body: some View {
+        ZStack(alignment: on ? .trailing : .leading) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(on ? Theme.text : Theme.hover)
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border))
+            RoundedRectangle(cornerRadius: 4)
+                .fill(on ? Theme.background : Theme.muted)
+                .frame(width: 16, height: 16)
+                .padding(3)
+        }
+        .frame(width: 40, height: 22)
+        .animation(Theme.settle, value: on)
     }
 }
 

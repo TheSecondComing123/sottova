@@ -281,6 +281,13 @@ public final class Controller {
         alarmsChanged()
     }
 
+    /// Saves an edited alarm in its place.
+    public func updateAlarm(_ alarm: Alarm) {
+        guard let i = alarms.firstIndex(where: { $0.id == alarm.id }) else { return }
+        alarms[i] = alarm
+        alarmsChanged()
+    }
+
     public func removeAlarm(_ id: Alarm.ID) {
         alarms.removeAll { $0.id == id }
         alarmsChanged()
@@ -288,7 +295,7 @@ public final class Controller {
 
     /// The soonest alarm and when it goes off.
     public func nextAlarm(after now: Date = .now) -> (alarm: Alarm, at: Date)? {
-        alarms.compactMap { alarm in alarm.next(after: now).map { (alarm, $0) } }.min { $0.1 < $1.1 }
+        alarms.filter(\.on).compactMap { alarm in alarm.next(after: now).map { (alarm, $0) } }.min { $0.1 < $1.1 }
     }
 
     private func alarmsChanged() {

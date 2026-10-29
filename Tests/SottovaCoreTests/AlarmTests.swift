@@ -37,4 +37,27 @@ struct AlarmTests {
         reopened.run()
         #expect(reopened.alarms.map(\.name) == ["A"])
     }
+
+    @Test func anAlarmThatsOffNeverComesNext() {
+        let c = Controller(storage: nil)
+        var off = Alarm(source: "a", name: "A", hour: 7, minute: 2, weekdays: Set(1...7))
+        off.on = false
+        c.addAlarm(off)
+        c.addAlarm(Alarm(source: "b", name: "B", hour: 8, minute: 0, weekdays: Set(1...7)))
+        #expect(c.nextAlarm()?.alarm.name == "B")
+    }
+
+    @Test func savedAlarmsWithoutOnDecodeAsOn() throws {
+        let json = #"[{"id":"\#(UUID().uuidString)","source":"a","name":"A","hour":7,"minute":2,"weekdays":[],"shuffled":false}]"#
+        let alarms = try JSONDecoder().decode([Alarm].self, from: Data(json.utf8))
+        #expect(alarms.first?.on == true)
+    }
+
+    @Test func aOneOffIsScheduledTodayOrTomorrow() {
+        var alarm = Alarm(source: "a", name: "A", hour: 7, minute: 2)
+        alarm.scheduleOnce(after: date(2026, 10, 29, 6, 0), calendar: calendar)
+        #expect(alarm.next(after: date(2026, 10, 29, 6, 0), calendar: calendar) == date(2026, 10, 29, 7, 2))
+        alarm.scheduleOnce(after: date(2026, 10, 29, 7, 8), calendar: calendar)
+        #expect(alarm.next(after: date(2026, 10, 29, 7, 8), calendar: calendar) == date(2026, 10, 30, 7, 2))
+    }
 }

@@ -100,7 +100,7 @@ extension Font {
 /// Phosphor icons (MIT), vendored as SVGs in Support/Icons and copied into the app's Resources: the PhosphorSwift
 /// package ships an asset catalog, which `swift build` can't compile. Only the name-weight pairs in use are vendored.
 enum Ph: String {
-    case house, clock, shuffle, x, waveform, play, pause
+    case house, clock, alarm, shuffle, x, waveform, play, pause
     case musicNote = "music-note", vinylRecord = "vinyl-record", microphoneStage = "microphone-stage"
     case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
@@ -132,7 +132,7 @@ enum Ph: String {
 }
 
 enum Route: Hashable {
-    case home, songs, albums, artists
+    case home, songs, albums, artists, alarms
     case album(String)
     case artist(String)
     /// By the playlist's file path.

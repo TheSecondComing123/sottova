@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import SottovaCore
 
-private struct PageScroll<Content: View>: View {
+struct PageScroll<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(Router.self) private var router
     @State private var position = ScrollPosition(edge: .top)
@@ -491,6 +491,8 @@ private struct RecentList: View {
 }
 
 struct InvertedButton: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
@@ -498,6 +500,7 @@ struct InvertedButton: ButtonStyle {
             .padding(.horizontal, 16)
             .frame(height: 40)
             .background(Theme.text, in: .rect(cornerRadius: 8))
+            .opacity(enabled ? 1 : 0.4)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(Theme.quick, value: configuration.isPressed)
     }
@@ -869,7 +872,7 @@ struct PlaylistPage: View {
         Menu {
             Button("Rename") { startRename(playlist) }
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
-            Button("Start at…") { router.alarmFor = .playlist(pid) }
+            Button("Start at…") { router.alarm = .new(.playlist(pid)) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {

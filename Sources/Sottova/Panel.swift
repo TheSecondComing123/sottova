@@ -18,9 +18,15 @@ struct Panel: View {
                     .foregroundStyle(controller.status == .playing ? color : Theme.text)
                     .lineLimit(1)
                 TimelineView(.periodic(from: .now, by: 15)) { context in
-                    Text(controller.subline(at: context.date))
-                        .font(.callout)
-                        .foregroundStyle(Theme.muted)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(controller.subline(at: context.date))
+                        if let next = controller.nextAlarm(after: context.date) {
+                            Label { Text(AlarmLine.headline(next.alarm, at: next.at)) } icon: { Ph.alarm.icon(size: 13) }
+                                .lineLimit(1)
+                        }
+                    }
+                    .font(.callout)
+                    .foregroundStyle(Theme.muted)
                 }
             }
 
