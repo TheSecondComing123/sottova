@@ -247,6 +247,7 @@ struct AlbumTile: View {
             AddToPlaylist(songs: album.songs, name: album.title)
             Button("Go to artist") { navigate(.artist(album.artist)) }
             Button("Choose cover…") { router.coverFor = .album(album.id) }
+            Button("Start at…") { router.alarmFor = .album(album.id) }
             Picker("Gaps", selection: Binding(
                 get: { controller.albumSettings[album.id]?.name ?? "" },
                 set: { name in

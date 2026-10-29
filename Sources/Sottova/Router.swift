@@ -20,6 +20,8 @@ final class Router {
     var typing = false
     /// The album or playlist whose cover is being chosen, shown as a sheet.
     var coverFor: CoverTarget?
+    /// The album or playlist getting a "start at" alarm.
+    var alarmFor: CoverTarget?
 
     func go(to destination: Route) {
         query = ""

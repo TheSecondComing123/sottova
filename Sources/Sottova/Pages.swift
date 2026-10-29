@@ -779,6 +779,7 @@ struct PlaylistPage: View {
                                 get: { playlist.gaps }, set: { controller.setGaps($0, for: pid) }))
                         }
                         CoverCredit(url: Controller.coverURL(forPlaylist: pid), key: controller.playlistCovers[pid])
+                        AlarmLine(source: pid)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -868,6 +869,7 @@ struct PlaylistPage: View {
         Menu {
             Button("Rename") { startRename(playlist) }
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
+            Button("Start at…") { router.alarmFor = .playlist(pid) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {
@@ -1014,6 +1016,7 @@ struct AlbumPage: View {
                         }
                         CoverCredit(url: album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") },
                                     key: album.artwork)
+                        AlarmLine(source: album.id)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

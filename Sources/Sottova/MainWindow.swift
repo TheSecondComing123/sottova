@@ -62,6 +62,7 @@ struct MainWindow: View {
         .onAppear(perform: watchMouseButtons)
         // at the window, never inside a lazy row that could be recycled with the sheet open
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
+        .sheet(item: Binding(get: { router.alarmFor }, set: { router.alarmFor = $0 })) { AlarmSheet(target: $0) }
     }
 
     @ViewBuilder
@@ -456,6 +457,7 @@ private struct PlaylistRow: View {
                 select()
             }
             Button("Choose cover…") { router.coverFor = .playlist(playlist.id) }
+            Button("Start at…") { router.alarmFor = .playlist(playlist.id) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) }
             Divider()
             Button("Move to Trash") {

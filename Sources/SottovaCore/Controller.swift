@@ -147,6 +147,7 @@ public final class Controller {
         startTicker()
         nowPlaying = NowPlaying(controller: self)
         restoreResume()
+        loadAlarms()
         publish()
         rescan()
     }
@@ -260,6 +261,82 @@ public final class Controller {
     public func playNext(_ songs: [Song], source: String? = nil) {
         let source = source ?? Self.source(of: songs)
         upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: 0)
+    }
+
+    // MARK: Alarms
+
+    public private(set) var alarms: [Alarm] = []
+    @ObservationIgnored private var alarmTimer: DispatchSourceTimer?
+
+    public func addAlarm(_ alarm: Alarm) {
+        alarms.append(alarm)
+        alarmsChanged()
+    }
+
+    public func removeAlarm(_ id: Alarm.ID) {
+        alarms.removeAll { $0.id == id }
+        alarmsChanged()
+    }
+
+    /// The soonest alarm and when it goes off.
+    public func nextAlarm(after now: Date = .now) -> (alarm: Alarm, at: Date)? {
+        alarms.compactMap { alarm in alarm.next(after: now).map { (alarm, $0) } }.min { $0.1 < $1.1 }
+    }
+
+    private func alarmsChanged() {
+        if let url = storage?.appending(path: "alarms.json") {
+            do {
+                try JSONEncoder().encode(alarms).write(to: url, options: .atomic)
+            } catch {
+                problem = "couldn't save the alarms: \(error.localizedDescription)"
+            }
+        }
+        armAlarm()
+    }
+
+    private func loadAlarms() {
+        guard let url = storage?.appending(path: "alarms.json"), let data = try? Data(contentsOf: url),
+              let saved = try? JSONDecoder().decode([Alarm].self, from: data) else { return }
+        // a one-off whose time passed while the app was closed is dropped, not played late
+        alarms = saved.filter { $0.next(after: .now) != nil }
+        if alarms != saved {
+            alarmsChanged()
+        } else {
+            armAlarm()
+        }
+    }
+
+    /// One timer for the soonest alarm, on the wall clock: it still fires on time after the Mac has slept, and
+    /// `.strict` keeps App Nap from sliding it while the app sits idle in the menu bar.
+    private func armAlarm() {
+        alarmTimer?.cancel()
+        alarmTimer = nil
+        guard let (alarm, at) = nextAlarm() else { return }
+        let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+        timer.schedule(wallDeadline: .now() + max(at.timeIntervalSinceNow, 0), leeway: .milliseconds(100))
+        timer.setEventHandler { [weak self] in
+            MainActor.assumeIsolated { self?.fire(alarm.id) }
+        }
+        timer.resume()
+        alarmTimer = timer
+    }
+
+    func fire(_ id: Alarm.ID) {
+        guard let alarm = alarms.first(where: { $0.id == id }) else { return }
+        let songs = playlists.first { $0.id == alarm.source }.map(songs(of:)) ?? catalog.albumsByID[alarm.source]?.songs ?? []
+        if !songs.isEmpty {
+            let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
+            play(alarm.shuffled ? songs.shuffled() : songs, source: playlist, origin: .init(key: alarm.source, shuffled: alarm.shuffled))
+            if status == .paused { toggle() }
+        } else {
+            problem = "the \(alarm.name) alarm went off, but there's nothing in it to play"
+        }
+        if alarm.weekdays.isEmpty {
+            alarms.removeAll { $0.id == id }
+            alarmsChanged()
+        } else {
+            armAlarm()
+        }
     }
 
     // MARK: Covers
