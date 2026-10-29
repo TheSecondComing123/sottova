@@ -528,7 +528,7 @@ struct SongsPage: View {
                             .foregroundStyle(Theme.text)
                         HStack(spacing: 8) {
                             Text((needle.isEmpty ? Format.count(all.count, "song") : "\(songs.count) of \(all.count) songs")
-                                 + ", \(Format.length(songs.reduce(0) { $0 + $1.duration })) ·")
+                                 + " · \(Format.length(songs.reduce(0) { $0 + $1.duration })) ·")
                                 .foregroundStyle(Theme.muted)
                             sortMenu
                         }
@@ -540,7 +540,7 @@ struct SongsPage: View {
                         filterField
                     }
                 }
-                .padding(.bottom, 20)
+                .padding(.bottom, 24)
                 if songs.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("no songs match “\(filter)”")
@@ -702,7 +702,7 @@ private struct AlbumGaps: View {
             if own?.name == "Custom" {
                 GapRange(low: field(\.gapMin), high: field(\.gapMax))
                     .padding(.horizontal, 12)
-                    .padding(.top, 20)
+                    .padding(.top, 16)
                 HStack(spacing: 12) {
                     ValueStepper(label: "In", value: field(\.fadeIn), range: 0...20, unit: "s")
                     ValueStepper(label: "Out", value: field(\.fadeOut), range: 0...20, unit: "s")
@@ -764,7 +764,7 @@ struct PlaylistPage: View {
             PageScroll {
                 HStack(alignment: .bottom, spacing: 32) {
                     Artwork(key: controller.playlistCovers[pid] ?? songs.first?.artwork, size: art, radius: 12, outlined: true,
-                            title: playlist.name, subtitle: "playlist")
+                            title: playlist.name)
                     VStack(alignment: .leading, spacing: 12) {
                         Text("playlist")
                             .font(.system(size: 13, weight: .medium))
@@ -867,7 +867,7 @@ struct PlaylistPage: View {
     private func menu(_ playlist: Playlist) -> some View {
         Menu {
             Button("Rename") { startRename(playlist) }
-            Button("Choose Cover…") { router.coverFor = .playlist(pid) }
+            Button("Choose cover…") { router.coverFor = .playlist(pid) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {
@@ -925,7 +925,7 @@ struct PlaylistPage: View {
             .frame(height: 60)
             .help(path)
             .contextMenu {
-                Button("Remove from Playlist") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }
+                Button("Remove from playlist") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }
             }
         }
     }

@@ -16,15 +16,17 @@ struct QueuePanel: View {
                 Spacer()
                 IconButton(icon: .x, weight: .bold, help: "close", size: 24, action: close)
             }
-            .padding(.leading, 16)
+            // the list adds its own inset, so the header steps in to meet its rows
+            .padding(.leading, 24)
             .padding(.trailing, 8)
             .frame(height: 48)
 
             List {
-                label("Now playing")
-                    .overlayScrollers()
-                nowPlaying
-                    .row()
+                if controller.status != .idle {
+                    label("Now playing")
+                    nowPlaying
+                        .row()
+                }
                 HStack(alignment: .firstTextBaseline) {
                     label("Next up")
                     Spacer()
@@ -34,10 +36,11 @@ struct QueuePanel: View {
                             .foregroundStyle(Theme.muted)
                     }
                 }
-                .padding(.top, 16)
+                .padding(.top, controller.status == .idle ? 0 : 16)
+                .overlayScrollers()
                 .row()
                 if controller.upNext.isEmpty {
-                    Text("nothing queued. play next on any song puts it here")
+                    Text("nothing queued yet. right-click a song and pick play next")
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.faint)
                         .padding(.vertical, 8)

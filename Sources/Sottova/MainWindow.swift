@@ -26,6 +26,8 @@ struct MainWindow: View {
                 TopBar()
                 page
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // the page makes room for the queue, as it does for the player bar, so no column hides under it
+                    .safeAreaPadding(.trailing, showsQueue ? 356 : 0)
                     .overlay(alignment: .trailing) {
                         if showsQueue {
                             QueuePanel(close: toggleQueue)
@@ -415,7 +417,7 @@ private struct PlaylistRow: View {
         let first = playlist.paths.lazy.compactMap { controller.catalog.songsByID[$0] }.first
         Button(action: select) {
             HStack(spacing: 12) {
-                Artwork(key: controller.playlistCovers[playlist.id] ?? first?.artwork, size: 16, radius: 4)
+                Artwork(key: controller.playlistCovers[playlist.id] ?? first?.artwork, size: 16, radius: 4, title: playlist.name)
                     .frame(width: 20)
                 Text(playlist.name)
                     .font(.system(size: 13, weight: selected ? .semibold : .medium))
@@ -453,7 +455,7 @@ private struct PlaylistRow: View {
                 renaming.wrappedValue = playlist.id
                 select()
             }
-            Button("Choose Cover…") { router.coverFor = .playlist(playlist.id) }
+            Button("Choose cover…") { router.coverFor = .playlist(playlist.id) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) }
             Divider()
             Button("Move to Trash") {

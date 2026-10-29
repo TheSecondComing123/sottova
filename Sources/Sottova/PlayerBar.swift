@@ -18,8 +18,8 @@ struct PlayerBar: View {
             nowPlaying
                 .frame(minWidth: 170, maxWidth: 280, alignment: .leading)
             Spacer(minLength: 12)
-            // 1 pt, with the line's 24 pt hit area, puts the line where 8 pt and a 10 pt frame had it
-            VStack(spacing: 1) {
+            // 2 pt, with the line's 24 pt hit area, puts the line where 8 pt and a 10 pt frame had it
+            VStack(spacing: 2) {
                 HStack(spacing: 16) {
                     // balances the skip button so play sits on the progress line's center
                     Color.clear.frame(width: 32, height: 32)
@@ -64,7 +64,7 @@ struct PlayerBar: View {
         let resting = controller.status == .resting
         return HStack(spacing: 12) {
             if song != nil {
-                Artwork(key: song?.artwork, size: 52, radius: 6)
+                Artwork(key: song?.artwork, size: 52, radius: 8)
                     .opacity(resting ? 0.45 : 1)
                     .saturation(resting ? 0 : 1)
                     .animation(Theme.ambient, value: resting)

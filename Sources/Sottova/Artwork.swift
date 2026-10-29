@@ -11,14 +11,14 @@ struct Artwork: View {
     let key: String?
     /// nil fills the proposed width as a square.
     var size: CGFloat?
-    var radius: CGFloat = 6
+    var radius: CGFloat = 4
     var circle = false
     var outlined = false
     var title: String?
     var subtitle: String?
     @State private var image: CGImage?
 
-    init(key: String?, size: CGFloat? = nil, radius: CGFloat = 6, circle: Bool = false, outlined: Bool = false, title: String? = nil, subtitle: String? = nil) {
+    init(key: String?, size: CGFloat? = nil, radius: CGFloat = 4, circle: Bool = false, outlined: Bool = false, title: String? = nil, subtitle: String? = nil) {
         self.key = key
         self.size = size
         self.radius = radius
@@ -117,7 +117,9 @@ private struct TypeCover: View {
             let side = geo.size.width
             if circle {
                 // the name is already the caption under an artist's circle, so the circle carries initials
-                Text(title.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined())
+                // first and last name, so "Adolf von Henselt" is AH, and always capitals
+                Text({ let words = title.split(separator: " "); return ([words.first] + (words.count > 1 ? [words.last] : []))
+                    .compactMap { $0?.first.map { String($0).uppercased() } }.joined() }())
                     .font(.system(size: side * 0.17))
                     .foregroundStyle(Theme.accent(for: title, or: \.muted))
                     .frame(width: side, height: side)

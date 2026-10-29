@@ -385,7 +385,7 @@ struct ValueStepper: View {
             icon.icon(.bold, size: 12)
                 .foregroundStyle(Theme.muted)
                 .frame(width: 32, height: 32)
-                .hoverable(radius: 6)
+                .hoverable(radius: 8)
         }
         .buttonStyle(PressStyle())
         .disabled(delta < 0 ? value <= range.lowerBound : value >= range.upperBound)
@@ -754,7 +754,7 @@ private struct FolderRow: View {
                 Ph.x.icon(.bold, size: 12)
                     .foregroundStyle(Theme.muted)
                     .frame(width: 28, height: 28)
-                    .hoverable(radius: 6)
+                    .hoverable(radius: 8)
             }
             .buttonStyle(PressStyle())
             .opacity(hovering ? 1 : 0)

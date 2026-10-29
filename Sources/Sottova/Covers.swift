@@ -36,7 +36,7 @@ struct CoverPicker: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 24) {
             Text("Choose a cover for \(name)")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.text)
@@ -62,7 +62,7 @@ struct CoverPicker: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.faint)
                     ScrollView {
-                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(120), spacing: 12, alignment: .top), count: 3), alignment: .leading, spacing: 16) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(136), spacing: 16, alignment: .top), count: 3), alignment: .leading, spacing: 16) {
                             ForEach(results) { painting in
                                 tile(painting)
                             }
@@ -158,7 +158,7 @@ struct CoverPicker: View {
                 } placeholder: {
                     Theme.raised
                 }
-                .frame(width: 120, height: 120)
+                .frame(width: 136, height: 136)
                 .clipShape(.rect(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(picked == painting ? Theme.text : .clear, lineWidth: 2))
                 Text(painting.title)
@@ -169,7 +169,7 @@ struct CoverPicker: View {
                     .foregroundStyle(Theme.muted)
             }
             .lineLimit(1)
-            .frame(width: 120, alignment: .leading)
+            .frame(width: 136, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle(scale: 0.98))

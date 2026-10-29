@@ -72,7 +72,7 @@ struct SottovaCommands: Commands {
                 .keyboardShortcut(.rightArrow)
                 .disabled(controller.status == .idle || router.typing)
             Divider()
-            Button("Show Playing") {
+            Button("Show playing") {
                 guard let song = controller.current else { return }
                 openWindow(id: "main")
                 router.go(to: .album(song.albumID))

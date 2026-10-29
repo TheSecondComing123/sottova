@@ -62,7 +62,7 @@ struct SongRow: View {
         }
         .padding(.horizontal, 12)
         .frame(height: showsArt ? 60 : 48)
-        .background(Theme.hover.opacity(hovering ? 1 : 0), in: .rect(cornerRadius: 6))
+        .background(Theme.hover.opacity(hovering ? 1 : 0), in: .rect(cornerRadius: 8))
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: play)
@@ -70,16 +70,16 @@ struct SongRow: View {
         .draggable(URL(filePath: song.id))
         .contextMenu {
             Button("Play", action: play)
-            Button("Play Next") { controller.playNext([song]) }
+            Button("Play next") { controller.playNext([song]) }
             AddToPlaylist(songs: [song], name: song.work)
             if let remove {
-                Button("Remove from Playlist", action: remove)
+                Button("Remove from playlist", action: remove)
             }
             Divider()
-            Button("Go to Album") { navigate(.album(song.albumID)) }
-            Button("Go to Artist") { navigate(.artist(song.artist)) }
+            Button("Go to album") { navigate(.album(song.albumID)) }
+            Button("Go to artist") { navigate(.artist(song.artist)) }
             if let composer = song.composer {
-                Button("Go to Composer") { navigate(.composer(composer)) }
+                Button("Go to composer") { navigate(.composer(composer)) }
             }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) }
         }
@@ -141,7 +141,7 @@ struct NowPlayingTitle: View {
     var lines = 1
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
             if playing {
                 Ph.waveform.icon(.bold, size: 12)
                     .foregroundStyle(Theme.accent(for: key))
@@ -243,10 +243,10 @@ struct AlbumTile: View {
         }
         .contextMenu {
             Button("Play") { controller.play(album.songs) }
-            Button("Play Next") { controller.playNext(album.songs) }
+            Button("Play next") { controller.playNext(album.songs) }
             AddToPlaylist(songs: album.songs, name: album.title)
-            Button("Go to Artist") { navigate(.artist(album.artist)) }
-            Button("Choose Cover…") { router.coverFor = .album(album.id) }
+            Button("Go to artist") { navigate(.artist(album.artist)) }
+            Button("Choose cover…") { router.coverFor = .album(album.id) }
             Picker("Gaps", selection: Binding(
                 get: { controller.albumSettings[album.id]?.name ?? "" },
                 set: { name in
@@ -254,7 +254,7 @@ struct AlbumTile: View {
                     guard name != "Custom" else { return }
                     controller.albumSettings[album.id] = SottovaCore.Settings.presets.first { $0.name == name }
                 })) {
-                Text("Your Setting").tag("")
+                Text("Your setting").tag("")
                 ForEach(SottovaCore.Settings.presets, id: \.name) { Text($0.name).tag($0.name) }
                 if controller.albumSettings[album.id]?.name == "Custom" {
                     Text("Custom").tag("Custom")
@@ -281,7 +281,7 @@ struct ArtistTile: View {
         }
         .contextMenu {
             Button("Shuffle") { controller.play(artist.songs.shuffled()) }
-            Button("Play Next") { controller.playNext(artist.songs) }
+            Button("Play next") { controller.playNext(artist.songs) }
         }
     }
 }
@@ -328,7 +328,7 @@ struct PageHeader: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 20)
+        .padding(.bottom, 24)
     }
 }
 
@@ -339,14 +339,14 @@ struct AddToPlaylist: View {
     @Environment(Controller.self) private var controller
 
     var body: some View {
-        Menu("Add to Playlist") {
+        Menu("Add to playlist") {
             ForEach(controller.playlists) { playlist in
                 Button(playlist.name) { controller.add(songs, to: playlist.id) }
             }
             if !controller.playlists.isEmpty {
                 Divider()
             }
-            Button("New Playlist") { controller.newPlaylist(named: name, songs: songs) }
+            Button("New playlist") { controller.newPlaylist(named: name, songs: songs) }
         }
     }
 }
