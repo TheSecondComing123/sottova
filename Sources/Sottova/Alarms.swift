@@ -375,11 +375,13 @@ private struct AlarmRow: View {
                 .padding(.trailing, 4)
         }
         .hoverable(radius: 8)
-        .contextMenu {
-            Button("Edit…") { router.alarm = .edit(alarm) }
-            Button(alarm.on ? "Turn off" : "Turn on", action: toggle)
-            Divider()
-            Button("Delete") { controller.removeAlarm(alarm.id) }
+        .sottovaMenu {
+            [
+                .item("Edit…", .pencil) { router.alarm = .edit(alarm) },
+                .item(alarm.on ? "Turn off" : "Turn on", .alarm, action: toggle),
+                .divider,
+                .item("Delete", .trash) { controller.removeAlarm(alarm.id) },
+            ]
         }
     }
 

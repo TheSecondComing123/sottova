@@ -68,20 +68,25 @@ struct SongRow: View {
         .onTapGesture(count: 2, perform: play)
         .accessibilityAction(named: "Play", play)
         .draggable(URL(filePath: song.id))
-        .contextMenu {
-            Button("Play", action: play)
-            Button("Play next") { controller.playNext([song]) }
-            AddToPlaylist(songs: [song], name: song.work)
+        .sottovaMenu {
+            var entries: [MenuEntry] = [
+                .item("Play", .play, action: play),
+                .item("Play next", .queue) { controller.playNext([song]) },
+                .addToPlaylist([song], name: song.work, controller: controller),
+            ]
             if let remove {
-                Button("Remove from playlist", action: remove)
+                entries.append(.item("Remove from playlist", .minus, action: remove))
             }
-            Divider()
-            Button("Go to album") { navigate(.album(song.albumID)) }
-            Button("Go to artist") { navigate(.artist(song.artist)) }
+            entries += [
+                .divider,
+                .item("Go to album", .vinylRecord) { navigate(.album(song.albumID)) },
+                .item("Go to artist", .microphoneStage) { navigate(.artist(song.artist)) },
+            ]
             if let composer = song.composer {
-                Button("Go to composer") { navigate(.composer(composer)) }
+                entries.append(.item("Go to composer", .musicNote) { navigate(.composer(composer)) })
             }
-            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) }
+            entries.append(.item("Show in Finder", .folder) { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) })
+            return entries
         }
     }
 }
@@ -241,26 +246,26 @@ struct AlbumTile: View {
                     .lineLimit(1)
             }
         }
-        .contextMenu {
-            Button("Play") { controller.play(album.songs) }
-            Button("Play next") { controller.playNext(album.songs) }
-            AddToPlaylist(songs: album.songs, name: album.title)
-            Button("Go to artist") { navigate(.artist(album.artist)) }
-            Button("Choose cover…") { router.coverFor = .album(album.id) }
-            Button("Start at…") { router.alarm = .new(.album(album.id)) }
-            Picker("Gaps", selection: Binding(
-                get: { controller.albumSettings[album.id]?.name ?? "" },
-                set: { name in
-                    // Custom is edited on the album page; picking it here keeps what's there
-                    guard name != "Custom" else { return }
-                    controller.albumSettings[album.id] = SottovaCore.Settings.presets.first { $0.name == name }
-                })) {
-                Text("Your setting").tag("")
-                ForEach(SottovaCore.Settings.presets, id: \.name) { Text($0.name).tag($0.name) }
-                if controller.albumSettings[album.id]?.name == "Custom" {
-                    Text("Custom").tag("Custom")
-                }
+        .sottovaMenu {
+            let gaps = controller.albumSettings[album.id]?.name
+            var choices: [MenuEntry] = [.item("Your setting", checked: gaps == nil) { controller.albumSettings[album.id] = nil }]
+            choices += SottovaCore.Settings.presets.map { preset in
+                .item(preset.name, checked: gaps == preset.name) { controller.albumSettings[album.id] = preset }
             }
+            // Custom is edited on the album page; here it only shows that it's the one in use
+            if gaps == "Custom" {
+                choices.append(.item("Custom", checked: true) {})
+            }
+            return [
+                .item("Play", .play) { controller.play(album.songs) },
+                .item("Play next", .queue) { controller.playNext(album.songs) },
+                .addToPlaylist(album.songs, name: album.title, controller: controller),
+                .item("Go to artist", .microphoneStage) { navigate(.artist(album.artist)) },
+                .divider,
+                .item("Choose cover…", .image) { router.coverFor = .album(album.id) },
+                .item("Start at…", .alarm) { router.alarm = .new(.album(album.id)) },
+                .submenu("Gaps", .waveform, choices),
+            ]
         }
     }
 }
@@ -280,9 +285,11 @@ struct ArtistTile: View {
                     .foregroundStyle(Theme.muted)
             }
         }
-        .contextMenu {
-            Button("Shuffle") { controller.play(artist.songs.shuffled(), shuffled: true) }
-            Button("Play next") { controller.playNext(artist.songs) }
+        .sottovaMenu {
+            [
+                .item("Shuffle", .shuffle) { controller.play(artist.songs.shuffled(), shuffled: true) },
+                .item("Play next", .queue) { controller.playNext(artist.songs) },
+            ]
         }
     }
 }
@@ -333,22 +340,15 @@ struct PageHeader: View {
     }
 }
 
-/// "Add to Playlist ▸": every playlist, then a new one named after what's being added.
-struct AddToPlaylist: View {
-    let songs: [Song]
-    let name: String
-    @Environment(Controller.self) private var controller
-
-    var body: some View {
-        Menu("Add to playlist") {
-            ForEach(controller.playlists) { playlist in
-                Button(playlist.name) { controller.add(songs, to: playlist.id) }
-            }
-            if !controller.playlists.isEmpty {
-                Divider()
-            }
-            Button("New playlist") { controller.newPlaylist(named: name, songs: songs) }
+extension MenuEntry {
+    /// "Add to playlist ▸": every playlist, then a new one named after what's being added.
+    @MainActor static func addToPlaylist(_ songs: [Song], name: String, controller: Controller) -> MenuEntry {
+        var entries = controller.playlists.map { playlist in MenuEntry.item(playlist.name) { controller.add(songs, to: playlist.id) } }
+        if !entries.isEmpty {
+            entries.append(.divider)
         }
+        entries.append(.item("New playlist", .plus) { controller.newPlaylist(named: name, songs: songs) })
+        return .submenu("Add to playlist", .plus, entries)
     }
 }
 

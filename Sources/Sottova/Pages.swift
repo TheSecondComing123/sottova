@@ -929,8 +929,8 @@ struct PlaylistPage: View {
             .padding(.horizontal, 12)
             .frame(height: 60)
             .help(path)
-            .contextMenu {
-                Button("Remove from playlist") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }
+            .sottovaMenu {
+                [.item("Remove from playlist", .minus) { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }]
             }
         }
     }

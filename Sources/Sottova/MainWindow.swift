@@ -450,22 +450,24 @@ private struct PlaylistRow: View {
             // the highlight comes on at once and leaves on the quick curve
             withAnimation(on ? nil : Theme.quick) { targeted = on }
         }
-        .contextMenu {
-            Button("Play") { controller.play(controller.songs(of: playlist), source: playlist.id) }
-            Button("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) }
-            Divider()
-            Button("Rename") {
-                renaming.wrappedValue = playlist.id
-                select()
-            }
-            Button("Choose cover…") { router.coverFor = .playlist(playlist.id) }
-            Button("Start at…") { router.alarm = .new(.playlist(playlist.id)) }
-            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) }
-            Divider()
-            Button("Move to Trash") {
-                if selected { navigate(.home) }
-                controller.trashPlaylist(playlist.id)
-            }
+        .sottovaMenu {
+            [
+                .item("Play", .play) { controller.play(controller.songs(of: playlist), source: playlist.id) },
+                .item("Shuffle", .shuffle) { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) },
+                .divider,
+                .item("Rename", .pencil) {
+                    renaming.wrappedValue = playlist.id
+                    select()
+                },
+                .item("Choose cover…", .image) { router.coverFor = .playlist(playlist.id) },
+                .item("Start at…", .alarm) { router.alarm = .new(.playlist(playlist.id)) },
+                .item("Show in Finder", .folder) { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
+                .divider,
+                .item("Move to Trash", .trash) {
+                    if selected { navigate(.home) }
+                    controller.trashPlaylist(playlist.id)
+                },
+            ]
         }
         .help(playlist.name)
     }
