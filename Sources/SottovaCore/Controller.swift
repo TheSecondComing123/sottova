@@ -363,6 +363,11 @@ public final class Controller {
         }
     }
 
+    /// What brings a file to the target loudness, as a multiplier; tracks not analyzed yet play at a provisional −6 dB.
+    public func gain(of path: String) -> Double {
+        pow(10, (library.entries[path]?.loudness?.gainDb(target: settings.targetLufs, ceiling: settings.ceilingDbtp) ?? -6) / 20)
+    }
+
     // MARK: Trims
 
     /// By file path; saved in trims.json, the audio files are never touched.
@@ -507,8 +512,7 @@ public final class Controller {
         self.file = file
         current = catalog.songsByID[state.path]
         title = current?.title ?? fileURL.deletingPathExtension().lastPathComponent
-        let gainDb = library.entries[state.path]?.loudness?.gainDb(target: settings.targetLufs, ceiling: settings.ceilingDbtp) ?? -6
-        trackGain = pow(10, gainDb / 20)
+        trackGain = gain(of: state.path)
         startedAt = Date()
         if let elapsed = state.elapsed {
             // scheduled from that frame when play is pressed, like after a device change
@@ -1011,9 +1015,7 @@ public final class Controller {
             deck.prepare(withFrameCount: 8192)
             deck.play()
             self.file = file
-            // tracks not analyzed yet play at a provisional −6 dB
-            let gainDb = library.entries[path]?.loudness?.gainDb(target: settings.targetLufs, ceiling: settings.ceilingDbtp) ?? -6
-            trackGain = pow(10, gainDb / 20)
+            trackGain = gain(of: path)
             current = catalog.songsByID[path]
             title = current?.title ?? url.deletingPathExtension().lastPathComponent
             refreshRecent()

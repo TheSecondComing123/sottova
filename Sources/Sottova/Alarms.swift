@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import SottovaCore
 
@@ -24,6 +25,7 @@ struct AlarmSheet: View {
     @State private var repeats: Repeat
     @State private var shuffled: Bool
     @State private var volume: Double?
+    private let preview = AlarmPreview.shared
 
     enum Repeat: String, CaseIterable {
         case once = "Once", weekdays = "Weekdays", daily = "Every day"
@@ -168,6 +170,11 @@ struct AlarmSheet: View {
             .toggleStyle(KnobToggle())
             .animation(Theme.quick, value: volume == nil)
             HStack(spacing: 12) {
+                if let alarm {
+                    Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
+                        .buttonStyle(QuietButton())
+                        .help("a few seconds of how it starts, at its volume")
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -187,6 +194,7 @@ struct AlarmSheet: View {
         .frame(width: 440)
         .background(Theme.background)
         .presentationBackground(Theme.background)
+        .onDisappear { preview.stop() }
     }
 }
 
@@ -353,6 +361,7 @@ private struct AlarmRow: View {
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @State private var hovering = false
+    private let preview = AlarmPreview.shared
 
     var body: some View {
         HStack(spacing: 16) {
@@ -383,6 +392,11 @@ private struct AlarmRow: View {
             .buttonStyle(PressStyle(scale: 0.99))
             .help("change the time or days")
 
+            let hearing = preview.playing == alarm.id
+            IconButton(icon: hearing ? .pause : .play, help: hearing ? "stop" : "hear how it starts") { preview.toggle(alarm, controller: controller) }
+                .opacity(hovering || hearing ? 1 : 0)
+                .animation(Theme.quick, value: hovering)
+
             Button(action: toggle) {
                 SwitchKnob(on: alarm.on)
             }
@@ -403,6 +417,7 @@ private struct AlarmRow: View {
         .sottovaMenu {
             [
                 .item("Edit…") { router.alarm = .edit(alarm) },
+                .item(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) },
                 .item(alarm.on ? "Turn off" : "Turn on", action: toggle),
                 .divider,
                 .item("Delete") { controller.removeAlarm(alarm.id) },
@@ -606,5 +621,50 @@ final class SystemWake {
         guard (try? sudo.run()) != nil else { return false }
         sudo.waitUntilExit()
         return sudo.terminationStatus == 0
+    }
+}
+
+/// A few seconds of how an alarm starts: its first piece (any piece, if it's shuffled) from the trim, faded in the way
+/// it will be, at the alarm's volume and the piece's leveling. On a player of its own, with the queue paused.
+@Observable @MainActor
+final class AlarmPreview {
+    static let shared = AlarmPreview()
+    private(set) var playing: Alarm.ID?
+    @ObservationIgnored private var player: AVAudioPlayer?
+    @ObservationIgnored private var ending: Task<Void, Never>?
+
+    func toggle(_ alarm: Alarm, controller: Controller) {
+        if playing == alarm.id { stop() } else { play(alarm, controller: controller) }
+    }
+
+    private func play(_ alarm: Alarm, controller: Controller) {
+        stop()
+        let songs = controller.playlists.first { $0.id == alarm.source }.map(controller.songs(of:)) ?? controller.catalog.albumsByID[alarm.source]?.songs ?? []
+        guard let song = alarm.shuffled ? songs.randomElement() : songs.first,
+              let player = try? AVAudioPlayer(contentsOf: URL(filePath: song.id)) else { return }
+        if controller.status == .playing { controller.toggle() }
+        let own = controller.albumSettings[alarm.source] ?? controller.playlists.first { $0.id == alarm.source }?.gaps
+        let fadeIn = (own?.gaps(over: controller.yourSettings) ?? controller.yourSettings).fadeIn
+        player.currentTime = controller.trims[song.id]?.start ?? 0
+        player.volume = 0
+        player.play()
+        player.setVolume(Float(min((alarm.volume ?? controller.volume) * controller.gain(of: song.id), 1)), fadeDuration: fadeIn)
+        self.player = player
+        playing = alarm.id
+        ending = Task {
+            try? await Task.sleep(for: .seconds(fadeIn + 6))
+            guard !Task.isCancelled else { return }
+            player.setVolume(0, fadeDuration: 1.5)
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            stop()
+        }
+    }
+
+    func stop() {
+        ending?.cancel()
+        player?.stop()
+        player = nil
+        playing = nil
     }
 }
