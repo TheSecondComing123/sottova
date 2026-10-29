@@ -56,7 +56,7 @@ struct HomePage: View {
         // the hero already shows what's playing
         let playing = controller.status == .idle ? nil : controller.current?.id
         let recent = controller.recent.filter { $0.id != playing }
-        let albums = controller.catalog.albums
+        let albums = controller.shownAlbums
         PageScroll {
             Hero()
                 .padding(.bottom, 48)
@@ -102,7 +102,7 @@ private struct Hero: View {
         HStack(alignment: .bottom, spacing: 32) {
             Group {
                 if idle {
-                    Mosaic(albums: controller.catalog.albums, side: art)
+                    Mosaic(albums: controller.shownAlbums, side: art)
                 } else {
                     TimelineView(FadeSchedule(track: controller.track, taken: .now, active: controller.status == .playing && visible)) { _ in
                         let gain = level
@@ -514,8 +514,10 @@ struct AlbumsPage: View {
     @Environment(Controller.self) private var controller
 
     var body: some View {
-        let albums = controller.catalog.albums
-        if albums.isEmpty {
+        let albums = controller.shownAlbums
+        if albums.isEmpty, !controller.catalog.albums.isEmpty {
+            Missing(text: "no albums. your folders are playlists now")
+        } else if albums.isEmpty {
             EmptyLibrary(what: "albums")
         } else {
             PageScroll {
@@ -530,29 +532,32 @@ struct AlbumsPage: View {
 }
 
 /// "about 9 h with Minecraft gaps", which opens the choice of gaps this album plays with.
-private struct AlbumGapsButton: View {
-    let album: Album
+struct GapsButton: View {
+    let title: String
+    let songs: [Song]
+    @Binding var gaps: SottovaCore.Settings?
     @Environment(Controller.self) private var controller
     @State private var open = false
     @State private var hovering = false
 
     var body: some View {
-        let s = controller.albumSettings[album.id]?.gaps(over: controller.yourSettings) ?? controller.yourSettings
-        let paced = s.lengthWithGaps(count: album.songs.count, music: album.duration)
+        let duration = songs.reduce(0) { $0 + $1.duration }
+        let s = gaps?.gaps(over: controller.yourSettings) ?? controller.yourSettings
+        let paced = s.lengthWithGaps(count: songs.count, music: duration)
         Button { open = true } label: {
             HStack(spacing: 4) {
-                Text(s.crossfade ? "crossfades, no gaps" : paced > album.duration ? "about \(Format.length(paced)) with \(s.name) gaps" : "\(s.name) gaps")
+                Text(s.crossfade ? "crossfades, no gaps" : paced > duration ? "about \(Format.length(paced)) with \(s.name) gaps" : "\(s.name) gaps")
                     .underline(hovering)
                 Ph.caretDown.icon(.bold, size: 10)
             }
-            .font(.system(size: 13, weight: controller.albumSettings[album.id] == nil ? .regular : .medium))
-            .foregroundStyle(controller.albumSettings[album.id] == nil ? Theme.muted : Theme.text)
+            .font(.system(size: 13, weight: gaps == nil ? .regular : .medium))
+            .foregroundStyle(gaps == nil ? Theme.muted : Theme.text)
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         // pinned to the label's start, which stays put while the label's length changes with each choice
         .popover(isPresented: $open, attachmentAnchor: .point(.bottomLeading), arrowEdge: .bottom) {
-            AlbumGaps(album: album)
+            AlbumGaps(title: title, gaps: $gaps)
         }
     }
 }
@@ -560,14 +565,15 @@ private struct AlbumGapsButton: View {
 /// Which gaps an album plays with, laid out like Settings > Playback: the score of what it'll sound like, then the
 /// choices as cards, then the range and fades when it has its own.
 private struct AlbumGaps: View {
-    let album: Album
+    let title: String
+    @Binding var gaps: SottovaCore.Settings?
     @Environment(Controller.self) private var controller
 
     var body: some View {
-        let own = controller.albumSettings[album.id]
+        let own = gaps
         let yours = controller.yourSettings
         VStack(alignment: .leading, spacing: 0) {
-            Text("Gaps for \(album.title)")
+            Text("Gaps for \(title)")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
@@ -582,7 +588,7 @@ private struct AlbumGaps: View {
 
             Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                 GridRow {
-                    card(named("Yours", yours), active: own == nil, accent: nil) { controller.albumSettings[album.id] = nil }
+                    card(named("Yours", yours), active: own == nil, accent: nil) { gaps = nil }
                     preset(0, own)
                     preset(1, own)
                 }
@@ -593,7 +599,7 @@ private struct AlbumGaps: View {
                         var custom = own ?? yours
                         custom.name = "Custom"
                         custom.crossfade = false
-                        controller.albumSettings[album.id] = custom
+                        gaps = custom
                     }
                 }
             }
@@ -618,7 +624,7 @@ private struct AlbumGaps: View {
 
     private func preset(_ index: Int, _ own: SottovaCore.Settings?) -> some View {
         let preset = SottovaCore.Settings.presets[index]
-        return card(preset, active: own?.name == preset.name, accent: 2 + 4 * index) { controller.albumSettings[album.id] = preset }
+        return card(preset, active: own?.name == preset.name, accent: 2 + 4 * index) { gaps = preset }
     }
 
     private func named(_ name: String, _ settings: SottovaCore.Settings) -> SottovaCore.Settings {
@@ -632,8 +638,245 @@ private struct AlbumGaps: View {
     }
 
     private func field(_ path: WritableKeyPath<SottovaCore.Settings, Double>) -> Binding<Double> {
-        Binding(get: { controller.albumSettings[album.id]?[keyPath: path] ?? 0 },
-                set: { controller.albumSettings[album.id]?[keyPath: path] = $0 })
+        Binding(get: { gaps?[keyPath: path] ?? 0 },
+                set: { gaps?[keyPath: path] = $0 })
+    }
+}
+
+/// A playlist laid out like an album: its cover, name and gaps, then its songs. Drop songs on a row to put them
+/// there; drag a row onto another to move it.
+struct PlaylistPage: View {
+    let id: String
+    @Environment(Controller.self) private var controller
+    @Environment(\.navigate) private var navigate
+    @Environment(\.renaming) private var renaming
+    @State private var art: CGFloat = 232
+    /// Renaming moves the file, so the id changes under the page.
+    @State private var renamedTo: String?
+    @State private var editing = false
+    @State private var name = ""
+    @State private var target: Int?
+    @FocusState private var typing: Bool
+
+    private var pid: String { renamedTo ?? id }
+
+    var body: some View {
+        if let playlist = controller.playlists.first(where: { $0.id == pid }) {
+            let songs = controller.songs(of: playlist)
+            let duration = songs.reduce(0) { $0 + $1.duration }
+            let missing = playlist.paths.count - songs.count
+            PageScroll {
+                HStack(alignment: .bottom, spacing: 32) {
+                    Artwork(key: songs.first?.artwork, size: art, radius: 12, outlined: true, title: playlist.name, subtitle: "playlist")
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("playlist")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.muted)
+                        title(playlist)
+                        HStack(spacing: 8) {
+                            Text([Format.count(playlist.paths.count, "song"), Format.length(duration), missing > 0 ? "\(missing) missing" : nil]
+                                .compactMap { $0 }.joined(separator: " · ") + " ·")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.muted)
+                            GapsButton(title: playlist.name, songs: songs, gaps: Binding(
+                                get: { playlist.gaps }, set: { controller.setGaps($0, for: pid) }))
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { art = Format.heroArt(for: $0) }
+                .background(alignment: .top) {
+                    if let key = songs.first?.artwork {
+                        ArtWash(key: key)
+                            .frame(height: art + 200)
+                            .padding(.horizontal, -32)
+                            .padding(.top, -12)
+                    }
+                }
+                .padding(.bottom, 32)
+
+                PlayRow(songs: songs, source: pid, more: AnyView(menu(playlist)))
+                    .padding(.bottom, 24)
+
+                if playlist.paths.isEmpty {
+                    Text("drag songs here from any page")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.faint)
+                        .frame(maxWidth: .infinity, minHeight: 120)
+                        .background(Theme.accent(for: playlist.name).opacity(target == 0 ? 0.14 : 0), in: .rect(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(target == 0 ? Theme.accent(for: playlist.name) : Theme.border,
+                                                                                 style: StrokeStyle(lineWidth: target == 0 ? 1.5 : 1, dash: [4, 4])))
+                        .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
+                } else {
+                    SongColumns()
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
+                            row(path, at: index, in: playlist, songs: songs)
+                                .overlay(alignment: .top) { insertionLine(playlist, at: index) }
+                                .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
+                                    if on { target = index } else if target == index { target = nil }
+                                }
+                        }
+                        // below the last row: drop to add at the end
+                        Color.clear
+                            .frame(height: 48)
+                            .overlay(alignment: .top) { insertionLine(playlist, at: playlist.paths.count) }
+                            .dropDestination(for: URL.self) { urls, _ in drop(urls, at: playlist.paths.count, in: playlist) } isTargeted: { on in
+                                if on { target = playlist.paths.count } else if target == playlist.paths.count { target = nil }
+                            }
+                    }
+                }
+            }
+            .onAppear {
+                if renaming.wrappedValue == pid { startRename(playlist) }
+            }
+            .onChange(of: renaming.wrappedValue) { _, new in
+                if new == pid { startRename(playlist) }
+            }
+        } else {
+            Missing(text: "this playlist isn't in your library anymore")
+        }
+    }
+
+    @ViewBuilder
+    private func title(_ playlist: Playlist) -> some View {
+        if editing {
+            // the same type as the title, so nothing moves when it turns into a field
+            TextField("", text: $name)
+                .textFieldStyle(.plain)
+                .font(.system(size: 48, weight: .bold))
+                .tracking(-1.2)
+                .foregroundStyle(Theme.text)
+                .focused($typing)
+                .onSubmit { commitRename() }
+                .onExitCommand { endRename() }
+                .onChange(of: typing) { _, focused in
+                    if !focused { commitRename() }
+                }
+        } else {
+            Text(playlist.name)
+                .font(.system(size: 48, weight: .bold))
+                .tracking(-1.2)
+                .foregroundStyle(Theme.text)
+                .lineLimit(2)
+                .minimumScaleFactor(0.5)
+                .onTapGesture(count: 2) { startRename(playlist) }
+                .help("double-click to rename")
+        }
+    }
+
+    private func menu(_ playlist: Playlist) -> some View {
+        Menu {
+            Button("Rename") { startRename(playlist) }
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
+            Divider()
+            Button("Move to Trash") {
+                navigate(.home)
+                controller.trashPlaylist(pid)
+            }
+        } label: {
+            Ph.dotsThree.icon(.bold, size: 16)
+                .foregroundStyle(Theme.text)
+                .frame(width: 40, height: 40)
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+                .hoverable(radius: 8)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("more")
+    }
+
+    @ViewBuilder
+    private func row(_ path: String, at index: Int, in playlist: Playlist, songs: [Song]) -> some View {
+        if let song = controller.catalog.songsByID[path] {
+            // where this row sits among the songs that can play
+            let playable = playlist.paths[..<index].count { controller.catalog.songsByID[$0] != nil }
+            SongRow(song: song, number: index + 1, remove: {
+                withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) }
+            }) {
+                controller.play(songs, from: playable, source: pid)
+            }
+            .draggable(URL(filePath: path))
+        } else {
+            HStack(spacing: 12) {
+                Text("\(index + 1)")
+                    .font(.system(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.faint)
+                    .frame(width: 28)
+                Color.clear.frame(width: 40, height: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(URL(filePath: path).deletingPathExtension().lastPathComponent)
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("file not found")
+                        .font(.system(size: 13))
+                }
+                .foregroundStyle(Theme.faint)
+                .lineLimit(1)
+                Spacer()
+                Text("–")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.faint)
+                    .frame(width: 48, alignment: .trailing)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 60)
+            .help(path)
+            .contextMenu {
+                Button("Remove from Playlist") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }
+            }
+        }
+    }
+
+    /// Where a drop will land: a 2 pt line in the playlist's color at the title's left edge.
+    private func insertionLine(_ playlist: Playlist, at index: Int) -> some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(Theme.accent(for: playlist.name))
+            .frame(height: 2)
+            .padding(.leading, 52)
+            .offset(y: -1)
+            .opacity(target == index ? 1 : 0)
+    }
+
+    /// A song already in the playlist moves to `index`; anything else is added there.
+    private func drop(_ urls: [URL], at index: Int, in playlist: Playlist) -> Bool {
+        target = nil
+        let paths = urls.map { $0.standardizedFileURL.path }
+        withAnimation(Theme.quick) {
+            // ponytail: a song already here moves rather than being added twice; add a copy from the context menu
+            if paths.count == 1, let from = playlist.paths.firstIndex(of: paths[0]) {
+                controller.movePlaylistSongs(pid, fromOffsets: [from], toOffset: index)
+            } else {
+                let songs = paths.compactMap { controller.catalog.songsByID[$0] }
+                controller.add(songs, to: pid, at: index)
+            }
+        }
+        return true
+    }
+
+    private func startRename(_ playlist: Playlist) {
+        name = playlist.name
+        editing = true
+        renaming.wrappedValue = nil
+        DispatchQueue.main.async {
+            typing = true
+            NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+        }
+    }
+
+    private func commitRename() {
+        guard editing else { return }
+        if let renamed = controller.rename(pid, to: name), renamed != pid {
+            renamedTo = renamed
+        }
+        endRename()
+    }
+
+    private func endRename() {
+        editing = false
+        typing = false
     }
 }
 
@@ -666,7 +909,8 @@ struct AlbumPage: View {
                                 .compactMap { $0 }.joined(separator: " · ") + " ·")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.muted)
-                            AlbumGapsButton(album: album)
+                            GapsButton(title: album.title, songs: album.songs, gaps: Binding(
+                                get: { controller.albumSettings[album.id] }, set: { controller.albumSettings[album.id] = $0 }))
                         }
                     }
                 }
@@ -752,7 +996,7 @@ struct ArtistPage: View {
 
                 SectionTitle(title: "Albums")
                     .padding(.bottom, 8)
-                Shelf(items: artist.albums) { AlbumTile(album: $0) }
+                Shelf(items: artist.albums.filter { !controller.albumsInPlaylists.contains($0.id) }) { AlbumTile(album: $0) }
                     .padding(.bottom, 32)
 
                 SectionTitle(title: "Songs")
@@ -815,7 +1059,7 @@ struct SearchPage: View {
             let needle = query.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
             let catalog = controller.catalog
             songs = catalog.songs.filter { $0.searchKey.contains(needle) }
-            albums = catalog.albums.filter { $0.title.localizedStandardContains(query) || $0.artist.localizedStandardContains(query) }
+            albums = controller.shownAlbums.filter { $0.title.localizedStandardContains(query) || $0.artist.localizedStandardContains(query) }
             artists = catalog.artists.filter { $0.name.localizedStandardContains(query) }
             searched = true
         }

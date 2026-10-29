@@ -81,6 +81,12 @@ extension Controller {
         }
     }
 
+    /// Albums without the ones made into playlists, which are listed there instead.
+    var shownAlbums: [Album] {
+        let hidden = albumsInPlaylists
+        return hidden.isEmpty ? catalog.albums : catalog.albums.filter { !hidden.contains($0.id) }
+    }
+
     var libraryLine: String {
         guard !folders.isEmpty else { return "no folder yet" }
         var parts = [Format.count(tracks.count, "song")]

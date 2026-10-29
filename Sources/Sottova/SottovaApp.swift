@@ -5,7 +5,7 @@ import SottovaCore
 @main
 struct SottovaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    private let controller = Controller()
+    private let controller = Controller(playlistFolder: .musicDirectory.appending(path: "Sottova Playlists"))
     /// Theme.palette is set before this changes, so re-keying the scenes below redraws them in the new colors.
     @AppStorage("palette") private var palette = Palette.monochrome.id
 

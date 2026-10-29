@@ -105,7 +105,7 @@ enum Ph: String {
     case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
     case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
-    case folder, plus, minus, palette, moon, queue, arrowsClockwise = "arrows-clockwise"
+    case folder, plus, minus, palette, moon, queue, dotsThree = "dots-three", arrowsClockwise = "arrows-clockwise"
 
     enum IconWeight: String {
         case duotone, bold, fill
@@ -135,6 +135,8 @@ enum Route: Hashable {
     case home, songs, albums, artists
     case album(String)
     case artist(String)
+    /// By the playlist's file path.
+    case playlist(String)
 
     /// The sidebar section a page lives under.
     var section: Route {
@@ -159,6 +161,8 @@ struct Navigate: Equatable {
 
 extension EnvironmentValues {
     @Entry var navigate = Navigate { _ in }
+    /// The playlist whose name is being typed, right after it's made or picked Rename.
+    @Entry var renaming: Binding<String?> = .constant(nil)
     /// False while the main window is minimized or covered, so nothing animates unseen.
     @Entry var windowVisible = true
 }

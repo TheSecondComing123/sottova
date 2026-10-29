@@ -603,12 +603,59 @@ private struct LibraryPage: View {
                     }
                 }
             }
+
+            FoldersToPlaylists(controller: controller)
         }
     }
 
     private func songCount(in folder: URL) -> Int {
         let prefix = folder.path(percentEncoded: false)
         return controller.tracks.count { $0.path(percentEncoded: false).hasPrefix(prefix) }
+    }
+}
+
+/// Folders tagged as one album, usually a mix of performers, offered as playlists. Picked by default: albums that
+/// are a folder rather than an album-artist tag. Nothing happens until the button.
+private struct FoldersToPlaylists: View {
+    let controller: Controller
+    @State private var unpicked: Set<String> = []
+    @State private var made: Int?
+
+    var body: some View {
+        let albums = controller.shownAlbums
+        if !albums.isEmpty || made != nil {
+            let picked = albums.filter { $0.id.contains("\u{1f}") && !unpicked.contains($0.id) }
+            VStack(alignment: .leading, spacing: 0) {
+                Heading(title: "Make playlists from folders")
+                Text("these become playlists you can reorder and add to. the music files stay where they are")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+                    .padding(.bottom, 12)
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(albums) { album in
+                        let gaps = controller.albumSettings[album.id].map { ", keeps \($0.name) gaps" } ?? ""
+                        SwitchRow(title: album.title, detail: Format.count(album.songs.count, "song") + gaps, isOn: Binding(
+                            get: { album.id.contains("\u{1f}") && !unpicked.contains(album.id) },
+                            set: { on in
+                                if on { unpicked.remove(album.id) } else { unpicked.insert(album.id) }
+                            }))
+                        .disabled(!album.id.contains("\u{1f}"))
+                    }
+                }
+                HStack(spacing: 12) {
+                    Button(picked.count == 1 ? "Make 1 playlist" : "Make \(picked.count) playlists") {
+                        controller.makePlaylists(from: picked)
+                        made = picked.count
+                    }
+                    .buttonStyle(InvertedButton())
+                    .disabled(picked.isEmpty)
+                    Text(made.map { "made \($0) in ~/Music/Sottova Playlists" } ?? "library.json and profile.json are backed up first")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.faint)
+                }
+                .padding(.top, 16)
+            }
+        }
     }
 }
 

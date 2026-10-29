@@ -12,6 +12,7 @@ struct MainWindow: View {
     @State private var mouseButtons: Any?
     @State private var escapeKey: Any?
     @State private var showsQueue = false
+    @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -49,6 +50,7 @@ struct MainWindow: View {
         .frame(minWidth: 980, minHeight: 640)
         .background(WindowVisibility(visible: $visible))
         .environment(\.windowVisible, visible)
+        .environment(\.renaming, $renaming)
         .environment(\.navigate, Navigate { route in
             query = ""
             go(to: route)
@@ -75,6 +77,7 @@ struct MainWindow: View {
                 case .artists: ArtistsPage()
                 case .album(let id): AlbumPage(id: id)
                 case .artist(let name): ArtistPage(name: name)
+                case .playlist(let id): PlaylistPage(id: id)
                 }
             }
         }
@@ -140,6 +143,7 @@ private struct Sidebar: View {
     @Environment(Controller.self) private var controller
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.renaming) private var renaming
     @Namespace private var pill
 
     private let items: [(Route, String, Ph)] = [
@@ -170,24 +174,54 @@ private struct Sidebar: View {
             }
             .padding(.horizontal, 12)
 
-            Text("Listening")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Theme.faint)
-                .padding(.horizontal, 24)
-                .padding(.top, 32)
-                .padding(.bottom, 8)
+            // the two lists scroll together, so many playlists never push the footer off the window
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Listening")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.faint)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 32)
+                        .padding(.bottom, 8)
 
-            VStack(spacing: 2) {
-                ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
-                    presetRow(preset)
+                    VStack(spacing: 2) {
+                        ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
+                            presetRow(preset)
+                        }
+                        if controller.settings.name == "Custom" {
+                            presetRow(controller.settings)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+
+                    HStack {
+                        Text("Playlists")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.faint)
+                        Spacer()
+                        IconButton(icon: .plus, weight: .bold, help: "new playlist", size: 24) {
+                            guard let id = controller.newPlaylist() else { return }
+                            renaming.wrappedValue = id
+                            select(.playlist(id))
+                        }
+                    }
+                    .padding(.leading, 24)
+                    .padding(.trailing, 16)
+                    .padding(.top, 24)
+                    .padding(.bottom, 4)
+
+                    VStack(spacing: 2) {
+                        ForEach(controller.playlists) { playlist in
+                            PlaylistRow(playlist: playlist, selected: section == .playlist(playlist.id)) { select(.playlist(playlist.id)) }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 16)
+                    .animation(Theme.quick, value: controller.playlists.map(\.id))
                 }
-                if controller.settings.name == "Custom" {
-                    presetRow(controller.settings)
-                }
+                .overlayScrollers()
             }
-            .padding(.horizontal, 12)
-
-            Spacer()
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
 
             // only when there's news: the song count alone is already on the Songs page
             if controller.folders.isEmpty || controller.pendingAnalysis > 0 || !controller.skippedFiles.isEmpty {
@@ -354,5 +388,68 @@ private struct TopBar: View {
         .buttonStyle(PressStyle())
         .disabled(!enabled)
         .help(help)
+    }
+}
+
+/// A playlist in the sidebar: its cover, name and count. Songs dropped on it are added, and the count ticks up.
+private struct PlaylistRow: View {
+    let playlist: Playlist
+    let selected: Bool
+    let select: () -> Void
+    @Environment(Controller.self) private var controller
+    @Environment(\.navigate) private var navigate
+    @Environment(\.renaming) private var renaming
+    @State private var targeted = false
+
+    var body: some View {
+        let first = playlist.paths.lazy.compactMap { controller.catalog.songsByID[$0] }.first
+        Button(action: select) {
+            HStack(spacing: 12) {
+                Artwork(key: first?.artwork, size: 16, radius: 4)
+                    .frame(width: 20)
+                Text(playlist.name)
+                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                    .foregroundStyle(selected ? Theme.text : Theme.muted)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Text("\(playlist.paths.count)")
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.faint)
+                    .contentTransition(.numericText(value: Double(playlist.paths.count)))
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(selected ? Theme.hover : .clear, in: .rect(cornerRadius: 8))
+            .background(Theme.accent(for: playlist.name).opacity(targeted ? 0.14 : 0), in: .rect(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.accent(for: playlist.name), lineWidth: 1.5).opacity(targeted ? 1 : 0))
+            .hoverable(radius: 8)
+        }
+        .buttonStyle(PressStyle(scale: 0.98))
+        .dropDestination(for: URL.self) { urls, _ in
+            let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
+            guard !songs.isEmpty else { return false }
+            withAnimation(Theme.quick) { controller.add(songs, to: playlist.id) }
+            return true
+        } isTargeted: { on in
+            // the highlight comes on at once and leaves on the quick curve
+            withAnimation(on ? nil : Theme.quick) { targeted = on }
+        }
+        .contextMenu {
+            Button("Play") { controller.play(controller.songs(of: playlist), source: playlist.id) }
+            Button("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id) }
+            Divider()
+            Button("Rename") {
+                renaming.wrappedValue = playlist.id
+                select()
+            }
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) }
+            Divider()
+            Button("Move to Trash") {
+                if selected { navigate(.home) }
+                controller.trashPlaylist(playlist.id)
+            }
+        }
+        .help(playlist.name)
     }
 }

@@ -10,6 +10,8 @@ struct SongRow: View {
     var showsAlbum = true
     /// On an album page the artist line only shows when a track's artist differs from the album's.
     var albumArtist: String?
+    /// On a playlist page: takes the song out of the playlist.
+    var remove: (() -> Void)?
     let play: () -> Void
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
@@ -60,6 +62,10 @@ struct SongRow: View {
         .contextMenu {
             Button("Play", action: play)
             Button("Play Next") { controller.playNext([song]) }
+            AddToPlaylist(songs: [song], name: song.work)
+            if let remove {
+                Button("Remove from Playlist", action: remove)
+            }
             Divider()
             Button("Go to Album") { navigate(.album(song.albumID)) }
             Button("Go to Artist") { navigate(.artist(song.artist)) }
@@ -225,6 +231,7 @@ struct AlbumTile: View {
         .contextMenu {
             Button("Play") { controller.play(album.songs) }
             Button("Play Next") { controller.playNext(album.songs) }
+            AddToPlaylist(songs: album.songs, name: album.title)
             Button("Go to Artist") { navigate(.artist(album.artist)) }
             Picker("Gaps", selection: Binding(
                 get: { controller.albumSettings[album.id]?.name ?? "" },
@@ -312,16 +319,39 @@ struct PageHeader: View {
 }
 
 /// Play in order, or shuffled; gaps either way.
+/// "Add to Playlist ▸": every playlist, then a new one named after what's being added.
+struct AddToPlaylist: View {
+    let songs: [Song]
+    let name: String
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        Menu("Add to Playlist") {
+            ForEach(controller.playlists) { playlist in
+                Button(playlist.name) { controller.add(songs, to: playlist.id) }
+            }
+            if !controller.playlists.isEmpty {
+                Divider()
+            }
+            Button("New Playlist") { controller.newPlaylist(named: name, songs: songs) }
+        }
+    }
+}
+
 struct PlayRow: View {
     let songs: [Song]
+    /// A playlist's id, whose gaps these play with.
+    var source: String?
+    /// Extra header actions after Shuffle.
+    var more: AnyView?
     @Environment(Controller.self) private var controller
 
     var body: some View {
         HStack(spacing: 16) {
-            PlayCircle(size: 52) { controller.play(songs) }
+            PlayCircle(size: 52) { controller.play(songs, source: source) }
             // labeled, not a bare icon: it's a one-shot "play these shuffled", and alone the icon read as a toggle
             // whose on and off looked the same
-            Button { controller.play(songs.shuffled()) } label: {
+            Button { controller.play(songs.shuffled(), source: source) } label: {
                 HStack(spacing: 8) {
                     Ph.shuffle.icon(size: 16)
                     Text("Shuffle")
@@ -335,6 +365,9 @@ struct PlayRow: View {
             }
             .buttonStyle(PressStyle(scale: 0.97))
             .help("play these in random order")
+            if let more {
+                more
+            }
         }
     }
 }

@@ -92,6 +92,10 @@ public final class Controller {
     @ObservationIgnored private var watchedPaths: [String] = []
     @ObservationIgnored private var nowPlaying: NowPlaying?
     /// Songs the listener picked, played in order before shuffle takes over again.
+    public private(set) var playlists: [Playlist] = []
+    @ObservationIgnored private let playlistStore: PlaylistStore?
+    @ObservationIgnored private var playlistWatcher: FolderWatcher?
+
     /// What plays next, in order; once it's empty the shuffler picks from everything. Read it only where it's shown:
     /// playing from Songs puts the whole library in it.
     public private(set) var upNext: [QueueEntry] = []
@@ -101,9 +105,12 @@ public final class Controller {
     @ObservationIgnored private var saving: Task<Void, Never>?
 
     /// `storage` holds library.json, profile.json, status.json and plays.jsonl; tests pass nil to keep nothing on disk.
-    public init(engine: AVAudioEngine = AVAudioEngine(), storage: URL? = .applicationSupportDirectory.appending(path: "Sottova")) {
+    /// `playlistFolder` holds the .m3u8 files; nil keeps playlists in memory only.
+    public init(engine: AVAudioEngine = AVAudioEngine(), storage: URL? = .applicationSupportDirectory.appending(path: "Sottova"),
+                playlistFolder: URL? = nil) {
         self.engine = engine
         self.storage = storage
+        playlistStore = playlistFolder.map(PlaylistStore.init)
         artwork = storage.map { _ in ArtworkStore(directory: .cachesDirectory.appending(path: "Sottova/Artwork")) }
         let file = Self.loadProfile(from: storage)
         let profile = file?.settings ?? Settings.presets.first { $0.name == "Short" }!
@@ -130,6 +137,7 @@ public final class Controller {
             shuffler.recent = playLog.suffix(20).map(\.file)
         }
         loadLibrary()
+        loadPlaylists()
     }
 
     /// Starts the envelope clock, media keys and the first scan. Tests skip this and call `advance` themselves.
@@ -193,9 +201,10 @@ public final class Controller {
     }
 
     /// Plays these songs in order from `index`, with the usual fades and gaps, then goes back to shuffling everything.
-    public func play(_ songs: [Song], from index: Int = 0) {
+    /// `source` is a playlist id, whose gaps the songs play with; without one, songs from one album play with its gaps.
+    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil) {
         guard songs.indices.contains(index) else { return }
-        let source = Self.source(of: songs)
+        let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
         if status == .idle {
             failures = 0
@@ -210,7 +219,7 @@ public final class Controller {
     /// changed them by hand while the album played, in which case their change stays.
     func useAlbumSettings(for id: String?) {
         let untouched = ownSettings != nil && settings == albumApplied
-        if let id, let album = albumSettings[id] {
+        if let id, let album = albumSettings[id] ?? playlists.first(where: { $0.id == id })?.gaps {
             let own = yourSettings
             playingAlbum = id
             ownSettings = own
@@ -229,9 +238,158 @@ public final class Controller {
         }
     }
 
-    public func playNext(_ songs: [Song]) {
-        let source = Self.source(of: songs)
+    public func playNext(_ songs: [Song], source: String? = nil) {
+        let source = source ?? Self.source(of: songs)
         upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: 0)
+    }
+
+    // MARK: Playlists
+
+    /// Albums turned into playlists, which the Albums page leaves out.
+    public var albumsInPlaylists: Set<String> {
+        Set(playlists.compactMap(\.fromAlbum))
+    }
+
+    public func songs(of playlist: Playlist) -> [Song] {
+        playlist.paths.compactMap { catalog.songsByID[$0] }
+    }
+
+    /// A new playlist named `name`, or "name 2" when that's taken. Returns its id.
+    @discardableResult
+    public func newPlaylist(named name: String = "New playlist", songs: [Song] = [], fromAlbum: String? = nil) -> String? {
+        guard let store = playlistStore else { return nil }
+        var candidate = name, n = 2
+        while playlists.contains(where: { $0.name.localizedCaseInsensitiveCompare(candidate) == .orderedSame }) {
+            candidate = "\(name) \(n)"
+            n += 1
+        }
+        let playlist = Playlist(id: store.url(for: candidate).path, name: candidate, paths: songs.map(\.id),
+                                gaps: fromAlbum.flatMap { albumSettings[$0] }, fromAlbum: fromAlbum)
+        guard save(playlist) else { return nil }
+        playlists.append(playlist)
+        playlists.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        return playlist.id
+    }
+
+    /// Adds at the end, or before `index`.
+    public func add(_ songs: [Song], to id: String, at index: Int? = nil) {
+        update(id) { $0.paths.insert(contentsOf: songs.map(\.id), at: min(index ?? $0.paths.count, $0.paths.count)) }
+    }
+
+    public func removeFromPlaylist(_ id: String, at offsets: IndexSet) {
+        update(id) { $0.paths = $0.paths.enumerated().filter { !offsets.contains($0.offset) }.map(\.element) }
+    }
+
+    public func movePlaylistSongs(_ id: String, fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        update(id) { playlist in
+            let moving = offsets.map { playlist.paths[$0] }
+            var rest = playlist.paths.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
+            rest.insert(contentsOf: moving, at: destination - offsets.count { $0 < destination })
+            playlist.paths = rest
+        }
+    }
+
+    public func setGaps(_ gaps: Settings?, for id: String) {
+        update(id) { $0.gaps = gaps }
+        if playingAlbum == id {
+            useAlbumSettings(for: id)
+        }
+    }
+
+    /// Renames the file too, so the playlist's id changes; queued songs and a playing playlist follow it.
+    @discardableResult
+    public func rename(_ id: String, to name: String) -> String? {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let store = playlistStore, let index = playlists.firstIndex(where: { $0.id == id }), !name.isEmpty else { return nil }
+        let url = store.url(for: name)
+        guard url.path == id || !FileManager.default.fileExists(atPath: url.path) else {
+            problem = "there's already a playlist called \(name)"
+            return nil
+        }
+        do {
+            try FileManager.default.moveItem(at: URL(filePath: id), to: url)
+        } catch {
+            problem = "couldn't rename \(playlists[index].name): \(error.localizedDescription)"
+            return nil
+        }
+        playlists[index].id = url.path
+        playlists[index].name = name
+        save(playlists[index])
+        upNext = upNext.map { $0.source == id ? QueueEntry(path: $0.path, source: url.path) : $0 }
+        if playingAlbum == id {
+            playingAlbum = url.path
+        }
+        playlists.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        return url.path
+    }
+
+    /// Moves the file to the Trash, where it can be put back.
+    public func trashPlaylist(_ id: String) {
+        do {
+            try FileManager.default.trashItem(at: URL(filePath: id), resultingItemURL: nil)
+            playlists.removeAll { $0.id == id }
+        } catch {
+            problem = "couldn't move the playlist to the Trash: \(error.localizedDescription)"
+        }
+    }
+
+    /// Turns albums (folders tagged as one album) into playlists, keeping their gaps; the files stay where they are.
+    /// Backs up library.json and profile.json first.
+    public func makePlaylists(from albums: [Album]) {
+        backUpData()
+        for album in albums where !albumsInPlaylists.contains(album.id) {
+            // the playlist file is written before the album's gaps move into it
+            guard newPlaylist(named: album.title, songs: album.songs, fromAlbum: album.id) != nil else { return }
+            albumSettings[album.id] = nil
+        }
+    }
+
+    private func backUpData() {
+        guard let storage else { return }
+        let backup = storage.appending(path: "backups/\(ISO8601DateFormatter().string(from: .now))")
+        try? FileManager.default.createDirectory(at: backup, withIntermediateDirectories: true)
+        for name in ["library.json", "profile.json"] {
+            try? FileManager.default.copyItem(at: storage.appending(path: name), to: backup.appending(path: name))
+        }
+    }
+
+    private func update(_ id: String, _ change: (inout Playlist) -> Void) {
+        guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
+        change(&playlists[index])
+        save(playlists[index])
+    }
+
+    @discardableResult
+    private func save(_ playlist: Playlist) -> Bool {
+        guard let store = playlistStore else { return true }
+        do {
+            try store.write(playlist) { [catalog] path in
+                catalog.songsByID[path].map { ($0.duration, "\($0.artist) - \($0.title)") }
+            }
+            watchPlaylists()
+            return true
+        } catch {
+            problem = "couldn't save \(playlist.name): \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func loadPlaylists() {
+        guard let store = playlistStore else { return }
+        let loaded = store.load()
+        if loaded != playlists {
+            playlists = loaded
+        }
+        watchPlaylists()
+    }
+
+    /// Its own stream, so a playlist edit reloads only playlists, never rescans the music. Our own writes come back
+    /// here too and change nothing.
+    private func watchPlaylists() {
+        guard playlistWatcher == nil, let store = playlistStore, FileManager.default.fileExists(atPath: store.folder.path) else { return }
+        playlistWatcher = FolderWatcher(paths: [store.folder.path]) { [weak self] in
+            Task { self?.loadPlaylists() }
+        }
     }
 
     public func moveQueued(fromOffsets offsets: IndexSet, toOffset destination: Int) {
