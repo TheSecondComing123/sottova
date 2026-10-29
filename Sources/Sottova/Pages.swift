@@ -4,6 +4,8 @@ import SottovaCore
 
 private struct PageScroll<Content: View>: View {
     @ViewBuilder let content: Content
+    @Environment(Router.self) private var router
+    @State private var position = ScrollPosition(edge: .top)
 
     var body: some View {
         ScrollView {
@@ -19,6 +21,17 @@ private struct PageScroll<Content: View>: View {
         }
         // rows fade out under the floating player bar instead of showing through the strip beneath it
         .scrollEdgeEffectStyle(.soft, for: .bottom)
+        .scrollPosition($position)
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in router.offset = y }
+        .onAppear {
+            // Back and Forward land where the page was left; anything else opens at the top. No animation: the page
+            // shouldn't be seen scrolling down to it
+            guard let y = router.restore else { return }
+            router.restore = nil
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { position.scrollTo(y: y) }
+        }
     }
 }
 

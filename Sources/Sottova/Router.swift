@@ -6,8 +6,13 @@ import SottovaCore
 @Observable @MainActor
 final class Router {
     private(set) var route = Route.home
-    private(set) var back: [Route] = []
-    private(set) var forward: [Route] = []
+    /// Where each page in the history was scrolled to, so Back lands where you were.
+    private(set) var back: [(route: Route, offset: CGFloat)] = []
+    private(set) var forward: [(route: Route, offset: CGFloat)] = []
+    /// How far the page on screen is scrolled. Changes every frame of a scroll, so nothing observes it.
+    @ObservationIgnored var offset: CGFloat = 0
+    /// Where the next page should open: set by Back and Forward, taken once by the page.
+    @ObservationIgnored var restore: CGFloat?
     var query = ""
     /// Bumped by ⌘F; the top bar focuses the search field when it changes.
     private(set) var searchRequests = 0
@@ -19,8 +24,9 @@ final class Router {
     func go(to destination: Route) {
         query = ""
         guard destination != route else { return }
+        restore = nil
         withAnimation(Theme.page) {
-            back.append(route)
+            back.append((route, offset))
             forward.removeAll()
             route = destination
         }
@@ -28,17 +34,19 @@ final class Router {
 
     func goBack() {
         guard let previous = back.popLast() else { return }
+        restore = previous.offset
         withAnimation(Theme.page) {
-            forward.append(route)
-            route = previous
+            forward.append((route, offset))
+            route = previous.route
         }
     }
 
     func goForward() {
         guard let next = forward.popLast() else { return }
+        restore = next.offset
         withAnimation(Theme.page) {
-            back.append(route)
-            route = next
+            back.append((route, offset))
+            route = next.route
         }
     }
 

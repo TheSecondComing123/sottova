@@ -8,6 +8,7 @@ struct MainWindow: View {
     @State private var visible = true
     @State private var mouseButtons: Any?
     @State private var escapeKey: Any?
+    @State private var swipes: Any?
     @State private var showsQueue = false
     @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -89,6 +90,37 @@ struct MainWindow: View {
         withAnimation(showsQueue ? Theme.quick : .spring(duration: 0.3, bounce: 0)) { showsQueue.toggle() }
     }
 
+    /// Two fingers sideways on a trackpad go back and forward, as in Safari: only when the gesture starts sideways,
+    /// and not over a shelf that can still scroll that way.
+    private func swipe(_ event: NSEvent) -> NSEvent? {
+        guard event.phase == .began, event.hasPreciseScrollingDeltas, NSEvent.isSwipeTrackingFromScrollEventsEnabled,
+              abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) * 2,
+              !shelfScrolls(event) else { return event }
+        let canBack = !router.back.isEmpty, canForward = !router.forward.isEmpty
+        guard canBack || canForward else { return event }
+        event.trackSwipeEvent(options: [.lockDirection, .clampGestureAmount],
+                              dampenAmountThresholdMin: canForward ? -1 : 0, max: canBack ? 1 : 0) { amount, _, isComplete, _ in
+            guard isComplete else { return }
+            if amount >= 1 { router.goBack() } else if amount <= -1 { router.goForward() }
+        }
+        return nil
+    }
+
+    /// True when the pointer is over a sideways scroll view with room to move in the gesture's direction.
+    private func shelfScrolls(_ event: NSEvent) -> Bool {
+        var view = event.window?.contentView?.hitTest(event.locationInWindow)
+        while let current = view {
+            if let scroll = current as? NSScrollView, let document = scroll.documentView,
+               document.frame.width > scroll.contentView.bounds.width + 1 {
+                let x = scroll.contentView.bounds.origin.x
+                // fingers moving right scroll toward the start
+                return event.scrollingDeltaX > 0 ? x > 0 : x + scroll.contentView.bounds.width < document.frame.width - 1
+            }
+            view = current.superview
+        }
+        return false
+    }
+
     /// The back and forward buttons on a mouse, and Esc for the queue when nothing is being typed.
     private func watchMouseButtons() {
         if escapeKey == nil {
@@ -97,6 +129,9 @@ struct MainWindow: View {
                 toggleQueue()
                 return nil
             }
+        }
+        if swipes == nil {
+            swipes = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: swipe)
         }
         guard mouseButtons == nil else { return }
         mouseButtons = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { event in
