@@ -3,6 +3,8 @@ import SottovaCore
 
 /// The floating bar at the bottom of the window. During a gap the progress line goes quiet and says so.
 struct PlayerBar: View {
+    let showsQueue: Bool
+    let toggleQueue: () -> Void
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
     @Environment(\.colorScheme) private var colorScheme
@@ -34,9 +36,18 @@ struct PlayerBar: View {
             // the mode lives in the sidebar; here it was the same thing twice
             HStack(spacing: 8) {
                 SleepButton()
+                Button(action: toggleQueue) {
+                    Ph.queue.icon(size: 16)
+                        .foregroundStyle(showsQueue ? Theme.text : Theme.muted)
+                        .frame(width: 32, height: 32)
+                        .background(showsQueue ? Theme.hover : .clear, in: .rect(cornerRadius: 8))
+                        .hoverable(radius: 8)
+                }
+                .buttonStyle(PressStyle())
+                .help(showsQueue ? "hide the queue" : "show the queue")
                 Volume()
             }
-            .frame(minWidth: 210, maxWidth: 280, alignment: .trailing)
+            .frame(minWidth: 250, maxWidth: 280, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .frame(height: 80)

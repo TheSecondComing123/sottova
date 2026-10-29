@@ -105,7 +105,7 @@ enum Ph: String {
     case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
     case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
-    case folder, plus, minus, palette, moon, arrowsClockwise = "arrows-clockwise"
+    case folder, plus, minus, palette, moon, queue, arrowsClockwise = "arrows-clockwise"
 
     enum IconWeight: String {
         case duotone, bold, fill

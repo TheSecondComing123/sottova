@@ -10,6 +10,9 @@ struct MainWindow: View {
     @State private var query = ""
     @State private var visible = true
     @State private var mouseButtons: Any?
+    @State private var escapeKey: Any?
+    @State private var showsQueue = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 0) {
@@ -25,9 +28,18 @@ struct MainWindow: View {
                 TopBar(query: $query, canGoBack: !back.isEmpty, canGoForward: !forward.isEmpty, goBack: goBack, goForward: goForward)
                 page
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .trailing) {
+                        if showsQueue {
+                            QueuePanel(close: toggleQueue)
+                                .padding([.trailing, .bottom], 16)
+                                .padding(.top, 8)
+                                // it leaves the way it came
+                                .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+                        }
+                    }
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
-                PlayerBar()
+                PlayerBar(showsQueue: showsQueue, toggleQueue: toggleQueue)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
             }
@@ -96,8 +108,20 @@ struct MainWindow: View {
         }
     }
 
-    /// The back and forward buttons on a mouse.
+    private func toggleQueue() {
+        // in on a spring with no overshoot, a 340 pt edge mustn't wobble; out on the quick curve
+        withAnimation(showsQueue ? Theme.quick : .spring(duration: 0.3, bounce: 0)) { showsQueue.toggle() }
+    }
+
+    /// The back and forward buttons on a mouse, and Esc for the queue when nothing is being typed.
     private func watchMouseButtons() {
+        if escapeKey == nil {
+            escapeKey = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                guard event.keyCode == 53, showsQueue, !(event.window?.firstResponder is NSText) else { return event }
+                toggleQueue()
+                return nil
+            }
+        }
         guard mouseButtons == nil else { return }
         mouseButtons = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { event in
             switch event.buttonNumber {

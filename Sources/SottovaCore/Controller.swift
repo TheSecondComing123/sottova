@@ -92,7 +92,9 @@ public final class Controller {
     @ObservationIgnored private var watchedPaths: [String] = []
     @ObservationIgnored private var nowPlaying: NowPlaying?
     /// Songs the listener picked, played in order before shuffle takes over again.
-    @ObservationIgnored private var queue: [String] = []
+    /// What plays next, in order; once it's empty the shuffler picks from everything. Read it only where it's shown:
+    /// playing from Songs puts the whole library in it.
+    public private(set) var upNext: [QueueEntry] = []
     @ObservationIgnored private var lastCatalogBuild = Date.distantPast
     @ObservationIgnored private var catalogEntries: [String: Library.Entry] = [:]
     @ObservationIgnored private var catalogGeneration = 0
@@ -193,9 +195,8 @@ public final class Controller {
     /// Plays these songs in order from `index`, with the usual fades and gaps, then goes back to shuffling everything.
     public func play(_ songs: [Song], from index: Int = 0) {
         guard songs.indices.contains(index) else { return }
-        queue = songs[index...].map(\.id)
-        let albums = Set(songs[index...].map(\.albumID))
-        useAlbumSettings(for: albums.count == 1 ? albums.first : nil)
+        let source = Self.source(of: songs)
+        upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
         if status == .idle {
             failures = 0
             command(.start)
@@ -229,7 +230,42 @@ public final class Controller {
     }
 
     public func playNext(_ songs: [Song]) {
-        queue.insert(contentsOf: songs.map(\.id), at: 0)
+        let source = Self.source(of: songs)
+        upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: 0)
+    }
+
+    public func moveQueued(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        // List's move(fromOffsets:) lives in SwiftUI, which Core doesn't link
+        let moving = offsets.map { upNext[$0] }
+        var rest = upNext.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
+        rest.insert(contentsOf: moving, at: destination - offsets.count { $0 < destination })
+        upNext = rest
+    }
+
+    public func removeQueued(_ id: QueueEntry.ID) {
+        upNext.removeAll { $0.id == id }
+    }
+
+    public func clearQueue() {
+        upNext.removeAll()
+    }
+
+    /// Songs from one album play with that album's gaps, wherever they were queued from.
+    private static func source(of songs: [Song]) -> String? {
+        let albums = Set(songs.map(\.albumID))
+        return albums.count == 1 ? albums.first : nil
+    }
+
+    /// The next path to play, putting its source's gaps in place, or nil when the shuffler should pick.
+    func dequeue() -> String? {
+        guard !upNext.isEmpty else {
+            useAlbumSettings(for: nil)
+            return nil
+        }
+        let entry = upNext.removeFirst()
+        useAlbumSettings(for: entry.source)
+        shuffler.note(entry.path)
+        return entry.path
     }
 
     public func addFolders(_ urls: [URL]) {
@@ -494,13 +530,7 @@ public final class Controller {
     }
 
     private func startNextTrack() {
-        let queued = queue.isEmpty ? nil : queue.removeFirst()
-        if let queued {
-            shuffler.note(queued)
-        } else {
-            useAlbumSettings(for: nil)
-        }
-        guard let path = queued ?? shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng) else {
+        guard let path = dequeue() ?? shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng) else {
             send(.stop)
             return
         }

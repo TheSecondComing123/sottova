@@ -75,4 +75,38 @@ struct AlbumGapsTests {
         #expect(c.settings == sparse)
         #expect(c.albumSettings.isEmpty)
     }
+
+    private func song(_ path: String, album: String) -> Song {
+        Song(id: path, title: path, work: path, detail: nil, artist: "", album: album, albumID: album, albumArtist: "",
+             composer: nil, trackNumber: nil, discNumber: nil, year: nil, duration: 60, artwork: nil, searchKey: path)
+    }
+
+    @Test func eachQueuedSongPlaysWithTheGapsOfWhereItCameFrom() {
+        let (c, _) = controller()
+        let own = c.settings
+        c.play([song("/c1", album: "compline"), song("/c2", album: "compline")])
+        c.playNext([song("/other", album: "lauds")])
+        c.playNext([song("/c3", album: "compline")])
+        #expect(c.dequeue() == "/c3")
+        #expect(c.settings.gapRange == 600...1200)
+        #expect(c.dequeue() == "/other")
+        #expect(c.settings == own)
+        // play() from idle already started /c1
+        #expect(c.dequeue() == "/c2")
+        #expect(c.settings.gapRange == 600...1200)
+        #expect(c.dequeue() == nil)
+        #expect(c.settings == own)
+    }
+
+    @Test func theSameSongQueuedTwiceMovesAndGoesOnItsOwn() {
+        let (c, _) = controller()
+        let a = song("/a", album: "x"), b = song("/b", album: "x")
+        c.playNext([a, b])
+        c.playNext([a])
+        #expect(c.upNext.map(\.path) == ["/a", "/a", "/b"])
+        c.removeQueued(c.upNext[1].id)
+        #expect(c.upNext.map(\.path) == ["/a", "/b"])
+        c.moveQueued(fromOffsets: [0], toOffset: 2)
+        #expect(c.upNext.map(\.path) == ["/b", "/a"])
+    }
 }

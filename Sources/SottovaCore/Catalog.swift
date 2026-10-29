@@ -22,6 +22,14 @@ public struct Song: Identifiable, Hashable, Sendable {
     public let searchKey: String
 }
 
+/// One song waiting to play. Its own id, so the same song queued twice moves and goes away on its own.
+public struct QueueEntry: Identifiable, Hashable, Sendable {
+    public let id = UUID()
+    public let path: String
+    /// The album it was queued from, whose gaps it plays with; nil plays with the user's own.
+    public let source: String?
+}
+
 public struct Album: Identifiable, Hashable, Sendable {
     public let id: String
     public let title: String
