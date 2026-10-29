@@ -45,9 +45,12 @@ public struct Settings: Equatable, Sendable {
         return s
     }
 
-    /// True when every field but the name matches the preset of the same name.
+    /// True when the way it plays matches the preset of the same name. Loudness is a listening level, not part of
+    /// a mode, so it's left out: turning it down doesn't make Sparse "Custom".
     public var matchesPreset: Bool {
-        Self.presets.contains(self)
+        var mode = self
+        (mode.targetLufs, mode.ceilingDbtp) = (Settings().targetLufs, Settings().ceilingDbtp)
+        return Self.presets.contains(mode)
     }
 }
 

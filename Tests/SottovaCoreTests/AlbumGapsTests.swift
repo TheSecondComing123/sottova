@@ -7,7 +7,7 @@ struct AlbumGapsTests {
     private let minecraft = Settings.presets.first { $0.name == "Minecraft" }!
     private let sparse = Settings.presets.first { $0.name == "Sparse" }!
 
-    /// Sparse at -23 LUFS, which the controller files as Custom.
+    /// Sparse at −23 LUFS, still Sparse: loudness isn't part of the mode.
     private func controller() -> (Controller, URL) {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-album-gaps-\(UUID().uuidString)")
         let c = Controller(storage: dir)
@@ -21,7 +21,7 @@ struct AlbumGapsTests {
     @Test func albumPlaysWithItsGapsOverTheUsersLoudness() {
         let (c, _) = controller()
         c.useAlbumSettings(for: "compline")
-        #expect(c.settings.name == "Custom")  // Minecraft gaps at -23 LUFS isn't the preset
+        #expect(c.settings.name == "Minecraft")
         #expect(c.settings.gapRange == 600...1200)
         #expect(c.settings.targetLufs == -23)
     }
@@ -108,5 +108,15 @@ struct AlbumGapsTests {
         #expect(c.upNext.map(\.path) == ["/a", "/b"])
         c.moveQueued(fromOffsets: [0], toOffset: 2)
         #expect(c.upNext.map(\.path) == ["/b", "/a"])
+    }
+
+    @Test func loudnessIsNotPartOfAMode() {
+        let c = Controller(storage: nil)
+        c.apply(sparse)
+        c.settings.targetLufs = -23
+        #expect(c.settings.name == "Sparse")
+        c.apply(minecraft)
+        #expect(c.settings.name == "Minecraft")
+        #expect(c.settings.targetLufs == -23)
     }
 }

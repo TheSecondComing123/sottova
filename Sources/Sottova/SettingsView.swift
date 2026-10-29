@@ -164,6 +164,20 @@ private struct PlaybackPage: View {
                     .padding(.top, 12)
             }
 
+            Heading(title: "Loudness", value: "\(Int(s.targetLufs)) LUFS".replacingOccurrences(of: "-", with: "−"))
+            HStack(spacing: 12) {
+                ForEach(Array([(-14.0, "Loud", "like streaming apps"), (-18, "Medium", "the default"), (-23, "Quiet", "like broadcast tv")].enumerated()),
+                        id: \.offset) { index, level in
+                    LoudnessCard(lufs: level.0, title: level.1, detail: level.2, selected: s.targetLufs == level.0, accent: 3 + 4 * index) {
+                        controller.settings.targetLufs = level.0
+                    }
+                }
+            }
+            Text("starts with the next piece")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.faint)
+                .padding(.top, 8)
+
             Heading(title: "Shuffle")
             HStack(spacing: 16) {
                 Text("Don't repeat any of the last")
@@ -412,6 +426,58 @@ private struct CurveCard: View {
             .frame(maxWidth: .infinity)
             .background(Theme.raised, in: .rect(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Theme.text : Theme.border, lineWidth: selected ? 1.5 : 1))
+            .hoverable(radius: 12)
+        }
+        .buttonStyle(PressStyle(scale: 0.98))
+        .animation(Theme.quick, value: selected)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// A loudness to level every piece to, drawn as how tall a waveform stands at it: −14 is 2.8 times −23.
+private struct LoudnessCard: View {
+    let lufs: Double
+    let title: String
+    let detail: String
+    let selected: Bool
+    let accent: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 12) {
+                Canvas { gc, size in
+                    let amplitude = pow(10, (lufs + 14) / 20)
+                    let shape: [Double] = [0.35, 0.7, 1, 0.55, 0.85, 0.45, 0.75, 0.3]
+                    for (i, h) in shape.enumerated() {
+                        let height = size.height * amplitude * h
+                        let x = CGFloat(i) * size.width / CGFloat(shape.count)
+                        gc.fill(Path(roundedRect: CGRect(x: x, y: (size.height - height) / 2, width: 2.5, height: height), cornerRadius: 1),
+                                with: .color(selected ? Theme.accent(accent) : Theme.muted))
+                    }
+                }
+                .frame(width: 64, height: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                        Spacer(minLength: 0)
+                        Text("\(Int(lufs))".replacingOccurrences(of: "-", with: "−"))
+                            .font(.system(size: 11, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.faint)
+                    }
+                    Text(detail)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(1)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.raised, in: .rect(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Theme.accent(accent) : Theme.border, lineWidth: selected ? 1.5 : 1))
             .hoverable(radius: 12)
         }
         .buttonStyle(PressStyle(scale: 0.98))

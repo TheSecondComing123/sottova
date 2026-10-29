@@ -197,7 +197,10 @@ public final class Controller {
         }
     }
 
+    /// Switches mode and keeps the loudness the user set.
     public func apply(_ preset: Settings) {
+        var preset = preset
+        (preset.targetLufs, preset.ceilingDbtp) = (settings.targetLufs, settings.ceilingDbtp)
         settings = preset
     }
 
