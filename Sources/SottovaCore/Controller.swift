@@ -79,7 +79,7 @@ public final class Controller {
     @ObservationIgnored private var lastTrack: Track?
     /// plays.jsonl, read once at launch and appended to after, so drawing today never rereads the file.
     @ObservationIgnored private var playLog: [PlayRecord] = []
-    @ObservationIgnored private var startedAt = Date()
+    @ObservationIgnored private(set) var startedAt = Date()
     @ObservationIgnored private var failures = 0
     @ObservationIgnored private var needsReschedule = false
     @ObservationIgnored private var pausedForSleep = false
@@ -267,6 +267,8 @@ public final class Controller {
 
     public private(set) var alarms: [Alarm] = []
     @ObservationIgnored private var alarmTimer: DispatchSourceTimer?
+    /// Held while an alarm is set: an idle menu-bar app gets App Nap, which may hold its timers back.
+    @ObservationIgnored private var alarmActivity: NSObjectProtocol?
 
     public func addAlarm(_ alarm: Alarm) {
         alarms.append(alarm)
@@ -311,7 +313,14 @@ public final class Controller {
     private func armAlarm() {
         alarmTimer?.cancel()
         alarmTimer = nil
-        guard let (alarm, at) = nextAlarm() else { return }
+        guard let (alarm, at) = nextAlarm() else {
+            alarmActivity.map(ProcessInfo.processInfo.endActivity)
+            alarmActivity = nil
+            return
+        }
+        // keeps the app awake to its timer, while still letting the Mac itself sleep
+        alarmActivity = alarmActivity ?? ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep], reason: "an alarm is set")
         let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
         timer.schedule(wallDeadline: .now() + max(at.timeIntervalSinceNow, 0), leeway: .milliseconds(100))
         timer.setEventHandler { [weak self] in

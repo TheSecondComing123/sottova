@@ -182,6 +182,33 @@ struct RenderTests {
         #expect(abs((second.track?.elapsed ?? 0) - 2.6) < 0.02)
     }
 
+    /// The real path: a timer on the wall clock, then the album starts. Waits for the next minute, so up to 60 s.
+    @Test func anAlarmStartsItsAlbumOnTheMinute() async throws {
+        let engine = AVAudioEngine()
+        try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
+        let storage = FileManager.default.temporaryDirectory.appending(path: "sottova-alarm-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)
+        let controller = Controller(engine: engine, storage: storage)
+        let url = try constantFile(channels: 2, seconds: 3)
+        controller.library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10),
+                                                             meta: TrackMeta(title: "t", artist: "a", album: "Lauds", duration: 3))
+        controller.refreshTracks()
+        try await Task.sleep(for: .milliseconds(500))
+        let album = try #require(controller.catalog.albums.first)
+        let soon = Date.now.addingTimeInterval(60)
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: soon)
+        controller.addAlarm(Alarm(source: album.id, name: "Lauds", hour: parts.hour!, minute: parts.minute!, day: soon))
+        #expect(controller.status == .idle)
+        let fireAt = controller.nextAlarm()!.at
+        // a busy main thread can wake this test late, so judge by when the piece really started, not when we looked
+        try await Task.sleep(for: .seconds(max(fireAt.timeIntervalSinceNow, 0) + 4))
+        #expect(controller.status == .playing)
+        #expect(controller.startedAt >= fireAt.addingTimeInterval(-0.05))
+        print("alarm due \(fireAt.timeIntervalSince1970), piece started \(controller.startedAt.timeIntervalSince1970)")
+        #expect(controller.current?.album == "Lauds")
+        #expect(controller.alarms.isEmpty)
+    }
+
     private func constantFile(channels: AVAudioChannelCount, seconds: Double) throws -> URL {
         let format = AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: channels)!
         let frames = AVAudioFrameCount(seconds * Self.rate)
