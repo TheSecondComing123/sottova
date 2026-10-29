@@ -23,7 +23,8 @@ struct MainWindow: View {
             Rectangle().fill(Theme.border).frame(width: 1)
 
             VStack(spacing: 0) {
-                TopBar()
+                // under the toolbar
+                Color.clear.frame(height: 60)
                 page
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // the page makes room for the queue, so no column hides under it; padding, not safe-area padding, or
@@ -47,6 +48,14 @@ struct MainWindow: View {
         }
         .background(Theme.background)
         .ignoresSafeArea(.container, edges: .top)
+        // in the toolbar, so the title bar is 52 pt with the traffic lights on this line, and clicks reach them
+        .toolbar {
+            ToolbarItem(placement: .navigation) { NavArrows() }
+                .sharedBackgroundVisibility(.hidden)
+            ToolbarItem(placement: .principal) { SearchField() }
+                .sharedBackgroundVisibility(.hidden)
+        }
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .frame(minWidth: 980, minHeight: 640)
         .background(WindowVisibility(visible: $visible))
         .environment(\.windowVisible, visible)
@@ -170,16 +179,14 @@ private struct Sidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // the wordmark sits on the same line as the search field; the traffic lights sit above it
+            // the traffic lights have the top bar's line to themselves; the wordmark heads the sidebar below them
             Text("sottova")
                 .font(.system(size: 22, weight: .bold))
                 .tracking(-0.6)
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 24)
-                // the top bar's 8 + 60, so it centers on the search field's line
-                .frame(height: 60)
-                .padding(.top, 8)
-                .padding(.bottom, 16)
+                .padding(.top, 52 + 8)
+                .padding(.bottom, 24)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
                 .gesture(WindowDragGesture())
@@ -346,55 +353,21 @@ private struct Sidebar: View {
     }
 }
 
-private struct TopBar: View {
+/// Back and forward, beside the traffic lights in the toolbar.
+private struct NavArrows: View {
     @Environment(Router.self) private var router
-    @FocusState private var searching: Bool
 
     var body: some View {
-        @Bindable var router = router
-        HStack(spacing: 12) {
+        HStack(spacing: 4) {
             arrow(.caretLeft, enabled: !router.back.isEmpty, help: "back", action: router.goBack)
             arrow(.caretRight, enabled: !router.forward.isEmpty, help: "forward", action: router.goForward)
-
-            HStack(spacing: 8) {
-                Ph.magnifyingGlass.icon(size: 16)
-                    .foregroundStyle(Theme.muted)
-                TextField("search songs, albums, artists", text: $router.query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.text)
-                    .focused($searching)
-                    .onExitCommand { router.query = ""; searching = false }
-                    .onChange(of: searching) { _, focused in router.typing = focused }
-                    .onChange(of: router.searchRequests) { searching = true }
-                    // AppKit hands a new window's focus to its first text field; here that would swallow Space
-                    .onAppear { DispatchQueue.main.async { searching = false } }
-                if !router.query.isEmpty {
-                    IconButton(icon: .x, weight: .bold, help: "clear search", size: 24) { router.query = "" }
-                }
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .frame(maxWidth: 560)
-            .background(Theme.raised, in: .rect(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(searching ? Theme.muted : Theme.border))
-            .animation(Theme.quick, value: searching)
-
-            // the rest of the bar still drags the window
-            Color.clear
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(.rect)
-                .gesture(WindowDragGesture())
         }
-        .padding(.horizontal, 24)
-        .frame(height: 60)
-        .padding(.top, 8)
     }
 
     private func arrow(_ icon: Ph, enabled: Bool, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            icon.icon(.bold, size: 14)
-                .foregroundStyle(enabled ? Theme.text : Theme.decor)
+            icon.icon(.bold, size: 15)
+                .foregroundStyle(enabled ? Theme.text : Theme.faint)
                 .frame(width: 32, height: 32)
                 .hoverable(radius: 16)
         }
@@ -402,6 +375,38 @@ private struct TopBar: View {
         .disabled(!enabled)
         .help(help)
         .accessibilityLabel(help)
+    }
+}
+
+/// Search, in the middle of the toolbar.
+private struct SearchField: View {
+    @Environment(Router.self) private var router
+    @FocusState private var searching: Bool
+
+    var body: some View {
+        @Bindable var router = router
+        HStack(spacing: 8) {
+            Ph.magnifyingGlass.icon(size: 16)
+                .foregroundStyle(Theme.muted)
+            TextField("search songs, albums, artists", text: $router.query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.text)
+                .focused($searching)
+                .onExitCommand { router.query = ""; searching = false }
+                .onChange(of: searching) { _, focused in router.typing = focused }
+                .onChange(of: router.searchRequests) { searching = true }
+                // AppKit hands a new window's focus to its first text field; here that would swallow Space
+                .onAppear { DispatchQueue.main.async { searching = false } }
+            if !router.query.isEmpty {
+                IconButton(icon: .x, weight: .bold, help: "clear search", size: 24) { router.query = "" }
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(width: 480, height: 36)
+        .background(Theme.raised, in: .rect(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(searching ? Theme.muted : Theme.border))
+        .animation(Theme.quick, value: searching)
     }
 }
 
