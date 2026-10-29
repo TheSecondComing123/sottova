@@ -1089,7 +1089,7 @@ private struct ComposerTile: View {
 
     var body: some View {
         let works = controller.catalog.works(by: name)
-        Tile(artwork: nil, circle: true, coverTitle: name, play: { controller.play(works.flatMap(\.recordings).shuffled()) },
+        Tile(artwork: nil, circle: true, coverTitle: name, play: { controller.play(works.flatMap(\.recordings).shuffled(), shuffled: true) },
              open: { navigate(.composer(name)) }) {
             VStack(spacing: 2) {
                 Text(name)

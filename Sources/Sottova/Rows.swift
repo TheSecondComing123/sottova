@@ -271,7 +271,7 @@ struct ArtistTile: View {
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        Tile(artwork: artist.artwork, circle: true, coverTitle: artist.name, play: { controller.play(artist.songs.shuffled()) }, open: { navigate(.artist(artist.name)) }) {
+        Tile(artwork: artist.artwork, circle: true, coverTitle: artist.name, play: { controller.play(artist.songs.shuffled(), shuffled: true) }, open: { navigate(.artist(artist.name)) }) {
             VStack(spacing: 2) {
                 NowPlayingTitle(text: artist.name, playing: controller.sounding.map { $0.artist == artist.name || $0.albumArtist == artist.name } ?? false,
                                 key: controller.sounding?.album)
@@ -281,7 +281,7 @@ struct ArtistTile: View {
             }
         }
         .contextMenu {
-            Button("Shuffle") { controller.play(artist.songs.shuffled()) }
+            Button("Shuffle") { controller.play(artist.songs.shuffled(), shuffled: true) }
             Button("Play next") { controller.playNext(artist.songs) }
         }
     }
@@ -363,7 +363,7 @@ struct PlayRow: View {
 
     /// Which songs these are, however they're ordered: the same set from the same page is the same origin.
     private var key: String {
-        source ?? String(Set(songs.map(\.id)).hashValue)
+        Controller.Origin.key(of: songs, source: source)
     }
 
     /// These songs are what's playing (or paused, or resting between them).
@@ -380,14 +380,14 @@ struct PlayRow: View {
                 if current != nil {
                     controller.toggle()
                 } else {
-                    controller.play(songs, source: source, origin: .init(key: key, shuffled: false))
+                    controller.play(songs, source: source)
                 }
             }
             // labeled, not a bare icon: it's a one-shot "play these shuffled", and alone the icon read as a toggle
             // whose on and off looked the same
             let shuffling = current?.shuffled == true
             // lit while these play shuffled; pressed again it deals a new order
-            Button { controller.play(songs.shuffled(), source: source, origin: .init(key: key, shuffled: true)) } label: {
+            Button { controller.play(songs.shuffled(), source: source, shuffled: true) } label: {
                 HStack(spacing: 8) {
                     Ph.shuffle.icon(shuffling ? .bold : .duotone, size: 16)
                         .foregroundStyle(shuffling ? Theme.accent(for: key) : Theme.text)

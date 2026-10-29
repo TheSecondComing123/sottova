@@ -216,14 +216,20 @@ public final class Controller {
             self.key = key
             self.shuffled = shuffled
         }
+
+        /// A playlist by its id; anything else by which songs it holds, whatever their order, so a song clicked in
+        /// a list and that page's play button agree.
+        public static func key(of songs: [Song], source: String?) -> String {
+            source ?? String(Set(songs.map(\.id)).hashValue)
+        }
     }
 
     public private(set) var origin: Origin?
 
     /// `source` is a playlist id, whose gaps the songs play with; without one, songs from one album play with its gaps.
-    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, origin: Origin? = nil) {
+    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false) {
         guard songs.indices.contains(index) else { return }
-        self.origin = origin
+        origin = Origin(key: Origin.key(of: songs, source: source), shuffled: shuffled)
         let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
         if status == .idle {
@@ -335,7 +341,7 @@ public final class Controller {
         let songs = playlists.first { $0.id == alarm.source }.map(songs(of:)) ?? catalog.albumsByID[alarm.source]?.songs ?? []
         if !songs.isEmpty {
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
-            play(alarm.shuffled ? songs.shuffled() : songs, source: playlist, origin: .init(key: alarm.source, shuffled: alarm.shuffled))
+            play(alarm.shuffled ? songs.shuffled() : songs, source: playlist, shuffled: alarm.shuffled)
             if status == .paused { toggle() }
         } else {
             problem = "the \(alarm.name) alarm went off, but there's nothing in it to play"

@@ -450,7 +450,7 @@ private struct PlaylistRow: View {
         }
         .contextMenu {
             Button("Play") { controller.play(controller.songs(of: playlist), source: playlist.id) }
-            Button("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id) }
+            Button("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) }
             Divider()
             Button("Rename") {
                 renaming.wrappedValue = playlist.id
