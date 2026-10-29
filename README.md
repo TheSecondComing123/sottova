@@ -1,10 +1,28 @@
-# sottova
+<p align="center">
+  <img src="docs/icon.png" width="128" height="128" alt="sottova icon">
+</p>
+
+<h1 align="center">sottova</h1>
+
+<p align="center">a music player for macOS that leaves silence between the songs.</p>
+
+<p align="center">
+  <a href="#build-it">build it</a> ·
+  <a href="#scripting">scripting</a> ·
+  <a href="#what-it-changes-on-your-mac">what it changes on your mac</a> ·
+  <a href="LICENSE">GPL-3.0</a>
+</p>
+
+![sottova's home page: the piece that's playing with its fade drawn under the title, then recently played and albums](docs/screenshot.png)
 
 sottova plays your own music the way Minecraft plays its soundtrack. each track rises out of silence, falls back into it, and then there's quiet for a while before the next one. you pick how long the quiet lasts.
 
 silence is the point, not a bug. a playlist that never stops turns into wallpaper. a track that shows up after ten minutes of nothing gets heard.
 
 it's a full window for browsing (songs, albums, artists, composers, playlists) and a small panel in the menu bar for when you only want the music.
+
+- **requires** macOS 26 Tahoe or later
+- **plays** your own files only. no streaming, no account
 
 ## what it does
 
@@ -20,6 +38,8 @@ it's a full window for browsing (songs, albums, artists, composers, playlists) a
 - reopens paused where you left off, in the piece or in the silence
 - composer pages list each work in catalog order with every recording of it
 - covers from a file or from public-domain paintings (the Met, the Art Institute of Chicago, Cleveland), credited inside the jpeg
+- alarms: an album or playlist starts itself at a time you set, once or on chosen days, at its own volume
+- trim: drag where a track really starts and ends to skip a spoken intro or applause; the file isn't touched
 - three palettes: Monochrome, Catppuccin and Gruvbox, in light and dark
 
 ## presets
@@ -35,7 +55,7 @@ Minecraft's own delay between overworld tracks is 10 to 20 minutes. change the g
 
 ## build it
 
-needs macOS 26 and Xcode 26.
+there's no signed release yet, so build it yourself. it needs Xcode 26.
 
 ```sh
 scripts/run.sh        # debug build, opens from the menu bar
@@ -82,9 +102,30 @@ everything sits in `~/Library/Application Support/Sottova`, as plain files:
 - `profile.json`: your settings, plus the albums that have their own gaps
 - `resume.json`: where playback was when you quit
 - `plays.jsonl`: one line per track played, with the gap after it
+- `alarms.json`: your alarms
+- `trims.json`: where each trimmed track starts and ends
 - `status.json`: the current state
 
 nothing leaves your Mac. there's no account and no analytics. the only network access is the painting search, and only while that sheet is open.
+
+## what it changes on your Mac
+
+alarms need the Mac awake, so sottova schedules a system wake two minutes before each one with `pmset`. scheduling a wake needs root. the first time you save an alarm, sottova asks for your password once and adds this rule:
+
+```
+/etc/sudoers.d/sottova
+<you> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron *
+```
+
+it lets sottova add wakes, and nothing else, without asking again. it's checked with `visudo` before it goes in. wakes are kept two weeks ahead, topped up at launch and whenever the Mac wakes. cancel the password prompt and alarms only play when the Mac is already awake.
+
+to undo it:
+
+```sh
+sudo rm /etc/sudoers.d/sottova
+pmset -g sched                  # see what's scheduled
+sudo pmset schedule cancelall   # removes every scheduled wake, not only sottova's
+```
 
 ## what it isn't
 
@@ -92,4 +133,7 @@ sottova is a music player. it makes no claims about sleep, focus, stress or heal
 
 ## license
 
-GPL-3.0, see `LICENSE`. the Phosphor icons in `Support/Icons` are MIT.
+copyright (C) 2026 TheSecondComing123. GPL-3.0, see `LICENSE`.
+
+- [libebur128](https://github.com/jiixyj/libebur128) in `Sources/CEbur128`: MIT, see its `LICENSE`
+- [Phosphor](https://phosphoricons.com) icons in `Support/Icons`: MIT, see its `LICENSE`
