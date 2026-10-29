@@ -37,7 +37,7 @@ struct Artwork: View {
         let shape = circle ? AnyShape(.circle) : AnyShape(.rect(cornerRadius: radius))
         Rectangle()
             // an artist without art is an outlined circle, lighter than an album's solid ground
-            .fill(image == nil ? (circle ? .clear : Theme.coverGround(for: title ?? "")) : Theme.hover)
+            .fill(image == nil ? Theme.coverGround(for: title ?? "") : Theme.hover)
             .overlay {
                 if let image {
                     Image(decorative: image, scale: 2)
@@ -134,12 +134,13 @@ private struct TypeCover: View {
             Text(title)
                 .font(.system(size: side * 0.105, weight: .semibold))
                 .tracking(-0.2)
-                .foregroundStyle(Theme.coverInk)
+                // the item's color is in the type, on a quiet ground, so a wall of type covers isn't a wall of color
+                .foregroundStyle(Theme.accent(for: title, or: \.coverInk))
                 .lineLimit(3)
             if let subtitle {
                 Text(subtitle)
                     .font(.system(size: side * 0.06))
-                    .foregroundStyle(Theme.coverInk.opacity(0.7))
+                    .foregroundStyle(Theme.muted)
                     .lineLimit(1)
             }
         }

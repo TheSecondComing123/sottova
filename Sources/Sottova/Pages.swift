@@ -81,12 +81,15 @@ struct HomePage: View {
             if recent.count >= 3 {
                 SectionTitle(title: "Recently played")
                     .padding(.bottom, 8)
+                // one tile per album: the same cover five times reads as a pattern. With fewer than three albums the
+                // titles are what differ, so it's a list
+                var seen = Set<String>()
+                let covers = recent.filter { seen.insert($0.albumID).inserted }
                 Group {
-                    // one album's cover five times reads as a pattern; the titles are what differ
-                    if Set(recent.map(\.albumID)).count == 1 {
+                    if covers.count < 3 {
                         RecentList(songs: Array(recent.prefix(6)))
                     } else {
-                        Shelf(items: recent) { RecentTile(song: $0) }
+                        Shelf(items: covers) { RecentTile(song: $0) }
                     }
                 }
                 .padding(.bottom, 32)
@@ -133,9 +136,11 @@ private struct Hero: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 TimelineView(.periodic(from: .now, by: 15)) { context in
-                    Text(eyebrow(at: context.date))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Theme.muted)
+                    if let line = eyebrow(at: context.date) {
+                        Text(line)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.muted)
+                    }
                 }
                 // the title thins with the sound: it fades out to a light weight, rests there, and fills in with the next track
                 TimelineView(FadeSchedule(track: controller.track, taken: .now, active: controller.status == .playing && visible)) { _ in
@@ -216,18 +221,19 @@ private struct Hero: View {
     }
 
 
-    private func eyebrow(at date: Date) -> String {
+    /// The line over the title. nil rather than "now playing" or "paused": the art, the title's weight and the player
+    /// bar already say that.
+    private func eyebrow(at date: Date) -> String? {
         switch controller.status {
         case .idle:
             guard !controller.tracks.isEmpty else { return "sottova plays your library with silence between songs" }
             let songs = controller.catalog.songs
             return "\(Format.count(songs.count, "song")) · \(Format.length(songs.reduce(0) { $0 + $1.duration })) · \(Format.range(controller.settings)) between"
-        case .playing:
+        case .playing, .paused:
             // concert-program order: composer, work, performer. Without a composer tag, classical files carry the
             // composer as album artist
-            guard let song = controller.current else { return "now playing" }
-            return song.composer ?? (song.albumArtist != song.artist ? song.albumArtist : "now playing")
-        case .paused: return "paused"
+            guard let song = controller.current else { return nil }
+            return song.composer ?? (song.albumArtist != song.artist ? song.albumArtist : nil)
         case .resting: return controller.subline(at: date)
         }
     }
@@ -412,15 +418,17 @@ private struct Mosaic: View {
     let side: CGFloat
 
     var body: some View {
-        if albums.count < 4 {
-            // four of the same cover would read as a pattern, not a library
-            Artwork(key: albums.first?.artwork, size: side, radius: 12, outlined: true, title: albums.first?.title, subtitle: albums.first?.artist)
+        // paintings, not type: four title covers in a square read as a placeholder
+        let painted = albums.filter { $0.artwork != nil }
+        if painted.count < 4 {
+            let one = painted.first ?? albums.first
+            Artwork(key: one?.artwork, size: side, radius: 12, outlined: true, title: one?.title, subtitle: one?.artist)
         } else {
-            grid
+            grid(painted)
         }
     }
 
-    private var grid: some View {
+    private func grid(_ albums: [Album]) -> some View {
         let picks = (0..<4).map { albums[$0 * albums.count / 4] }
         return Grid(horizontalSpacing: 2, verticalSpacing: 2) {
             GridRow {
@@ -447,15 +455,17 @@ private struct RecentTile: View {
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        Tile(artwork: song.artwork, coverTitle: song.album, coverSubtitle: song.albumArtist, play: { controller.play([song]) }, open: { navigate(.album(song.albumID)) }) {
+        Tile(artwork: song.artwork, coverTitle: song.album, play: { controller.play([song]) }, open: { navigate(.album(song.albumID)) }) {
             VStack(alignment: .leading, spacing: 2) {
-                // a shelf is a lazy row sized from its first tiles; equal heights keep a later cover from being squeezed
                 NowPlayingTitle(text: song.work, playing: controller.sounding?.id == song.id, key: song.album, lines: 2)
                 Text(song.artist)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
                     .lineLimit(1)
             }
+            // a shelf is a lazy row sized from its first tiles; equal heights keep a later cover from being squeezed,
+            // and the spare line goes at the bottom instead of between a short title and its performer
+            .frame(height: 52, alignment: .topLeading)
         }
     }
 }
@@ -1090,8 +1100,12 @@ struct ArtistsPage: View {
                 if !composers.isEmpty {
                     SectionTitle(title: "Composers")
                         .padding(.bottom, 8)
-                    Shelf(items: composers.map(ComposerName.init)) { ComposerTile(name: $0.id) }
-                        .padding(.bottom, 32)
+                    // a grid like the performers below: this is already the show-all page, and its columns line up
+                    LazyVGrid(columns: albumGrid, alignment: .leading, spacing: 16) {
+                        ForEach(composers, id: \.self) { ComposerTile(name: $0) }
+                    }
+                    .padding(.horizontal, -8)
+                    .padding(.bottom, 32)
                     SectionTitle(title: "Performers")
                         .padding(.bottom, 8)
                 }
@@ -1102,10 +1116,6 @@ struct ArtistsPage: View {
             }
         }
     }
-}
-
-private struct ComposerName: Identifiable {
-    let id: String
 }
 
 private struct ComposerTile: View {

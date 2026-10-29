@@ -155,7 +155,7 @@ struct NowPlayingTitle: View {
                     .accessibilityLabel("playing")
             }
             Text(text)
-                .lineLimit(lines, reservesSpace: lines > 1)
+                .lineLimit(lines)
         }
         .font(.system(size: 13, weight: .semibold))
         .foregroundStyle(Theme.text)
@@ -209,7 +209,9 @@ struct Tile<Label: View>: View {
                 // a type cover repeats the label below it
                 .accessibilityHidden(true)
                 .overlay(alignment: .bottomTrailing) {
+                    // lifted off the art: the button's color can be the cover's own
                     PlayCircle(size: 44, action: play)
+                        .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
                         .padding(circle ? 4 : 8)
                         .opacity(hovering ? 1 : 0)
                         .offset(y: hovering || reduceMotion ? 0 : 8)
@@ -219,7 +221,8 @@ struct Tile<Label: View>: View {
         }
         .padding(8)
         // 12 outside, 12 − 8 = 4 on the art inside, so the two corners stay concentric
-        .background(Theme.hover.opacity(hovering ? 1 : 0), in: .rect(cornerRadius: 12))
+        // a square plate behind a circle reads as a frame around it; circles lift the play button and nothing else
+        .background(Theme.hover.opacity(hovering && !circle ? 1 : 0), in: .rect(cornerRadius: 12))
         .animation(Theme.quick, value: hovering)
         .contentShape(.rect)
         .onHover { hovering = $0 }
@@ -239,7 +242,7 @@ struct AlbumTile: View {
     @Environment(Router.self) private var router
 
     var body: some View {
-        Tile(artwork: album.artwork, coverTitle: album.title, coverSubtitle: album.artist, play: { controller.play(album.songs) }, open: { navigate(.album(album.id)) }) {
+        Tile(artwork: album.artwork, coverTitle: album.title, play: { controller.play(album.songs) }, open: { navigate(.album(album.id)) }) {
             VStack(alignment: .leading, spacing: 2) {
                 NowPlayingTitle(text: album.title, playing: controller.sounding?.albumID == album.id, key: album.title)
                 Text([album.artist, album.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
