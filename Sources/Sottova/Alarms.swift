@@ -59,6 +59,15 @@ struct AlarmSheet: View {
         }
     }
 
+    /// Whether this Mac's clock shows AM and PM.
+    private static let twelveHour = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? false
+
+    /// "7", not "07": the AM or PM sits after the minutes.
+    private var hourText: String {
+        let hour = Calendar.current.component(.hour, from: time)
+        return String(Self.twelveHour ? (hour + 11) % 12 + 1 : hour)
+    }
+
     private var picking: Bool {
         if case .new(nil) = request { true } else { false }
     }
@@ -120,12 +129,27 @@ struct AlarmSheet: View {
                 .menuIndicator(.hidden)
                 .buttonStyle(.plain)
             }
-            HStack(spacing: 8) {
-                TimeStep(text: time.formatted(.dateTime.hour()), help: "hour") { time = time.addingTimeInterval(Double($0) * 3600) }
-                TimeStep(text: time.formatted(.dateTime.minute(.twoDigits)), help: "minute") { time = time.addingTimeInterval(Double($0) * 60) }
-                Spacer(minLength: 0)
+            // when: the time reads as a time, 7 : 00 AM, with what it repeats on and what that means right under it
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 4) {
+                    TimeStep(text: hourText, help: "hour") { time = time.addingTimeInterval(Double($0) * 3600) }
+                    Text(":")
+                    TimeStep(text: time.formatted(.dateTime.minute(.twoDigits)), help: "minute") { time = time.addingTimeInterval(Double($0) * 60) }
+                    if Self.twelveHour {
+                        Text(Calendar.current.component(.hour, from: time) < 12 ? Calendar.current.amSymbol : Calendar.current.pmSymbol)
+                            .padding(.leading, 4)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+                RepeatStrip(selection: $repeats)
+                if let alarm {
+                    Text(AlarmLine.describe(alarm) + (SystemWake.shared.missing(for: [alarm]).isEmpty ? "" : ". saving asks for your password once, so the mac can wake for it"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.faint)
+                }
             }
-            RepeatStrip(selection: $repeats)
             VStack(spacing: 8) {
                 Toggle("Shuffled", isOn: $shuffled)
                 Toggle("Set the volume", isOn: Binding(get: { volume != nil }, set: { volume = $0 ? 0.15 : nil }))
@@ -143,17 +167,11 @@ struct AlarmSheet: View {
             }
             .toggleStyle(KnobToggle())
             .animation(Theme.quick, value: volume == nil)
-            Text((alarm.map(AlarmLine.describe) ?? "pick what it plays") + ". saving asks for your password once, so the mac can wake itself up 2 minutes before, even with nobody there")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Theme.faint)
             HStack(spacing: 12) {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.muted)
-                    .padding(.horizontal, 12)
+                    .buttonStyle(QuietButton())
                 Button(editing ? "Save" : "Set alarm") {
                     guard let alarm else { return }
                     if editing { controller.updateAlarm(alarm) } else { controller.addAlarm(alarm) }
@@ -206,6 +224,8 @@ private struct TimeStep: View {
                 .hoverable(radius: 8)
         }
         .buttonStyle(PressStyle())
+        // held down it keeps going, so 7:30 isn't thirty clicks
+        .buttonRepeatBehavior(.enabled)
         .help(delta < 0 ? "earlier" : "later")
     }
 }
@@ -239,7 +259,7 @@ private struct RepeatStrip: View {
                 .accessibilityAddTraits(chosen ? .isSelected : [])
             }
         }
-        .padding(3)
+        .padding(2)
         .background(Theme.raised, in: .rect(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
         .animation(Theme.settle, value: selection)
@@ -332,6 +352,7 @@ private struct AlarmRow: View {
     let alarm: Alarm
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 16) {
@@ -371,10 +392,14 @@ private struct AlarmRow: View {
                 Toggle("on", isOn: Binding(get: { alarm.on }, set: { _ in toggle() }))
             }
 
+            // only under the pointer: one click deletes, and it sat right beside the switch
             IconButton(icon: .x, weight: .bold, help: "delete") { controller.removeAlarm(alarm.id) }
                 .padding(.trailing, 4)
+                .opacity(hovering ? 1 : 0)
+                .animation(Theme.quick, value: hovering)
         }
         .hoverable(radius: 8)
+        .onHover { hovering = $0 }
         .sottovaMenu {
             [
                 .item("Edit…") { router.alarm = .edit(alarm) },
@@ -408,9 +433,7 @@ private struct WakeLine: View {
         Group {
             if let failure = wake.failure {
                 Text(failure)
-            } else if let through = wake.covered(for: alarms) {
-                Text("the mac wakes itself for these through \(through.formatted(.dateTime.weekday(.wide).month().day()))")
-            } else if alarms.contains(where: \.on) {
+            } else if alarms.contains(where: \.on), !wake.missing(for: alarms).isEmpty {
                 HStack(spacing: 8) {
                     Text("won't wake the mac from sleep, only play if it's awake")
                     LinkText(text: "wake it") { wake.schedule(for: alarms) }
@@ -531,13 +554,6 @@ final class SystemWake {
             .map { $0 - Self.lead }
             .filter { $0 > now + 60 && !scheduled.contains($0) }
             .sorted()
-    }
-
-    /// The last day the Mac wakes itself for an alarm, when none are missing.
-    func covered(for alarms: [Alarm], now: Date = .now) -> Date? {
-        let needed = alarms.filter(\.on).flatMap { $0.times(after: now, until: now + Self.ahead) }
-        guard !needed.isEmpty, missing(for: alarms, now: now).isEmpty else { return nil }
-        return needed.max()
     }
 
     /// Asks for the password once and schedules every missing wake. A wake left from a deleted alarm stays: it

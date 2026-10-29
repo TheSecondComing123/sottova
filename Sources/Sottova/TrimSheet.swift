@@ -54,10 +54,7 @@ struct TrimSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.muted)
-                    .padding(.horizontal, 12)
+                    .buttonStyle(QuietButton())
                 Button("Save") {
                     // a whole file isn't a trim; an end at the file's end is kept open, in case the file is replaced
                     let whole = start < 0.05 && end > length - 0.05
@@ -117,6 +114,7 @@ struct TrimSheet: View {
                 .hoverable(radius: 8)
         }
         .buttonStyle(PressStyle())
+        .buttonRepeatBehavior(.enabled)
         .help(step < 0 ? "a tenth of a second earlier" : "a tenth of a second later")
     }
 
@@ -192,13 +190,17 @@ private struct Waveform: View {
             let w = geo.size.width, h = geo.size.height
             let x = { (t: Double) in length > 0 ? CGFloat(t / length) * w : 0 }
             ZStack(alignment: .topLeading) {
+                // the cut parts sink to the window's ground; the part that plays stays raised
+                Theme.background.frame(width: max(x(start), 0), height: h)
+                Theme.background.frame(width: max(w - x(end), 0), height: h).offset(x: x(end))
                 Canvas { context, size in
                     guard !peaks.isEmpty else { return }
                     let step = size.width / CGFloat(peaks.count)
                     for (i, peak) in peaks.enumerated() {
                         let bx = CGFloat(i) * step
                         let t = length * Double(i) / Double(peaks.count)
-                        let bar = max(CGFloat(peak) * size.height, 1)
+                        // square root, so quiet speech and soft openings still show beside the loudest bars
+                        let bar = max(CGFloat(peak.squareRoot()) * size.height, 1)
                         let rect = CGRect(x: bx, y: (size.height - bar) / 2, width: max(step - 1, 1), height: bar)
                         context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(t >= start && t <= end ? Theme.text : Theme.decor))
                     }

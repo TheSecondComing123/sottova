@@ -496,11 +496,26 @@ struct InvertedButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(Theme.background)
             .padding(.horizontal, 16)
             .frame(height: 40)
-            .background(Theme.text, in: .rect(cornerRadius: 8))
-            .opacity(enabled ? 1 : 0.4)
+            // disabled, it steps back into the surface instead of staying the heaviest thing on it at low opacity
+            .foregroundStyle(enabled ? Theme.background : Theme.faint)
+            .background(enabled ? Theme.text : Theme.hover, in: .rect(cornerRadius: 8))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(Theme.quick, value: configuration.isPressed)
+    }
+}
+
+/// The quiet partner of InvertedButton, for Cancel: the whole 40 pt block is the target, not just the word.
+struct QuietButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Theme.muted)
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+            .contentShape(.rect)
+            .hoverable(radius: 8)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(Theme.quick, value: configuration.isPressed)
     }
@@ -675,7 +690,7 @@ private struct AlbumGaps: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
-            Text("it plays with these, then goes back to yours")
+            Text("only for this one; everything else keeps yours")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.muted)
                 .padding(.top, 2)
@@ -703,14 +718,14 @@ private struct AlbumGaps: View {
             }
 
             if own?.name == "Custom" {
+                caption("Silence between tracks")
                 GapRange(low: field(\.gapMin), high: field(\.gapMax))
                     .padding(.horizontal, 12)
-                    .padding(.top, 16)
+                caption("Fades")
                 HStack(spacing: 12) {
                     ValueStepper(label: "In", value: field(\.fadeIn), range: 0...20, unit: "s")
                     ValueStepper(label: "Out", value: field(\.fadeOut), range: 0...20, unit: "s")
                 }
-                .padding(.top, 16)
             }
         }
         .padding(16)
@@ -718,6 +733,14 @@ private struct AlbumGaps: View {
         // its own ground so the edge shows against the page; the cards, score and steppers keep their borders on it
         .presentationBackground(Theme.raised)
         .animation(Theme.quick, value: own?.name)
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Theme.muted)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
     }
 
     private func preset(_ index: Int, _ own: SottovaCore.Settings?) -> some View {

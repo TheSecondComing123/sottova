@@ -393,6 +393,7 @@ struct ValueStepper: View {
                 .frame(width: 32, height: 32)
                 .hoverable(radius: 8)
         }
+        .buttonRepeatBehavior(.enabled)
         .buttonStyle(PressStyle())
         .disabled(delta < 0 ? value <= range.lowerBound : value >= range.upperBound)
     }

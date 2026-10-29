@@ -58,9 +58,21 @@ struct CoverPicker: View {
                 }
                 VStack(alignment: .leading, spacing: 12) {
                     searchField
-                    Text(status)
+                    if searched.isEmpty && !searching {
+                        HStack(spacing: 4) {
+                            Text("try a painter or a mood:")
+                            ForEach(["hammershøi", "nocturne", "moonlight"], id: \.self) { word in
+                                LinkText(text: word) { query = word; search() }
+                                    .foregroundStyle(Theme.text)
+                            }
+                        }
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.faint)
+                    } else {
+                        Text(status)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.faint)
+                    }
                     ScrollView {
                         LazyVGrid(columns: Array(repeating: GridItem(.fixed(136), spacing: 16, alignment: .top), count: 3), alignment: .leading, spacing: 16) {
                             ForEach(results) { painting in
@@ -80,10 +92,7 @@ struct CoverPicker: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.muted)
-                    .padding(.horizontal, 12)
+                    .buttonStyle(QuietButton())
                 Button(saving ? "Saving…" : "Use cover", action: save)
                     .buttonStyle(InvertedButton())
                     .keyboardShortcut(.defaultAction)
@@ -125,7 +134,7 @@ struct CoverPicker: View {
         HStack(spacing: 8) {
             Ph.magnifyingGlass.icon(size: 14)
                 .foregroundStyle(Theme.faint)
-            TextField("search paintings", text: $query)
+            TextField("search paintings, then return", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text)
