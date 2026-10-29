@@ -528,30 +528,40 @@ struct AlbumsPage: View {
     }
 }
 
-/// "about 9 h with Minecraft gaps", which opens the choice of gaps this album plays with.
+/// Beside Shuffle: the gaps an album or playlist plays with and how long they make it, opening the choice. Its border
+/// darkens when it has gaps of its own, like a filter that's on.
 struct GapsButton: View {
     let title: String
     let songs: [Song]
     @Binding var gaps: SottovaCore.Settings?
     @Environment(Controller.self) private var controller
     @State private var open = false
-    @State private var hovering = false
 
     var body: some View {
         let duration = songs.reduce(0) { $0 + $1.duration }
         let s = gaps?.gaps(over: controller.yourSettings) ?? controller.yourSettings
         let paced = s.lengthWithGaps(count: songs.count, music: duration)
         Button { open = true } label: {
-            HStack(spacing: 4) {
-                Text(s.crossfade ? "crossfades, no gaps" : paced > duration ? "about \(Format.length(paced)) with \(s.name) gaps" : "\(s.name) gaps")
-                    .underline(hovering)
+            HStack(spacing: 8) {
+                Text(s.crossfade ? "Crossfades" : "\(s.name) gaps")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                if paced > duration {
+                    Text(Format.length(paced))
+                        .font(.system(size: 13))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.muted)
+                }
                 Ph.caretDown.icon(.bold, size: 10)
+                    .foregroundStyle(Theme.muted)
             }
-            .font(.system(size: 13, weight: gaps == nil ? .regular : .medium))
-            .foregroundStyle(gaps == nil ? Theme.muted : Theme.text)
+            .padding(.horizontal, 16)
+            .frame(height: 40)
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(gaps == nil ? Theme.border : Theme.muted))
+            .hoverable(radius: 8)
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .buttonStyle(PressStyle(scale: 0.97))
+        .help(paced > duration ? "about \(Format.length(paced)) with the gaps" : "choose the gaps between these")
         // pinned to the label's start, which stays put while the label's length changes with each choice
         .popover(isPresented: $open, attachmentAnchor: .point(.bottomLeading), arrowEdge: .bottom) {
             AlbumGaps(title: title, gaps: $gaps)
@@ -677,17 +687,10 @@ struct PlaylistPage: View {
                             title: playlist.name)
                     VStack(alignment: .leading, spacing: 12) {
                         title(playlist)
-                        // one separator, " · ", between every part of the line
-                        HStack(spacing: 0) {
-                            Text([Format.count(playlist.paths.count, "song"), Format.length(duration), missing > 0 ? "\(missing) missing" : nil]
-                                .compactMap { $0 }.joined(separator: " · ") + (songs.isEmpty ? "" : " · "))
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.muted)
-                            if !songs.isEmpty {
-                                GapsButton(title: playlist.name, songs: songs, gaps: Binding(
-                                    get: { playlist.gaps }, set: { controller.setGaps($0, for: pid) }))
-                            }
-                        }
+                        Text([Format.count(playlist.paths.count, "song"), Format.length(duration), missing > 0 ? "\(missing) missing" : nil]
+                            .compactMap { $0 }.joined(separator: " · "))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.muted)
                         CoverCredit(url: Controller.coverURL(forPlaylist: pid), key: controller.playlistCovers[pid])
                         AlarmLine(source: pid)
                     }
@@ -704,7 +707,13 @@ struct PlaylistPage: View {
                 }
                 .padding(.bottom, 32)
 
-                PlayRow(songs: songs, source: pid, more: AnyView(menu(playlist)))
+                PlayRow(songs: songs, source: pid, more: AnyView(HStack(spacing: 16) {
+                    if !songs.isEmpty {
+                        GapsButton(title: playlist.name, songs: songs, gaps: Binding(
+                            get: { playlist.gaps }, set: { controller.setGaps($0, for: pid) }))
+                    }
+                    menu(playlist)
+                }))
                     .padding(.bottom, 24)
 
                 if playlist.paths.isEmpty {
@@ -913,11 +922,9 @@ struct AlbumPage: View {
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Theme.text)
                             Text(" · " + [album.year.map(String.init), Format.count(album.songs.count, "song"), Format.length(album.duration)]
-                                .compactMap { $0 }.joined(separator: " · ") + " · ")
+                                .compactMap { $0 }.joined(separator: " · "))
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.muted)
-                            GapsButton(title: album.title, songs: album.songs, gaps: Binding(
-                                get: { controller.albumSettings[album.id] }, set: { controller.albumSettings[album.id] = $0 }))
                         }
                         CoverCredit(url: album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") },
                                     key: album.artwork)
@@ -936,7 +943,9 @@ struct AlbumPage: View {
                 }
                 .padding(.bottom, 32)
 
-                PlayRow(songs: album.songs)
+                PlayRow(songs: album.songs, more: AnyView(
+                    GapsButton(title: album.title, songs: album.songs, gaps: Binding(
+                        get: { controller.albumSettings[album.id] }, set: { controller.albumSettings[album.id] = $0 }))))
                     .padding(.bottom, 24)
 
                 LazyVStack(spacing: 0) {
