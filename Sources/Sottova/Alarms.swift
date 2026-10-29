@@ -145,7 +145,7 @@ struct AlarmSheet: View {
                 .foregroundStyle(Theme.muted)
                 RepeatStrip(selection: $repeats)
                 if let alarm {
-                    Text(AlarmLine.describe(alarm) + (SystemWake.shared.missing(for: [alarm]).isEmpty ? "" : ". saving asks for your password once, so the mac can wake for it"))
+                    Text(AlarmLine.describe(alarm) + (SystemWake.shared.trusted || SystemWake.shared.missing(for: [alarm]).isEmpty ? "" : ". saving asks for your password once, so the mac can wake for alarms from then on"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.faint)
                 }
@@ -433,7 +433,7 @@ private struct WakeLine: View {
         Group {
             if let failure = wake.failure {
                 Text(failure)
-            } else if alarms.contains(where: \.on), !wake.missing(for: alarms).isEmpty {
+            } else if wake.nextMissing(for: alarms) {
                 HStack(spacing: 8) {
                     Text("won't wake the mac from sleep, only play if it's awake")
                     LinkText(text: "wake it") { wake.schedule(for: alarms) }
@@ -514,7 +514,7 @@ extension Controller {
 }
 
 /// Wakes the Mac from sleep before each alarm, through pmset. Scheduling needs root, so it asks for the password;
-/// reading what's scheduled doesn't, so the password is only asked for when a wake is missing.
+/// reading what's scheduled doesn't.
 @Observable @MainActor
 final class SystemWake {
     static let shared = SystemWake()
@@ -547,30 +547,64 @@ final class SystemWake {
             .compactMap { Self.format.date(from: String($0.1)) })
     }
 
-    /// The wakes the alarms that are on need in the next two weeks and don't have yet.
-    func missing(for alarms: [Alarm], now: Date = .now) -> [Date] {
+    /// A sudoers rule that lets this user schedule wakes, and nothing else, without a password. It goes in with
+    /// the one password prompt, so later wakes are added as the days go by without asking again.
+    static let rule = "/etc/sudoers.d/sottova"
+    var trusted: Bool { FileManager.default.fileExists(atPath: Self.rule) }
+
+    /// The wakes the alarms that are on need in the next two weeks, soonest first.
+    private func needed(for alarms: [Alarm], now: Date) -> [Date] {
         alarms.filter(\.on)
             .flatMap { $0.times(after: now, until: now + Self.ahead) }
             .map { $0 - Self.lead }
-            .filter { $0 > now + 60 && !scheduled.contains($0) }
+            .filter { $0 > now + 60 }
             .sorted()
     }
 
-    /// Asks for the password once and schedules every missing wake. A wake left from a deleted alarm stays: it
-    /// only wakes the Mac, which goes back to sleep, and removing it would mean another password.
+    func missing(for alarms: [Alarm], now: Date = .now) -> [Date] {
+        needed(for: alarms, now: now).filter { !scheduled.contains($0) }
+    }
+
+    /// Whether the very next alarm can't wake the Mac; the days after it are filled in as they come closer.
+    func nextMissing(for alarms: [Alarm], now: Date = .now) -> Bool {
+        needed(for: alarms, now: now).first.map { !scheduled.contains($0) } ?? false
+    }
+
+    /// Fills in the wakes without asking, once the rule is in. Runs at launch and on every wake from sleep.
+    func renew(for alarms: [Alarm]) {
+        if trusted { schedule(for: alarms) }
+    }
+
+    /// Schedules every missing wake, asking for the password first if the rule isn't in yet. A wake left from a
+    /// deleted alarm stays: it only wakes the Mac, which goes back to sleep.
     func schedule(for alarms: [Alarm]) {
         refresh()
         let dates = missing(for: alarms)
         guard !dates.isEmpty else { return }
-        let commands = dates.map { "/usr/bin/pmset schedule wakeorpoweron '\(Self.format.string(from: $0))'" }.joined(separator: "; ")
-        var error: NSDictionary?
-        NSAppleScript(source: "do shell script \"\(commands)\" with administrator privileges")?.executeAndReturnError(&error)
-        // -128 is Cancel in the password prompt: not a failure, the page still says the Mac won't wake
-        if let error, error[NSAppleScript.errorNumber] as? Int != -128 {
-            failure = "couldn't schedule the wake: \(error[NSAppleScript.errorMessage] as? String ?? "pmset failed")"
-        } else {
-            failure = nil
+        if !trusted {
+            // written and checked under a name with a dot, which sudo skips, so a bad rule never takes effect
+            let line = "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron *"
+            let install = "echo '\(line)' > /etc/sudoers.d/.sottova && chmod 440 /etc/sudoers.d/.sottova && /usr/sbin/visudo -cf /etc/sudoers.d/.sottova && mv /etc/sudoers.d/.sottova /etc/sudoers.d/sottova || { rm -f /etc/sudoers.d/.sottova; exit 1; }"
+            var error: NSDictionary?
+            NSAppleScript(source: "do shell script \"\(install)\" with administrator privileges")?.executeAndReturnError(&error)
+            if let error {
+                // -128 is Cancel in the password prompt: not a failure, the page still says the Mac won't wake
+                failure = error[NSAppleScript.errorNumber] as? Int == -128 ? nil
+                    : "couldn't let sottova wake the mac: \(error[NSAppleScript.errorMessage] as? String ?? "sudoers rule failed")"
+                return
+            }
         }
+        let failed = dates.filter { !Self.pmset($0) }
+        failure = failed.isEmpty ? nil : "couldn't schedule \(failed.count) of the wakes: pmset said no"
         refresh()
+    }
+
+    private static func pmset(_ date: Date) -> Bool {
+        let sudo = Process()
+        sudo.executableURL = URL(filePath: "/usr/bin/sudo")
+        sudo.arguments = ["-n", "/usr/bin/pmset", "schedule", "wakeorpoweron", format.string(from: date)]
+        guard (try? sudo.run()) != nil else { return false }
+        sudo.waitUntilExit()
+        return sudo.terminationStatus == 0
     }
 }

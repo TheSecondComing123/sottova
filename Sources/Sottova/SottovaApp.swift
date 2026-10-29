@@ -20,12 +20,16 @@ struct SottovaApp: App {
             UserDefaults.standard.removeObject(forKey: "folder")
         }
         controller.run()
+        SystemWake.shared.renew(for: controller.alarms)
         let center = NSWorkspace.shared.notificationCenter
         _ = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { controller.systemWillSleep() }
         }
         _ = center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { controller.systemDidWake() }
+            MainActor.assumeIsolated {
+                controller.systemDidWake()
+                SystemWake.shared.renew(for: controller.alarms)
+            }
         }
     }
 
