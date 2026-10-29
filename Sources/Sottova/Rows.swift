@@ -39,19 +39,17 @@ struct SongRow: View {
                     Title(song: song)
                 }
                 if song.artist != albumArtist, !performerFirst {
-                    Text(song.artist)
+                    LinkText(text: song.artist) { navigate(.artist(song.artist)) }
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.muted)
-                        .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsAlbum {
-                Text(song.album)
+                LinkText(text: song.album) { navigate(.album(song.albumID)) }
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
-                    .lineLimit(1)
                     .frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
             }
 
