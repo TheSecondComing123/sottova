@@ -108,6 +108,8 @@ private struct ProgressLine: View {
 
     var body: some View {
         let resting = controller.status == .resting
+        // paused, nothing ticks: a seek has to redraw the times itself
+        let _ = controller.seeks
         TimelineView(.periodic(from: .now, by: controller.status == .playing && visible ? 1 : 60)) { _ in
             let track = controller.track
             HStack(spacing: 12) {

@@ -21,6 +21,8 @@ struct Timeline: View {
                 draw(in: gc, size: size, time: context.date.timeIntervalSinceReferenceDate)
             }
         }
+        // the timeline is paused with the music and doesn't redraw for a seek on its own
+        .id(controller.seeks)
     }
 
     private func draw(in gc: GraphicsContext, size: CGSize, time: Double) {
@@ -179,6 +181,13 @@ struct Seeker: ViewModifier {
                     guard seekable != nil, piece > 0, drag.startLocation.x <= piece else { return }
                     controller.seek(to: controller.track?.time(at: Double(min(max(drag.location.x, 0), piece) / piece)) ?? 0)
                 })
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("position")
+            .accessibilityValue(Format.time(seekable?.elapsed ?? 0))
+            .accessibilityAdjustableAction { direction in
+                guard let track = seekable else { return }
+                controller.seek(to: track.elapsed + (direction == .increment ? 10 : -10))
+            }
     }
 }
 
