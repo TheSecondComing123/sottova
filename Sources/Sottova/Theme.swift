@@ -306,3 +306,36 @@ enum Format {
         return "\(Int(low)) s–\(String(format: "%g", high / 60)) min"
     }
 }
+
+/// With a mouse plugged in, AppKit gives every scroll view a wide gray scroller that never goes away; on these
+/// grounds it reads as a stray bar. This asks the enclosing scroll view for the thin one that shows while scrolling,
+/// and asks again when the system preference changes, since AppKit resets it then.
+private struct OverlayScroller: NSViewRepresentable {
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ nsView: Probe, context: Context) {}
+
+    final class Probe: NSView {
+        private var observer: Any?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            apply()
+            observer = observer ?? NotificationCenter.default.addObserver(
+                forName: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.apply() }
+            }
+        }
+
+        private func apply() {
+            enclosingScrollView?.scrollerStyle = .overlay
+        }
+    }
+}
+
+extension View {
+    /// Put on content inside a ScrollView or List.
+    func overlayScrollers() -> some View {
+        background(OverlayScroller())
+    }
+}

@@ -15,6 +15,7 @@ private struct PageScroll<Content: View>: View {
             .padding(.horizontal, 32)
             .padding(.top, 12)
             .padding(.bottom, 24)
+            .overlayScrollers()
         }
         // rows fade out under the floating player bar instead of showing through the strip beneath it
         .scrollEdgeEffectStyle(.soft, for: .bottom)
@@ -251,6 +252,7 @@ private struct TodayScore: View {
                 ScrollView(.horizontal) {
                     Canvas { gc, size in draw(in: gc, size: size, start: start, now: context.date) }
                         .frame(width: width, height: band + 18)
+                        .overlayScrollers()
                         .onContinuousHover { phase in
                             guard case .active(let point) = phase else { hovered = nil; return }
                             hovered = plays.firstIndex {

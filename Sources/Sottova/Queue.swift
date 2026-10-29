@@ -22,6 +22,7 @@ struct QueuePanel: View {
 
             List {
                 label("Now playing")
+                    .overlayScrollers()
                 nowPlaying
                     .row()
                 HStack(alignment: .firstTextBaseline) {
