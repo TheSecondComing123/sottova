@@ -21,8 +21,17 @@ ditto -c -k --keepParent .build/release/Sottova.app "$zip"
 
 if [ -n "$SOTTOVA_NOTARY" ]; then
     [ -n "$SOTTOVA_SIGN_ID" ] || { echo "notarization needs a Developer ID signature, set SOTTOVA_SIGN_ID"; exit 1; }
-    xcrun notarytool submit "$zip" --keychain-profile "$SOTTOVA_NOTARY" --wait
+    # --wait exits 0 even when Apple rejects the build, so read the verdict
+    result=$(xcrun notarytool submit "$zip" --keychain-profile "$SOTTOVA_NOTARY" --wait --output-format json)
+    status=$(/usr/bin/plutil -extract status raw -o - - <<< "$result")
+    if [ "$status" != "Accepted" ]; then
+        echo "notarization: $status"
+        xcrun notarytool log "$(/usr/bin/plutil -extract id raw -o - - <<< "$result")" --keychain-profile "$SOTTOVA_NOTARY"
+        exit 1
+    fi
     xcrun stapler staple .build/release/Sottova.app
+    xcrun stapler validate .build/release/Sottova.app
+    spctl -a -vvv -t exec .build/release/Sottova.app
     # re-zip so the download carries the stapled ticket
     rm -f "$zip"
     ditto -c -k --keepParent .build/release/Sottova.app "$zip"

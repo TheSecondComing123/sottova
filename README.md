@@ -4,7 +4,7 @@ sottova plays your own music the way Minecraft plays its soundtrack. each track 
 
 silence is the point, not a bug. a playlist that never stops turns into wallpaper. a track that shows up after ten minutes of nothing gets heard.
 
-it lives in the menu bar and stays out of the way.
+it's a full window for browsing (songs, albums, artists, composers, playlists) and a small panel in the menu bar for when you only want the music.
 
 ## what it does
 
@@ -13,7 +13,14 @@ it lives in the menu bar and stays out of the way.
 - levels every track to the same loudness (−18 LUFS, peaks under −1 dBTP), measured once per file with [libebur128](https://github.com/jiixyj/libebur128)
 - shuffles without repeats: every track plays once before any repeats, and never one of the last 10
 - keeps the Mac awake during gaps (the audio engine is off then, so nothing else would), pauses on sleep and resumes after
-- shows up in Now Playing, and the media keys work
+- shows up in Now Playing, and the media keys and the scrubber work
+- gives an album or a playlist its own gaps: Compline plays with ten-minute silences, then hands back to yours
+- playlists are `.m3u8` files in `~/Music/Sottova Playlists`, so other players can open them; folders of mixed performers can become playlists in one click
+- a queue you can reorder, a sleep timer that eases the music down over its last three minutes, and click-to-seek that fades back in instead of starting loud
+- reopens paused where you left off, in the piece or in the silence
+- composer pages list each work in catalog order with every recording of it
+- covers from a file or from public-domain paintings (the Met, the Art Institute of Chicago, Cleveland), credited inside the jpeg
+- three palettes: Monochrome, Catppuccin and Gruvbox, in light and dark
 
 ## presets
 
@@ -24,7 +31,7 @@ it lives in the menu bar and stays out of the way.
 | Short | 30 s–2 min | 4 s / 6 s |
 | Continuous | none, 4 s equal-power crossfade | 3 s / 3 s |
 
-Minecraft's own delay between overworld tracks is 10 to 20 minutes. change anything and the preset becomes Custom.
+Minecraft's own delay between overworld tracks is 10 to 20 minutes. change the gaps or fades and the preset becomes Custom; loudness is separate (−14, −18 or −23 LUFS).
 
 ## build it
 
@@ -49,6 +56,9 @@ sottova://pause
 sottova://toggle
 sottova://skip
 sottova://preset/minecraft
+sottova://sleep/45
+sottova://sleep/after
+sottova://sleep/off
 ```
 
 every state change rewrites `~/Library/Application Support/Sottova/status.json`:
@@ -69,12 +79,17 @@ sketchybar --add event sottova_status com.alanbagel.sottova.status \
 everything sits in `~/Library/Application Support/Sottova`, as plain files:
 
 - `library.json`: watched folders and the loudness of every file
-- `profile.json`: the current profile, schema 1
+- `profile.json`: your settings, plus the albums that have their own gaps
+- `resume.json`: where playback was when you quit
 - `plays.jsonl`: one line per track played, with the gap after it
 - `status.json`: the current state
 
-nothing leaves your Mac. there's no account, no analytics, and no network access.
+nothing leaves your Mac. there's no account and no analytics. the only network access is the painting search, and only while that sheet is open.
 
 ## what it isn't
 
 sottova is a music player. it makes no claims about sleep, focus, stress or health.
+
+## license
+
+GPL-3.0, see `LICENSE`. the Phosphor icons in `Support/Icons` are MIT.
