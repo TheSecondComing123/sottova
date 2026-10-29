@@ -146,6 +146,7 @@ public final class Controller {
         lastTick = .now
         startTicker()
         nowPlaying = NowPlaying(controller: self)
+        restoreResume()
         publish()
         rescan()
     }
@@ -241,6 +242,80 @@ public final class Controller {
     public func playNext(_ songs: [Song], source: String? = nil) {
         let source = source ?? Self.source(of: songs)
         upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: 0)
+    }
+
+    // MARK: Resume
+
+    /// resume.json: the piece and how far in (or the gap's time left), what's queued, and whose gaps are playing.
+    struct ResumeState: Codable, Equatable {
+        struct Entry: Codable, Equatable {
+            var path: String
+            var source: String?
+        }
+
+        var path: String
+        var elapsed: Double?
+        var restLeft: Double?
+        var source: String?
+        var upNext: [Entry]
+    }
+
+    /// Brings the clock up to now and saves, for when the app quits.
+    public func quitting() {
+        catchUp()
+        saveResume()
+    }
+
+    /// Written on every status change, new piece and seek; removed once playback stops.
+    func saveResume() {
+        guard let url = storage?.appending(path: "resume.json") else { return }
+        let path = file?.url.path
+        let state: ResumeState?
+        switch machine.phase {
+        case .track(let track): state = path.map { ResumeState(path: $0, elapsed: track.elapsed, restLeft: nil, source: playingAlbum, upNext: []) }
+        case .resting: state = path.map { ResumeState(path: $0, elapsed: nil, restLeft: machine.restRemaining, source: playingAlbum, upNext: []) }
+        case .idle: state = nil
+        // a moment between pieces; the next status change saves
+        case .loading: return
+        }
+        guard var state else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        state.upNext = upNext.map { ResumeState.Entry(path: $0.path, source: $0.source) }
+        do {
+            try JSONEncoder().encode(state).write(to: url, options: .atomic)
+        } catch {
+            problem = "couldn't save where playback is: \(error.localizedDescription)"
+        }
+    }
+
+    /// Picks up where the last run left off, paused: the same piece at the same spot (it fades back in on play), or
+    /// the same gap with the same time left.
+    func restoreResume() {
+        guard status == .idle, let url = storage?.appending(path: "resume.json"), let data = try? Data(contentsOf: url),
+              let state = try? JSONDecoder().decode(ResumeState.self, from: data) else { return }
+        let fileURL = URL(filePath: state.path)
+        guard let file = try? AVAudioFile(forReading: fileURL) else {
+            problem = "couldn't pick up where you left off: \(fileURL.lastPathComponent) isn't there anymore"
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        upNext = state.upNext.map { QueueEntry(path: $0.path, source: $0.source) }
+        useAlbumSettings(for: state.source)
+        self.file = file
+        current = catalog.songsByID[state.path]
+        title = current?.title ?? fileURL.deletingPathExtension().lastPathComponent
+        let gainDb = library.entries[state.path]?.loudness?.gainDb(target: settings.targetLufs, ceiling: settings.ceilingDbtp) ?? -6
+        trackGain = pow(10, gainDb / 20)
+        startedAt = Date()
+        if let elapsed = state.elapsed {
+            // scheduled from that frame when play is pressed, like after a device change
+            needsReschedule = true
+            send(.restoreTrack(duration: Double(file.length) / file.processingFormat.sampleRate, at: elapsed))
+        } else {
+            send(.restoreRest(left: state.restLeft ?? 0))
+        }
     }
 
     // MARK: Playlists
@@ -621,6 +696,11 @@ public final class Controller {
             catalog = built
             if let path = file?.url.path {
                 current = catalog.songsByID[path]
+                // a piece restored before the catalog was built has only its file name as a title so far
+                if let song = current, title != song.title {
+                    title = song.title
+                    publish()
+                }
             }
             refreshRecent()
             // today's plays take their lengths from the tags, which may only just have been read
@@ -647,6 +727,7 @@ public final class Controller {
         keepAwake(keepsMacAwake && (new == .playing || new == .resting))
         refreshSleep()
         publish()
+        saveResume()
     }
 
     private func perform(_ effect: Machine.Effect) {
@@ -678,6 +759,7 @@ public final class Controller {
             engine.pause()
         case .seekPlayback:
             seeks += 1
+            defer { saveResume() }
             if status == .paused {
                 // picked up from the new spot on resume, like after a device change
                 needsReschedule = true
@@ -734,6 +816,7 @@ public final class Controller {
             problem = nil
             send(.trackStarted(duration: Double(file.length) / file.processingFormat.sampleRate))
             publish()
+            saveResume()
         } catch {
             failures += 1
             // ponytail: gives up after as many failures in a row as there are tracks, not after trying each one

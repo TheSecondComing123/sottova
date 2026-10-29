@@ -66,6 +66,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         urls.forEach { Self.controller?.open($0) }
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { Self.controller?.quitting() }
+    }
 }
 
 extension PlaybackStatus {

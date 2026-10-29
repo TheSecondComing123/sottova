@@ -96,6 +96,9 @@ struct Machine: Sendable {
         case start, stop, trackStarted(duration: Double), trackFailed, tick(Double), skip, pause, resume
         case sleep(after: Double), sleepAfterCurrent, cancelSleep, sleepNow
         case seek(to: Double)
+        /// After a relaunch: the piece at this point, or a gap with this much left, paused. Nothing plays until resume.
+        case restoreTrack(duration: Double, at: Double)
+        case restoreRest(left: Double)
     }
 
     /// Stop after `left` more seconds of playing time, easing the volume down over the last `fade` of them;
@@ -201,6 +204,20 @@ struct Machine: Sendable {
         return effects + handleCurrent(event)
     }
 
+    private func makeTrack(duration: Double) -> Track {
+        // each fade gets at most half of a short track
+        let crossfadeLength = min(settings.crossfadeSec, duration / 2)
+        let fadeIn = crossfadeNext ? crossfadeLength : min(settings.fadeIn, duration / 2)
+        let fadeOut = settings.crossfade ? crossfadeLength : min(settings.fadeOut, duration / 2)
+        // A mixer whose input runs out freezes its volume ramp and finishes it when that deck's next track starts.
+        // Ending the crossfade 30 ms before the audio lets the mixer land on 0 while it still has input.
+        let tail = settings.crossfade ? min(0.03, duration / 4) : 0
+        var track = Track(duration: duration, fadeIn: fadeIn, outStart: duration - fadeOut - tail, outLength: fadeOut)
+        track.equalPowerIn = crossfadeNext
+        track.equalPowerOut = settings.crossfade
+        return track
+    }
+
     /// Gains for the decks right now, after the sleep timer changed.
     private func currentGains() -> [Effect] {
         var effects: [Effect] = []
@@ -244,19 +261,23 @@ struct Machine: Sendable {
             return []
 
         case (.trackStarted(let duration), .loading):
-            // each fade gets at most half of a short track
-            let crossfadeLength = min(settings.crossfadeSec, duration / 2)
-            let fadeIn = crossfadeNext ? crossfadeLength : min(settings.fadeIn, duration / 2)
-            let fadeOut = settings.crossfade ? crossfadeLength : min(settings.fadeOut, duration / 2)
-            // A mixer whose input runs out freezes its volume ramp and finishes it when that deck's next track starts.
-            // Ending the crossfade 30 ms before the audio lets the mixer land on 0 while it still has input.
-            let tail = settings.crossfade ? min(0.03, duration / 4) : 0
-            var track = Track(duration: duration, fadeIn: fadeIn, outStart: duration - fadeOut - tail, outLength: fadeOut)
-            track.equalPowerIn = crossfadeNext
-            track.equalPowerOut = settings.crossfade
+            phase = .track(makeTrack(duration: duration))
             crossfadeNext = false
-            phase = .track(track)
             return paused ? [.setGain(0), .pausePlayback] : [.setGain(0)]
+
+        case (.restoreTrack(let duration, let at), .idle):
+            var track = makeTrack(duration: duration)
+            // it comes back up from silence, like a seek
+            track.elapsed = min(max(at, 0), max(duration - 0.5, 0))
+            track.seekedAt = track.elapsed
+            phase = .track(track)
+            paused = true
+            return []
+
+        case (.restoreRest(let left), .idle):
+            phase = .resting(elapsed: 0, gap: max(left, 0))
+            paused = true
+            return []
 
         case (.trackFailed, .loading):
             return [.startNextTrack]

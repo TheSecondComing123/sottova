@@ -79,4 +79,24 @@ struct SeekTests {
         #expect(t.steady(from: 62) == t.outStart - 62)
         #expect(t.steady(from: 2) == 0)
     }
+
+    @Test func restoringAPieceIsPausedSilentAndFadesInOnResume() {
+        var m = Machine(settings: Self.settings, seed: 1)
+        #expect(m.handle(.restoreTrack(duration: 180, at: 60)) == [])
+        #expect(m.status == .paused)
+        #expect(gains(tick(&m, seconds: 5)).isEmpty)
+        #expect(m.handle(.resume) == [.resumePlayback])
+        let g = gains(tick(&m, seconds: 2))
+        #expect(g.first! < 0.01 && g.last! == 1)
+    }
+
+    @Test func restoringAGapKeepsItsTimeLeft() {
+        var m = Machine(settings: Self.settings, seed: 1)
+        #expect(m.handle(.restoreRest(left: 40)) == [])
+        #expect(m.status == .paused)
+        _ = m.handle(.resume)
+        #expect(m.status == .resting)
+        #expect(tick(&m, seconds: 39).isEmpty)
+        #expect(tick(&m, seconds: 1.5).contains(.startNextTrack))
+    }
 }

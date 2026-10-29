@@ -140,6 +140,48 @@ struct RenderTests {
         #expect(abs(try render(seconds: 1.6) - 0.5) < 0.01)
     }
 
+    @Test func aRelaunchPicksUpPausedAtTheSameSpot() throws {
+        let storage = FileManager.default.temporaryDirectory.appending(path: "sottova-resume-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)
+        let url = try constantFile(channels: 2, seconds: 3)
+        func controller() throws -> (Controller, AVAudioEngine) {
+            let engine = AVAudioEngine()
+            try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
+            let c = Controller(engine: engine, storage: storage)
+            var settings = Settings()
+            settings.fadeIn = 0.5
+            settings.fadeOut = 0.2
+            c.settings = settings
+            c.library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10))
+            c.refreshTracks()
+            return (c, engine)
+        }
+        let (first, engine) = try controller()
+        first.toggle()
+        let out = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 480)!
+        for _ in 0..<100 {
+            _ = try engine.renderOffline(480, to: out)
+            first.advance(480 / Self.rate)
+        }
+        first.quitting()
+
+        let (second, engine2) = try controller()
+        second.restoreResume()
+        #expect(second.status == .paused)
+        #expect(abs((second.track?.elapsed ?? 0) - 1) < 0.02)
+        second.toggle()
+        let out2 = AVAudioPCMBuffer(pcmFormat: engine2.manualRenderingFormat, frameCapacity: 480)!
+        var level = 0.0
+        for _ in 0..<160 {
+            _ = try engine2.renderOffline(480, to: out2)
+            level = rms(out2)
+            second.advance(480 / Self.rate)
+        }
+        // past the seek fade and still in the hold: full level, from the file's second second on
+        #expect(abs(level - Double(Self.level)) < 1e-3)
+        #expect(abs((second.track?.elapsed ?? 0) - 2.6) < 0.02)
+    }
+
     private func constantFile(channels: AVAudioChannelCount, seconds: Double) throws -> URL {
         let format = AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: channels)!
         let frames = AVAudioFrameCount(seconds * Self.rate)
