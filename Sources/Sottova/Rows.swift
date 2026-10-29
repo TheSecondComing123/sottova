@@ -16,6 +16,7 @@ struct SongRow: View {
     var performerFirst = false
     let play: () -> Void
     @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
     @State private var hovering = false
 
@@ -70,22 +71,23 @@ struct SongRow: View {
         .draggable(URL(filePath: song.id))
         .sottovaMenu {
             var entries: [MenuEntry] = [
-                .item("Play", .play, action: play),
-                .item("Play next", .queue) { controller.playNext([song]) },
+                .item("Play", action: play),
+                .item("Play next") { controller.playNext([song]) },
                 .addToPlaylist([song], name: song.work, controller: controller),
             ]
+            entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })
             if let remove {
-                entries.append(.item("Remove from playlist", .minus, action: remove))
+                entries.append(.item("Remove from playlist", action: remove))
             }
             entries += [
                 .divider,
-                .item("Go to album", .vinylRecord) { navigate(.album(song.albumID)) },
-                .item("Go to artist", .microphoneStage) { navigate(.artist(song.artist)) },
+                .item("Go to album") { navigate(.album(song.albumID)) },
+                .item("Go to artist") { navigate(.artist(song.artist)) },
             ]
             if let composer = song.composer {
-                entries.append(.item("Go to composer", .musicNote) { navigate(.composer(composer)) })
+                entries.append(.item("Go to composer") { navigate(.composer(composer)) })
             }
-            entries.append(.item("Show in Finder", .folder) { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) })
+            entries.append(.item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) })
             return entries
         }
     }
@@ -257,14 +259,14 @@ struct AlbumTile: View {
                 choices.append(.item("Custom", checked: true) {})
             }
             return [
-                .item("Play", .play) { controller.play(album.songs) },
-                .item("Play next", .queue) { controller.playNext(album.songs) },
+                .item("Play") { controller.play(album.songs) },
+                .item("Play next") { controller.playNext(album.songs) },
                 .addToPlaylist(album.songs, name: album.title, controller: controller),
-                .item("Go to artist", .microphoneStage) { navigate(.artist(album.artist)) },
+                .item("Go to artist") { navigate(.artist(album.artist)) },
                 .divider,
-                .item("Choose cover…", .image) { router.coverFor = .album(album.id) },
-                .item("Start at…", .alarm) { router.alarm = .new(.album(album.id)) },
-                .submenu("Gaps", .waveform, choices),
+                .item("Choose cover…") { router.coverFor = .album(album.id) },
+                .item("Start at…") { router.alarm = .new(.album(album.id)) },
+                .submenu("Gaps", choices),
             ]
         }
     }
@@ -287,8 +289,8 @@ struct ArtistTile: View {
         }
         .sottovaMenu {
             [
-                .item("Shuffle", .shuffle) { controller.play(artist.songs.shuffled(), shuffled: true) },
-                .item("Play next", .queue) { controller.playNext(artist.songs) },
+                .item("Shuffle") { controller.play(artist.songs.shuffled(), shuffled: true) },
+                .item("Play next") { controller.playNext(artist.songs) },
             ]
         }
     }
@@ -347,8 +349,8 @@ extension MenuEntry {
         if !entries.isEmpty {
             entries.append(.divider)
         }
-        entries.append(.item("New playlist", .plus) { controller.newPlaylist(named: name, songs: songs) })
-        return .submenu("Add to playlist", .plus, entries)
+        entries.append(.item("New playlist") { controller.newPlaylist(named: name, songs: songs) })
+        return .submenu("Add to playlist", entries)
     }
 }
 

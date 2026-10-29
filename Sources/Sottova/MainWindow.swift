@@ -63,6 +63,7 @@ struct MainWindow: View {
         // at the window, never inside a lazy row that could be recycled with the sheet open
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
+        .sheet(item: Binding(get: { router.trimming }, set: { router.trimming = $0 })) { TrimSheet(song: $0) }
     }
 
     @ViewBuilder
@@ -452,18 +453,18 @@ private struct PlaylistRow: View {
         }
         .sottovaMenu {
             [
-                .item("Play", .play) { controller.play(controller.songs(of: playlist), source: playlist.id) },
-                .item("Shuffle", .shuffle) { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) },
+                .item("Play") { controller.play(controller.songs(of: playlist), source: playlist.id) },
+                .item("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) },
                 .divider,
-                .item("Rename", .pencil) {
+                .item("Rename") {
                     renaming.wrappedValue = playlist.id
                     select()
                 },
-                .item("Choose cover…", .image) { router.coverFor = .playlist(playlist.id) },
-                .item("Start at…", .alarm) { router.alarm = .new(.playlist(playlist.id)) },
-                .item("Show in Finder", .folder) { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
+                .item("Choose cover…") { router.coverFor = .playlist(playlist.id) },
+                .item("Start at…") { router.alarm = .new(.playlist(playlist.id)) },
+                .item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
                 .divider,
-                .item("Move to Trash", .trash) {
+                .item("Move to Trash") {
                     if selected { navigate(.home) }
                     controller.trashPlaylist(playlist.id)
                 },

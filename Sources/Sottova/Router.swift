@@ -20,6 +20,8 @@ final class Router {
     var typing = false
     /// The album or playlist whose cover is being chosen, shown as a sheet.
     var coverFor: CoverTarget?
+    /// The song whose start and end are being trimmed, shown as a sheet.
+    var trimming: Song?
     /// The alarm being set or changed, shown as a sheet.
     var alarm: AlarmRequest?
 

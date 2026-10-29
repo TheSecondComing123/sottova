@@ -10,16 +10,15 @@ struct MenuEntry {
     }
 
     var title = ""
-    var icon: Ph?
     var checked = false
     let kind: Kind
 
-    static func item(_ title: String, _ icon: Ph? = nil, checked: Bool = false, action: @escaping () -> Void) -> MenuEntry {
-        MenuEntry(title: title, icon: icon, checked: checked, kind: .action(action))
+    static func item(_ title: String, checked: Bool = false, action: @escaping () -> Void) -> MenuEntry {
+        MenuEntry(title: title, checked: checked, kind: .action(action))
     }
 
-    static func submenu(_ title: String, _ icon: Ph? = nil, _ entries: [MenuEntry]) -> MenuEntry {
-        MenuEntry(title: title, icon: icon, kind: .submenu(entries))
+    static func submenu(_ title: String, _ entries: [MenuEntry]) -> MenuEntry {
+        MenuEntry(title: title, kind: .submenu(entries))
     }
 
     static var divider: MenuEntry { MenuEntry(kind: .divider) }
@@ -87,6 +86,8 @@ final class MenuPresenter {
     final class Level {
         let entries: [MenuEntry]
         var highlighted: Int?
+        /// Each row's frame in its panel, for placing a submenu beside it.
+        @ObservationIgnored var frames: [Int: CGRect] = [:]
 
         init(entries: [MenuEntry]) {
             self.entries = entries
@@ -99,9 +100,9 @@ final class MenuPresenter {
     private var resign: NSObjectProtocol?
 
     func show(_ entries: [MenuEntry], at point: NSPoint, over window: NSWindow) {
-        close()
+        close(fading: false)
         owner = window
-        open(entries, topLeft: point, depth: 0)
+        open(entries, at: point, depth: 0)
         // a click anywhere else closes the menu and does nothing more, as a system menu does
         monitors.append(NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel]) { [weak self] event in
             guard let self, !self.panels.contains(where: { $0.panel === event.window }) else { return event }
@@ -116,11 +117,31 @@ final class MenuPresenter {
         }
     }
 
-    private func open(_ entries: [MenuEntry], topLeft: NSPoint, depth: Int, alongside row: NSRect? = nil) {
+    /// The menu's corner sits on `point`; a submenu sits beside `row` instead. Either flips at the screen's edge.
+    private func open(_ entries: [MenuEntry], at point: NSPoint, depth: Int, beside row: NSRect? = nil) {
         let level = Level(entries: entries)
-        let host = NSHostingView(rootView: MenuList(level: level, depth: depth, presenter: self))
-        let size = host.fittingSize
-        let panel = MenuPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+        let screen = (NSScreen.screens.first { $0.frame.contains(row?.origin ?? point) } ?? NSScreen.main)?.visibleFrame ?? .zero
+        let probe = NSHostingView(rootView: MenuList(level: level, depth: depth, grows: .topLeading, presenter: self))
+        let size = probe.fittingSize
+
+        var origin = NSPoint(x: point.x, y: point.y - size.height)
+        var leftward = false
+        if let row {
+            origin = NSPoint(x: row.maxX + 2, y: row.maxY - size.height + 4)
+            if origin.x + size.width > screen.maxX { origin.x = row.minX - size.width - 2 }
+        } else if origin.x + size.width > screen.maxX {
+            origin.x = point.x - size.width
+            leftward = true
+        }
+        let upward = origin.y < screen.minY && row == nil
+        if upward { origin.y = point.y }
+        origin.x = max(screen.minX, min(origin.x, screen.maxX - size.width))
+        origin.y = max(screen.minY, min(origin.y, screen.maxY - size.height))
+
+        // the menu grows out of the corner at the pointer, so it reads as coming from what was clicked
+        let corner = UnitPoint(x: leftward ? 1 : 0, y: upward ? 1 : 0)
+        let host = NSHostingView(rootView: MenuList(level: level, depth: depth, grows: corner, presenter: self))
+        let panel = MenuPanel(contentRect: NSRect(origin: origin, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
         panel.contentView = host
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -131,40 +152,34 @@ final class MenuPresenter {
         panel.appearance = owner?.effectiveAppearance
         panel.presenter = self
         panel.depth = depth
-
-        let screen = (NSScreen.screens.first { $0.frame.contains(topLeft) } ?? NSScreen.main)?.visibleFrame ?? .zero
-        var origin = NSPoint(x: topLeft.x, y: topLeft.y - size.height)
-        if let row {
-            // a submenu sits beside its row, and flips to the other side at the screen's edge
-            origin = NSPoint(x: row.maxX - 4, y: row.maxY - size.height + 4)
-            if origin.x + size.width > screen.maxX { origin.x = row.minX - size.width + 4 }
-        } else if origin.x + size.width > screen.maxX {
-            origin.x = topLeft.x - size.width
-        }
-        origin.x = max(screen.minX, min(origin.x, screen.maxX - size.width))
-        origin.y = max(screen.minY, min(origin.y, screen.maxY - size.height))
-        panel.setFrameOrigin(origin)
-
         panels.append((panel, level))
         panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
-        NSAnimationContext.runAnimationGroup { $0.duration = 0.08; panel.animator().alphaValue = 1 }
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.12; panel.animator().alphaValue = 1 }
+        // the shadow was taken from the first, slightly smaller frame
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak panel] in panel?.invalidateShadow() }
     }
 
     /// Hovering a row: its submenu opens beside it; any other row closes the submenu that was open.
-    func hover(_ index: Int, depth: Int, row: NSRect) {
+    func hover(_ index: Int, depth: Int) {
         guard depth < panels.count else { return }
         let level = panels[depth].level
         guard level.highlighted != index || panels.count == depth + 1 else { return }
         level.highlighted = index
         closeBelow(depth)
         if case .submenu(let entries) = level.entries[index].kind {
-            open(entries, topLeft: .zero, depth: depth + 1, alongside: screenRect(row, depth: depth))
+            open(entries, at: .zero, depth: depth + 1, beside: screenRect(index, depth: depth))
             panels[depth].panel.makeKey()
         }
     }
 
-    func choose(_ index: Int, depth: Int, row: NSRect) {
+    /// Leaving a row clears it, unless it's holding its submenu open.
+    func leave(_ index: Int, depth: Int) {
+        guard depth < panels.count, panels.count == depth + 1, panels[depth].level.highlighted == index else { return }
+        panels[depth].level.highlighted = nil
+    }
+
+    func choose(_ index: Int, depth: Int) {
         guard depth < panels.count else { return }
         switch panels[depth].level.entries[index].kind {
         case .action(let action):
@@ -173,7 +188,7 @@ final class MenuPresenter {
             // after the menu is gone, so a sheet the action opens attaches to the window, not the menu
             DispatchQueue.main.async(execute: action)
         case .submenu:
-            hover(index, depth: depth, row: row)
+            hover(index, depth: depth)
             if depth + 1 < panels.count {
                 panels[depth + 1].level.highlighted = panels[depth + 1].level.entries.firstIndex { $0.selectable }
                 panels[depth + 1].panel.makeKey()
@@ -198,7 +213,7 @@ final class MenuPresenter {
         case 36, 76, 124: // return, enter, right
             guard let index = level.highlighted else { return true }
             if event.keyCode == 124, case .action = level.entries[index].kind { return true }
-            choose(index, depth: depth, row: rowRect(index, depth: depth))
+            choose(index, depth: depth)
         case 123, 53: // left, escape
             if depth == 0 {
                 close()
@@ -213,8 +228,14 @@ final class MenuPresenter {
         return true
     }
 
-    func close() {
-        closeBelow(-1)
+    /// Fades out, softer than it came in; a new menu replacing this one doesn't wait for it.
+    func close(fading: Bool = true) {
+        let closing = panels.map(\.panel)
+        panels.removeAll()
+        for panel in closing {
+            guard fading else { panel.orderOut(nil); continue }
+            NSAnimationContext.runAnimationGroup { $0.duration = 0.1; panel.animator().alphaValue = 0 } completionHandler: { panel.orderOut(nil) }
+        }
         monitors.forEach(NSEvent.removeMonitor)
         monitors.removeAll()
         resign.map(NotificationCenter.default.removeObserver)
@@ -228,18 +249,9 @@ final class MenuPresenter {
     }
 
     /// Row frames come from SwiftUI in the panel's flipped space; submenus are placed on the screen.
-    private var rows: [Int: [Int: CGRect]] = [:]
-
-    func record(_ frame: CGRect, index: Int, depth: Int) {
-        rows[depth, default: [:]][index] = frame
-    }
-
-    private func rowRect(_ index: Int, depth: Int) -> NSRect {
-        rows[depth]?[index] ?? .zero
-    }
-
-    private func screenRect(_ row: CGRect, depth: Int) -> NSRect {
+    private func screenRect(_ index: Int, depth: Int) -> NSRect {
         let frame = panels[depth].panel.frame
+        let row = panels[depth].level.frames[index] ?? .zero
         return NSRect(x: frame.minX + row.minX, y: frame.maxY - row.maxY, width: row.width, height: row.height)
     }
 }
@@ -255,76 +267,74 @@ final class MenuPanel: NSPanel {
     }
 }
 
+/// Type only: the label is the item. A ✓ marks the option in use, a › a submenu, and the row under the pointer
+/// takes the play button's color.
 private struct MenuList: View {
     let level: MenuPresenter.Level
     let depth: Int
+    let grows: UnitPoint
     let presenter: MenuPresenter
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(level.entries.enumerated()), id: \.offset) { index, entry in
                 if entry.selectable {
-                    row(entry, index: index)
+                    MenuRow(entry: entry, index: index, level: level, depth: depth, presenter: presenter)
                 } else {
                     Rectangle()
-                        .fill(Theme.border)
+                        .fill(Theme.text.opacity(0.08))
                         .frame(height: 1)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                 }
             }
         }
         .padding(4)
-        .frame(minWidth: 200)
+        .frame(minWidth: 180)
         .fixedSize()
-        .background(Theme.raised, in: .rect(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
+        .background(Theme.menu, in: .rect(cornerRadius: 12))
+        // light catching the edge: on a dark window the shadow alone loses the menu's outline
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.text.opacity(0.08)))
         .coordinateSpace(.named("menu"))
+        .scaleEffect(shown || depth > 0 || reduceMotion ? 1 : 0.96, anchor: grows)
+        .onAppear { withAnimation(.spring(duration: 0.2, bounce: 0)) { shown = true } }
     }
+}
 
-    private func row(_ entry: MenuEntry, index: Int) -> some View {
+private struct MenuRow: View {
+    let entry: MenuEntry
+    let index: Int
+    let level: MenuPresenter.Level
+    let depth: Int
+    let presenter: MenuPresenter
+
+    var body: some View {
         let lit = level.highlighted == index
-        return GeometryReader { geo in
-            let frame = geo.frame(in: .named("menu"))
-            HStack(spacing: 8) {
-                Group {
-                    if entry.checked {
-                        Ph.check.icon(.bold, size: 12)
-                    } else if let icon = entry.icon {
-                        icon.icon(size: 16)
-                    }
-                }
-                .foregroundStyle(lit ? Theme.text : Theme.muted)
-                .frame(width: 16)
-                Text(entry.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Spacer(minLength: 16)
-                if case .submenu = entry.kind {
-                    Ph.caretRight.icon(.bold, size: 10)
-                        .foregroundStyle(Theme.muted)
-                }
+        HStack(spacing: 24) {
+            Text(entry.title)
+                .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if entry.checked {
+                Ph.check.icon(.bold, size: 12)
+            } else if case .submenu = entry.kind {
+                Ph.caretRight.icon(.bold, size: 10)
+                    .opacity(lit ? 1 : 0.6)
             }
-            .padding(.horizontal, 8)
-            .frame(width: geo.size.width, height: geo.size.height)
-            .background(lit ? Theme.hover : .clear, in: .rect(cornerRadius: 6))
-            .contentShape(.rect)
-            .onHover { inside in if inside { presenter.hover(index, depth: depth, row: frame) } }
-            .onTapGesture { presenter.choose(index, depth: depth, row: frame) }
-            .onAppear { presenter.record(frame, index: index, depth: depth) }
         }
-        .frame(height: 28)
-        .frame(minWidth: titleWidth(entry))
+        .foregroundStyle(lit ? Theme.onPrimary : Theme.text)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+        .background(lit ? Theme.primary : .clear, in: .rect(cornerRadius: 8))
+        .contentShape(.rect)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("menu")) } action: { level.frames[index] = $0 }
+        .onHover { $0 ? presenter.hover(index, depth: depth) : presenter.leave(index, depth: depth) }
+        .onTapGesture { presenter.choose(index, depth: depth) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(entry.title)
         .accessibilityAddTraits(entry.checked ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { presenter.choose(index, depth: depth, row: .zero) }
-    }
-
-    /// GeometryReader takes no width of its own, so the row asks for what its title needs.
-    private func titleWidth(_ entry: MenuEntry) -> CGFloat {
-        let text = (entry.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium)]).width
-        return ceil(text) + 8 + 16 + 8 + 16 + 10 + 8
+        .accessibilityAction { presenter.choose(index, depth: depth) }
     }
 }

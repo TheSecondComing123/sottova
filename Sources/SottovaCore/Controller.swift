@@ -148,6 +148,7 @@ public final class Controller {
         nowPlaying = NowPlaying(controller: self)
         restoreResume()
         loadAlarms()
+        loadTrims()
         publish()
         rescan()
     }
@@ -367,6 +368,36 @@ public final class Controller {
         }
     }
 
+    // MARK: Trims
+
+    /// By file path; saved in trims.json, the audio files are never touched.
+    public private(set) var trims: [String: Trim] = [:]
+    /// The frames of the file on deck that play, past its trim.
+    @ObservationIgnored private var span: (start: Int64, end: Int64) = (0, 0)
+
+    /// Takes effect the next time the song starts; nil plays the whole file again.
+    public func setTrim(_ trim: Trim?, for path: String) {
+        trims[path] = trim
+        guard let url = storage?.appending(path: "trims.json") else { return }
+        do {
+            try JSONEncoder().encode(trims).write(to: url, options: .atomic)
+        } catch {
+            problem = "couldn't save the trim: \(error.localizedDescription)"
+        }
+    }
+
+    private func loadTrims() {
+        guard let url = storage?.appending(path: "trims.json"), let data = try? Data(contentsOf: url) else { return }
+        trims = (try? JSONDecoder().decode([String: Trim].self, from: data)) ?? [:]
+    }
+
+    /// Sets `span` for the file and returns how long that part plays.
+    private func useSpan(of file: AVAudioFile) -> Double {
+        let rate = file.processingFormat.sampleRate
+        span = (trims[file.url.path] ?? Trim()).frames(sampleRate: rate, length: file.length)
+        return Double(span.end - span.start) / rate
+    }
+
     // MARK: Covers
 
     /// Art keys for playlists with a picture beside their file.
@@ -487,7 +518,7 @@ public final class Controller {
         if let elapsed = state.elapsed {
             // scheduled from that frame when play is pressed, like after a device change
             needsReschedule = true
-            send(.restoreTrack(duration: Double(file.length) / file.processingFormat.sampleRate, at: elapsed))
+            send(.restoreTrack(duration: useSpan(of: file), at: elapsed))
         } else {
             send(.restoreRest(left: state.restLeft ?? 0))
         }
@@ -982,7 +1013,8 @@ public final class Controller {
             deck.stop()
             mixers[active].outputVolume = 0
             try engine.start()
-            deck.scheduleFile(file, at: nil, completionHandler: nil)
+            let duration = useSpan(of: file)
+            deck.scheduleSegment(file, startingFrame: span.start, frameCount: AVAudioFrameCount(span.end - span.start), at: nil, completionHandler: nil)
             deck.prepare(withFrameCount: 8192)
             deck.play()
             self.file = file
@@ -995,7 +1027,7 @@ public final class Controller {
             startedAt = Date()
             failures = 0
             problem = nil
-            send(.trackStarted(duration: Double(file.length) / file.processingFormat.sampleRate))
+            send(.trackStarted(duration: duration))
             publish()
             saveResume()
         } catch {
@@ -1158,10 +1190,10 @@ public final class Controller {
         needsReschedule = false
         guard let file, case .track(let track) = machine.phase else { return }
         let deck = players[active]
-        let start = AVAudioFramePosition(track.elapsed * file.processingFormat.sampleRate)
-        guard start < file.length else { return }
+        let start = span.start + AVAudioFramePosition(track.elapsed * file.processingFormat.sampleRate)
+        guard start < span.end else { return }
         deck.stop()
-        deck.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(file.length - start), at: nil, completionHandler: nil)
+        deck.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(span.end - start), at: nil, completionHandler: nil)
     }
 
     private func log(skipped: Bool, gap: Double) {

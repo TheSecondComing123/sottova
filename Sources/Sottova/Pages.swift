@@ -930,7 +930,7 @@ struct PlaylistPage: View {
             .frame(height: 60)
             .help(path)
             .sottovaMenu {
-                [.item("Remove from playlist", .minus) { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }]
+                [.item("Remove from playlist") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }]
             }
         }
     }

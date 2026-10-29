@@ -209,6 +209,49 @@ struct RenderTests {
         #expect(controller.alarms.isEmpty)
     }
 
+    /// A file that's a second of silence, like a spoken intro to cut, then two seconds of sound.
+    @Test func aTrimmedFilePlaysOnlyItsKeptPart() throws {
+        let engine = AVAudioEngine()
+        try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
+        let controller = Controller(engine: engine, storage: nil)
+        var settings = Settings()
+        settings.fadeIn = 0.2
+        settings.fadeOut = 0.2
+        settings.gapMin = 5
+        settings.gapMax = 5
+        controller.settings = settings
+        let format = AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(3 * Self.rate))!
+        buffer.frameLength = buffer.frameCapacity
+        for channel in 0..<2 {
+            buffer.floatChannelData![channel].update(repeating: 0, count: Int(Self.rate))
+            buffer.floatChannelData![channel].advanced(by: Int(Self.rate)).update(repeating: Self.level, count: Int(2 * Self.rate))
+        }
+        let url = FileManager.default.temporaryDirectory.appending(path: "sottova-render-intro.caf")
+        try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
+        controller.library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10))
+        controller.setTrim(Trim(start: 1, end: 2.5), for: url.path)
+        controller.refreshTracks()
+        controller.toggle()
+
+        let out = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 480)!
+        var held: [Double] = []
+        var played = 0.0
+        var previous = 0.0
+        while controller.status == .playing {
+            let gain = Double(controller.deckGain)
+            #expect(try engine.renderOffline(480, to: out) == .success)
+            // the mixer ramps from the previous volume within a render cycle, so only cycles held at 1 throughout count
+            if abs(previous - 1) < 1e-6, abs(gain - 1) < 1e-6 { held.append(rms(out)) }
+            previous = gain
+            played += 480 / Self.rate
+            controller.advance(480 / Self.rate)
+        }
+        // the cut second of silence never plays: every frame at full gain is sound
+        #expect(abs(played - 1.5) < 0.02)
+        #expect(!held.isEmpty && held.allSatisfy { abs($0 - Double(Self.level)) < 1e-3 })
+    }
+
     private func constantFile(channels: AVAudioChannelCount, seconds: Double) throws -> URL {
         let format = AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: channels)!
         let frames = AVAudioFrameCount(seconds * Self.rate)

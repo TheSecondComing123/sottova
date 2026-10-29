@@ -377,10 +377,10 @@ private struct AlarmRow: View {
         .hoverable(radius: 8)
         .sottovaMenu {
             [
-                .item("Edit…", .pencil) { router.alarm = .edit(alarm) },
-                .item(alarm.on ? "Turn off" : "Turn on", .alarm, action: toggle),
+                .item("Edit…") { router.alarm = .edit(alarm) },
+                .item(alarm.on ? "Turn off" : "Turn on", action: toggle),
                 .divider,
-                .item("Delete", .trash) { controller.removeAlarm(alarm.id) },
+                .item("Delete") { controller.removeAlarm(alarm.id) },
             ]
         }
     }

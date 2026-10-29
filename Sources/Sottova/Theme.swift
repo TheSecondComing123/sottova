@@ -20,6 +20,11 @@ enum Theme {
     static let primary = token(\.primary)
     static let onPrimary = token(\.onPrimary)
     static let coverInk = token(\.coverInk)
+    /// A menu's ground: a step lighter than the window in dark, the page's own white-ish raised in light.
+    static let menu = Color(nsColor: NSColor(name: nil) { appearance in
+        let tokens = tokens(appearance)
+        return rgb(appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? tokens.hover : tokens.raised)
+    })
 
     /// An item's own color, by its place in a fixed list (sections, presets). Monochrome has no accents, so it falls
     /// back to the gray token the item used before.
@@ -100,12 +105,11 @@ extension Font {
 /// Phosphor icons (MIT), vendored as SVGs in Support/Icons and copied into the app's Resources: the PhosphorSwift
 /// package ships an asset catalog, which `swift build` can't compile. Only the name-weight pairs in use are vendored.
 enum Ph: String {
-    case house, clock, alarm, check, trash, image, shuffle, x, waveform, play, pause
+    case house, clock, alarm, check, shuffle, x, waveform, play, pause
     case musicNote = "music-note", vinylRecord = "vinyl-record", microphoneStage = "microphone-stage"
     case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
     case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
-    case pencil = "pencil-simple"
     case folder, plus, minus, palette, moon, queue, dotsThree = "dots-three", arrowsClockwise = "arrows-clockwise"
 
     enum IconWeight: String {
