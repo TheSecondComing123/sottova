@@ -205,9 +205,24 @@ public final class Controller {
     }
 
     /// Plays these songs in order from `index`, with the usual fades and gaps, then goes back to shuffling everything.
+    /// What the queue was started from (an album, playlist, page) and whether shuffled, so that page's play button
+    /// can show it's the one playing. Cleared when the queue runs out.
+    public struct Origin: Equatable, Sendable {
+        public let key: String
+        public let shuffled: Bool
+
+        public init(key: String, shuffled: Bool) {
+            self.key = key
+            self.shuffled = shuffled
+        }
+    }
+
+    public private(set) var origin: Origin?
+
     /// `source` is a playlist id, whose gaps the songs play with; without one, songs from one album play with its gaps.
-    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil) {
+    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, origin: Origin? = nil) {
         guard songs.indices.contains(index) else { return }
+        self.origin = origin
         let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
         if status == .idle {
@@ -553,6 +568,7 @@ public final class Controller {
     func dequeue() -> String? {
         guard !upNext.isEmpty else {
             useAlbumSettings(for: nil)
+            origin = nil
             return nil
         }
         let entry = upNext.removeFirst()

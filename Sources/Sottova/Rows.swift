@@ -360,25 +360,50 @@ struct PlayRow: View {
     var more: AnyView?
     @Environment(Controller.self) private var controller
 
+    /// Which songs these are, however they're ordered: the same set from the same page is the same origin.
+    private var key: String {
+        source ?? String(Set(songs.map(\.id)).hashValue)
+    }
+
+    /// These songs are what's playing (or paused, or resting between them).
+    private var current: Controller.Origin? {
+        guard let origin = controller.origin, origin.key == key, controller.status != .idle else { return nil }
+        return origin
+    }
+
     var body: some View {
+        let running = current != nil && (controller.status == .playing || controller.status == .resting)
         HStack(spacing: 16) {
-            PlayCircle(size: 52) { controller.play(songs, source: source) }
+            // while these play it's their pause button; paused, it picks them up again instead of starting over
+            PlayCircle(size: 52, playing: running) {
+                if current != nil {
+                    controller.toggle()
+                } else {
+                    controller.play(songs, source: source, origin: .init(key: key, shuffled: false))
+                }
+            }
             // labeled, not a bare icon: it's a one-shot "play these shuffled", and alone the icon read as a toggle
             // whose on and off looked the same
-            Button { controller.play(songs.shuffled(), source: source) } label: {
+            let shuffling = current?.shuffled == true
+            // lit while these play shuffled; pressed again it deals a new order
+            Button { controller.play(songs.shuffled(), source: source, origin: .init(key: key, shuffled: true)) } label: {
                 HStack(spacing: 8) {
-                    Ph.shuffle.icon(size: 16)
-                    Text("Shuffle")
+                    Ph.shuffle.icon(shuffling ? .bold : .duotone, size: 16)
+                        .foregroundStyle(shuffling ? Theme.accent(for: key) : Theme.text)
+                    Text(shuffling ? "Shuffling" : "Shuffle")
                         .font(.system(size: 13, weight: .semibold))
+                        .contentTransition(.opacity)
                 }
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 16)
                 .frame(height: 40)
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+                .background(shuffling ? Theme.hover : .clear, in: .rect(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(shuffling ? Theme.accent(for: key) : Theme.border, lineWidth: shuffling ? 1.5 : 1))
                 .hoverable(radius: 8)
             }
             .buttonStyle(PressStyle(scale: 0.97))
-            .help("play these in random order")
+            .animation(Theme.quick, value: shuffling)
+            .help(shuffling ? "shuffle again" : "play these in random order")
             if let more {
                 more
             }
