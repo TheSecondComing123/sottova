@@ -155,6 +155,13 @@ public final class Controller {
     }
 
     private var tickInterval: Duration {
+        let envelope = envelopeInterval
+        // the sleep timer's ease-down moves the gain too: at 10 Hz its steps are 0.03 dB
+        guard status == .playing, case .timer(let left, let fade)? = machine.sleep else { return envelope }
+        return min(envelope, .milliseconds(Int(max(0.1, left - fade) * 1000)))
+    }
+
+    private var envelopeInterval: Duration {
         guard status == .playing, machine.outgoing == nil, case .track(let track) = machine.phase else {
             return status == .playing ? .milliseconds(10) : .milliseconds(500)
         }
@@ -289,7 +296,51 @@ public final class Controller {
         command(.skip)
     }
 
-    /// sottova://play, pause, toggle, skip, preset/<name>
+    /// The sleep timer as the UI shows it. Set on commands and status changes, never per tick.
+    public enum SleepTimer: Equatable, Sendable {
+        case at(Date)
+        case paused(left: Double)
+        case afterCurrent
+    }
+
+    public private(set) var sleepTimer: SleepTimer?
+
+    /// The sleep timer's ease-down for drawing: 1 until its last minutes, then down to 0.25 as playback stops.
+    /// Not observed, like `track`: views poll it.
+    public var sleepLevel: Double {
+        0.25 + 0.75 * machine.sleepLevel
+    }
+
+    public func sleep(minutes: Double) {
+        command(.sleep(after: minutes * 60))
+        refreshSleep()
+        publish()
+    }
+
+    public func sleepAfterCurrent() {
+        command(.sleepAfterCurrent)
+        refreshSleep()
+        publish()
+    }
+
+    public func cancelSleep() {
+        command(.cancelSleep)
+        refreshSleep()
+        publish()
+    }
+
+    private func refreshSleep() {
+        let timer: SleepTimer? = switch machine.sleep {
+        case .timer(let left, _)?: status == .paused ? .paused(left: left) : .at(Date(timeIntervalSinceNow: left))
+        case .afterCurrent?: .afterCurrent
+        case nil: nil
+        }
+        if timer != sleepTimer {
+            sleepTimer = timer
+        }
+    }
+
+    /// sottova://play, pause, toggle, skip, preset/<name>, sleep/<minutes>, sleep/after, sleep/off
     public func open(_ url: URL) {
         guard acceptsURLs, url.scheme == "sottova" else { return }
         switch url.host()?.lowercased() {
@@ -302,6 +353,12 @@ public final class Controller {
             if let preset = Settings.presets.first(where: { $0.name.lowercased() == name }) {
                 apply(preset)
             }
+        case "sleep":
+            switch url.lastPathComponent.lowercased() {
+            case "off": cancelSleep()
+            case "after": sleepAfterCurrent()
+            case let minutes: if let minutes = Double(minutes), minutes > 0 { sleep(minutes: minutes) }
+            }
         default:
             break
         }
@@ -309,6 +366,11 @@ public final class Controller {
 
     public func systemWillSleep() {
         guard status == .playing || status == .resting else { return }
+        // closing the lid with a sleep timer set means stop, not resume in the morning
+        if machine.sleep != nil {
+            command(.sleepNow)
+            return
+        }
         pausedForSleep = true
         command(.pause)
     }
@@ -381,6 +443,7 @@ public final class Controller {
         status = new
         nextTrackAt = machine.restRemaining.map { Date(timeIntervalSinceNow: $0) }
         keepAwake(keepsMacAwake && (new == .playing || new == .resting))
+        refreshSleep()
         publish()
     }
 
@@ -596,6 +659,12 @@ public final class Controller {
         var info: [String: Any] = ["status": "\(status)", "preset": settings.name]
         if let title { info["title"] = title }
         if let nextTrackAt { info["nextTrackAt"] = ISO8601DateFormatter().string(from: nextTrackAt) }
+        switch sleepTimer {
+        case .at(let date)?: info["sleepAt"] = ISO8601DateFormatter().string(from: date)
+        case .paused(let left)?: info["sleepLeftSec"] = Int(left)
+        case .afterCurrent?: info["sleepAt"] = "afterCurrent"
+        case nil: break
+        }
         do {
             try JSONSerialization.data(withJSONObject: info, options: [.sortedKeys]).write(to: url, options: .atomic)
         } catch {

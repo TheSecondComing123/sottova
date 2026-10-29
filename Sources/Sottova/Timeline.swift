@@ -48,10 +48,12 @@ struct Timeline: View {
 
     private func envelope(_ track: Track, in gc: GraphicsContext, width: CGFloat, height: CGFloat, resting: Bool) {
         let curve = controller.settings.curve
+        // the sleep timer's ease-down lowers the whole shape: what's left of the piece will be that quiet
+        let sleep = controller.sleepLevel
         var shape = Path()
         shape.move(to: CGPoint(x: 0, y: height))
         for x in stride(from: 0, through: width, by: 2) {
-            let gain = track.gain(at: track.time(at: Double(x / width)), curve)
+            let gain = track.gain(at: track.time(at: Double(x / width)), curve) * sleep
             shape.addLine(to: CGPoint(x: x, y: height - CGFloat(gain) * height))
         }
         shape.addLine(to: CGPoint(x: width, y: height))
@@ -72,9 +74,11 @@ struct Timeline: View {
 
     private func stroke(_ track: Track, in gc: GraphicsContext, width: CGFloat, middle: CGFloat) {
         let curve = controller.settings.curve
+        // falling asleep, the band thins toward the hairline with the sound
+        let sleep = controller.sleepLevel
         var top: [CGPoint] = []
         for x in stride(from: 0, through: width, by: 2) {
-            let gain = track.gain(at: track.time(at: Double(x / width)), curve)
+            let gain = track.gain(at: track.time(at: Double(x / width)), curve) * sleep
             top.append(CGPoint(x: x, y: middle - 2 * CGFloat(gain)))
         }
         var band = Path()

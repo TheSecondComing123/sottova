@@ -43,6 +43,7 @@ struct Panel: View {
                     Controls(controller: controller)
                 }
                 Spacer()
+                SleepButton()
                 Menu {
                     Button("open sottova") { openWindow(id: "main"); NSApp.activate() }
                     Divider()

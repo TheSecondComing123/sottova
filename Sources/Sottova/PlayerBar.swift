@@ -32,8 +32,11 @@ struct PlayerBar: View {
             }
             Spacer(minLength: 12)
             // the mode lives in the sidebar; here it was the same thing twice
-            Volume()
-                .frame(minWidth: 150, maxWidth: 280, alignment: .trailing)
+            HStack(spacing: 8) {
+                SleepButton()
+                Volume()
+            }
+            .frame(minWidth: 210, maxWidth: 280, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .frame(height: 80)
@@ -111,6 +114,60 @@ private struct ProgressLine: View {
             .foregroundStyle(Theme.faint)
             .frame(width: 36)
             .opacity(controller.status == .resting ? 0 : 1)
+    }
+}
+
+/// The moon: off it's a quiet icon; set, it takes a color and says how long is left. The minutes count down, so
+/// only "after this piece" gets a check in the menu.
+struct SleepButton: View {
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        let timer = controller.sleepTimer
+        let resting = controller.status == .resting
+        Menu {
+            if let timer {
+                Button("stops \(Format.sleep(timer, resting: resting, at: .now, sentence: true))") {}
+                    .disabled(true)
+                Divider()
+            }
+            Toggle(resting ? "After the next piece" : "After this piece", isOn: Binding(
+                get: { timer == .afterCurrent },
+                set: { $0 ? controller.sleepAfterCurrent() : controller.cancelSleep() }))
+            Divider()
+            ForEach([15.0, 30, 45, 60, 90], id: \.self) { minutes in
+                Button(Format.minutes(minutes * 60)) { controller.sleep(minutes: minutes) }
+            }
+            if timer != nil {
+                Divider()
+                Button("Turn off") { controller.cancelSleep() }
+            }
+        } label: {
+            // the label only needs whole minutes, so twice a minute is enough
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                HStack(spacing: 4) {
+                    Ph.moon.icon(size: 16)
+                        .foregroundStyle(timer == nil ? Theme.muted : Theme.accent(10))
+                    if let timer {
+                        Text(Format.sleep(timer, resting: resting, at: context.date))
+                            .font(.system(size: 11, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.muted)
+                            .contentTransition(.numericText())
+                    }
+                }
+                .padding(.horizontal, 8)
+                .frame(minWidth: 32, minHeight: 32)
+                .hoverable(radius: 8)
+            }
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .disabled(controller.status == .idle)
+        .animation(Theme.quick, value: timer)
+        .help("sleep timer")
     }
 }
 

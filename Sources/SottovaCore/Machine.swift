@@ -76,7 +76,18 @@ struct Machine: Sendable {
 
     enum Event {
         case start, stop, trackStarted(duration: Double), trackFailed, tick(Double), skip, pause, resume
+        case sleep(after: Double), sleepAfterCurrent, cancelSleep, sleepNow
     }
+
+    /// Stop after `left` more seconds of playing time, easing the volume down over the last `fade` of them;
+    /// or stop when the piece playing ends (in a gap: the next one).
+    enum Sleep: Equatable {
+        case timer(left: Double, fade: Double)
+        case afterCurrent
+    }
+
+    /// How long the sleep timer takes to ease the volume down to nothing.
+    static let sleepFade = 180.0
 
     enum Effect: Equatable {
         case startNextTrack, setGain(Double), stopTrack(skipped: Bool), pausePlayback, resumePlayback
@@ -89,6 +100,7 @@ struct Machine: Sendable {
     private(set) var paused = false
     /// The track fading out under the next one during a crossfade.
     private(set) var outgoing: Track?
+    private(set) var sleep: Sleep?
     private var crossfadeNext = false
     private var rng: SplitMix64
 
@@ -116,7 +128,44 @@ struct Machine: Sendable {
         return outgoing != nil
     }
 
+    /// The sleep timer's ease-down, over whatever the envelope is doing. dB-linear, so it gets quieter at an even rate.
+    /// How far into the ease-down, for drawing: 1 until it starts, 0 at the end. Linear, unlike the sound, which
+    /// is at −20 dB by the last two minutes and would draw as nothing.
+    var sleepLevel: Double {
+        guard case .timer(let left, let fade) = sleep, left < fade, fade > 0 else { return 1 }
+        return max(left, 0) / fade
+    }
+
+    var sleepGain: Double {
+        guard case .timer(let left, let fade) = sleep, left < fade, fade > 0 else { return 1 }
+        return FadeCurve.dbLinear.fadeIn(max(left, 0) / fade)
+    }
+
     mutating func handle(_ event: Event) -> [Effect] {
+        switch event {
+        case .sleep(let seconds):
+            guard phase != .idle, seconds > 0 else { return [] }
+            sleep = .timer(left: seconds, fade: min(Self.sleepFade, seconds))
+            return currentGains()
+        case .sleepAfterCurrent:
+            guard phase != .idle else { return [] }
+            sleep = .afterCurrent
+            return currentGains()
+        case .cancelSleep:
+            sleep = nil
+            return currentGains()
+        case .sleepNow:
+            return goToSleep()
+        default:
+            break
+        }
+        if case .tick(let dt) = event, !paused, case .timer(let left, let fade) = sleep {
+            sleep = .timer(left: left - dt, fade: fade)
+            // once the ease-down has begun, a gap ends here rather than starting a piece to fade out
+            if left - dt <= 0 || (left - dt <= fade && !hasAudio) {
+                return goToSleep()
+            }
+        }
         var effects: [Effect] = []
         if case .tick(let dt) = event, !paused, var track = outgoing {
             track.elapsed += dt
@@ -125,10 +174,38 @@ struct Machine: Sendable {
                 effects.append(.stopOutgoing)
             } else {
                 outgoing = track
-                effects.append(.setOutgoingGain(track.gain(settings.curve)))
+                effects.append(.setOutgoingGain(track.gain(settings.curve) * sleepGain))
             }
         }
         return effects + handleCurrent(event)
+    }
+
+    /// Gains for the decks right now, after the sleep timer changed.
+    private func currentGains() -> [Effect] {
+        var effects: [Effect] = []
+        if case .track(let track) = phase {
+            effects.append(.setGain(track.gain(settings.curve) * sleepGain))
+        }
+        if let outgoing {
+            effects.append(.setOutgoingGain(outgoing.gain(settings.curve) * sleepGain))
+        }
+        return effects
+    }
+
+    private mutating func goToSleep() -> [Effect] {
+        var effects: [Effect] = []
+        if outgoing != nil {
+            outgoing = nil
+            effects.append(.stopOutgoing)
+        }
+        if case .track = phase {
+            effects += [.setGain(0), .stopTrack(skipped: false)]
+        }
+        phase = .idle
+        paused = false
+        sleep = nil
+        crossfadeNext = false
+        return effects
     }
 
     private mutating func handleCurrent(_ event: Event) -> [Effect] {
@@ -140,6 +217,7 @@ struct Machine: Sendable {
         case (.stop, _):
             phase = .idle
             paused = false
+            sleep = nil
             outgoing = nil
             crossfadeNext = false
             return []
@@ -188,7 +266,7 @@ struct Machine: Sendable {
 
         case (.tick(let dt), .track(var track)) where !paused:
             track.elapsed += dt
-            if track.equalPowerOut, settings.crossfade, track.elapsed >= track.outStart {
+            if track.equalPowerOut, settings.crossfade, sleep != .afterCurrent, track.elapsed >= track.outStart {
                 // the next track starts underneath while this one keeps fading on the other deck
                 outgoing = track
                 crossfadeNext = true
@@ -197,7 +275,10 @@ struct Machine: Sendable {
             }
             guard track.finished else {
                 phase = .track(track)
-                return [.setGain(track.gain(settings.curve))]
+                return [.setGain(track.gain(settings.curve) * sleepGain)]
+            }
+            if sleep == .afterCurrent, !track.skipping {
+                return goToSleep()
             }
             if track.skipping {
                 phase = .loading

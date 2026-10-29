@@ -182,10 +182,10 @@ private struct Hero: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { art = Format.heroArt(for: $0) }
     }
 
-    /// The envelope's gain right now: 0 in a gap, 1 while a track holds.
+    /// The envelope's gain right now: 0 in a gap, 1 while a track holds, lower as the sleep timer eases it down.
     private var level: Double {
         guard controller.status != .resting, let track = controller.track else { return 0 }
-        return track.gain(at: track.elapsed, controller.settings.curve)
+        return track.gain(at: track.elapsed, controller.settings.curve) * controller.sleepLevel
     }
 
     private var heading: String {

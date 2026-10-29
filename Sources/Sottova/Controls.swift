@@ -70,7 +70,7 @@ extension Controller {
         case .idle:
             return tracks.isEmpty ? "add a music folder to start" : "ready when you are"
         case .playing:
-            return "playing"
+            return sleepTimer.map { "playing · stops \(Format.sleep($0, resting: false, at: now, sentence: true))" } ?? "playing"
         case .paused:
             return "paused"
         case .resting:

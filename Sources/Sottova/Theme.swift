@@ -105,7 +105,7 @@ enum Ph: String {
     case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
     case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
-    case folder, plus, minus, palette, arrowsClockwise = "arrows-clockwise"
+    case folder, plus, minus, palette, moon, arrowsClockwise = "arrows-clockwise"
 
     enum IconWeight: String {
         case duotone, bold, fill
@@ -259,6 +259,24 @@ enum Format {
         guard seconds.isFinite, seconds > 0 else { return "0:00" }
         let total = Int(seconds.rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// Whole minutes, rounded up: "45 min", "1 h", "1 h 30 min".
+    static func minutes(_ seconds: Double) -> String {
+        let m = max(1, Int((seconds / 60).rounded(.up)))
+        return m < 60 ? "\(m) min" : m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) min"
+    }
+
+    /// What the sleep timer has left, for the moon's label, or after "stops" in a sentence.
+    static func sleep(_ timer: Controller.SleepTimer, resting: Bool, at now: Date, sentence: Bool = false) -> String {
+        let left: Double
+        switch timer {
+        case .afterCurrent: return resting ? "after the next piece" : "after this piece"
+        case .paused(let seconds): left = seconds
+        case .at(let date): left = date.timeIntervalSince(now)
+        }
+        if left < 60 { return sentence ? "in under a minute" : "stopping" }
+        return sentence ? "in \(minutes(left))" : minutes(left)
     }
 
     static func length(_ seconds: Double) -> String {
