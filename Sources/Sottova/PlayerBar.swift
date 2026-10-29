@@ -46,6 +46,8 @@ struct PlayerBar: View {
                 }
                 .buttonStyle(PressStyle())
                 .help(showsQueue ? "hide the queue" : "show the queue")
+                .accessibilityLabel("queue")
+                .accessibilityAddTraits(showsQueue ? .isSelected : [])
                 Volume()
             }
             .frame(minWidth: 250, maxWidth: 280, alignment: .trailing)
@@ -183,6 +185,7 @@ struct SleepButton: View {
         .disabled(controller.status == .idle)
         .animation(Theme.quick, value: timer)
         .help("sleep timer")
+        .accessibilityLabel("sleep timer")
     }
 }
 
@@ -201,7 +204,8 @@ private struct Volume: View {
             // a plain line like the rest of the bar; the knob only shows when you reach for it
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2).fill(Theme.text.opacity(0.15)).frame(height: 4)
-                RoundedRectangle(cornerRadius: 2).fill(Theme.text).frame(width: width * controller.volume, height: 4)
+                // muted at rest: the brightest mark on the right shouldn't be a level you set once
+                RoundedRectangle(cornerRadius: 2).fill(hovering || dragging ? Theme.text : Theme.muted).frame(width: width * controller.volume, height: 4)
                 Circle()
                     .fill(Theme.text)
                     .frame(width: 10, height: 10)

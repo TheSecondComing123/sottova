@@ -26,8 +26,9 @@ struct MainWindow: View {
                 TopBar()
                 page
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // the page makes room for the queue, as it does for the player bar, so no column hides under it
-                    .safeAreaPadding(.trailing, showsQueue ? 356 : 0)
+                    // the page makes room for the queue, so no column hides under it; padding, not safe-area padding, or
+                    // sideways shelves would still draw under the panel and show through its gutters
+                    .padding(.trailing, showsQueue ? 356 : 0)
                     .overlay(alignment: .trailing) {
                         if showsQueue {
                             QueuePanel(close: toggleQueue)
@@ -175,7 +176,9 @@ private struct Sidebar: View {
                 .tracking(-0.6)
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 24)
-                .frame(height: 66, alignment: .bottom)
+                // the top bar's 8 + 60, so it centers on the search field's line
+                .frame(height: 60)
+                .padding(.top, 8)
                 .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
@@ -195,7 +198,7 @@ private struct Sidebar: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.faint)
                         .padding(.horizontal, 24)
-                        .padding(.top, 32)
+                        .padding(.top, 24)
                         .padding(.bottom, 8)
 
                     VStack(spacing: 2) {
@@ -321,7 +324,8 @@ private struct Sidebar: View {
         .buttonStyle(PressStyle(scale: 0.98))
         .animation(Theme.quick, value: active)
         .disabled(preset.name == "Custom")
-        .help(Format.gaps(preset))
+        // the range is on the row already; only crossfade's overlap needs saying
+        .help(preset.crossfade ? Format.gaps(preset) : "")
     }
 
     private func footerRow(_ label: String, _ icon: Ph, action: @escaping () -> Void) -> some View {
@@ -366,12 +370,7 @@ private struct TopBar: View {
                     // AppKit hands a new window's focus to its first text field; here that would swallow Space
                     .onAppear { DispatchQueue.main.async { searching = false } }
                 if !router.query.isEmpty {
-                    Button { router.query = "" } label: {
-                        Ph.x.icon(.bold, size: 12)
-                            .foregroundStyle(Theme.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help("clear search")
+                    IconButton(icon: .x, weight: .bold, help: "clear search", size: 24) { router.query = "" }
                 }
             }
             .padding(.horizontal, 12)
@@ -397,12 +396,12 @@ private struct TopBar: View {
             icon.icon(.bold, size: 14)
                 .foregroundStyle(enabled ? Theme.text : Theme.decor)
                 .frame(width: 32, height: 32)
-                .background(Theme.raised, in: .circle)
-                .overlay(Circle().strokeBorder(Theme.border))
+                .hoverable(radius: 16)
         }
         .buttonStyle(PressStyle())
         .disabled(!enabled)
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 
@@ -470,6 +469,5 @@ private struct PlaylistRow: View {
                 },
             ]
         }
-        .help(playlist.name)
     }
 }

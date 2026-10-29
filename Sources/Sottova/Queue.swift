@@ -11,7 +11,7 @@ struct QueuePanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Queue")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
                 Spacer()
                 IconButton(icon: .x, weight: .bold, help: "close", size: 24, action: close)
@@ -89,8 +89,9 @@ struct QueuePanel: View {
             }
             .frame(height: 56, alignment: .leading)
         } else if controller.status != .idle, let song = controller.current {
-            SongLine(song: song, art: 40, trailing: Format.time(song.duration))
-                .frame(height: 56)
+            // the same art size as the rows below, so the titles line up in one column
+            SongLine(song: song, art: 32, trailing: Format.time(song.duration))
+                .frame(height: 48)
         } else {
             Text("nothing playing")
                 .font(.system(size: 13))

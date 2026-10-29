@@ -244,6 +244,7 @@ struct PlayCircle: View {
             withAnimation(Theme.settle) { self.hovering = hovering }
         }
         .help(playing ? "pause" : "play")
+        .accessibilityLabel(playing ? "pause" : "play")
     }
 }
 
@@ -263,6 +264,8 @@ struct IconButton: View {
         }
         .buttonStyle(PressStyle())
         .help(help)
+        // .help is only the tooltip; without a label VoiceOver reads an unnamed button
+        .accessibilityLabel(help)
     }
 }
 
