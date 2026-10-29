@@ -127,7 +127,8 @@ private struct ProgressLine: View {
             .monospacedDigit()
             .foregroundStyle(Theme.faint)
             .frame(width: 36)
-            .opacity(controller.status == .resting ? 0 : 1)
+            // nothing to time in a gap, including one restored paused after a relaunch
+            .opacity(controller.status == .resting || controller.track == nil ? 0 : 1)
     }
 }
 
