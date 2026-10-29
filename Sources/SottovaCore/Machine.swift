@@ -12,6 +12,11 @@ public struct Track: Equatable, Sendable {
     public internal(set) var outLength: Double
     var outFrom = 1.0
     var skipping = false
+    /// Where the last seek landed: from there the sound comes back up from silence, never starting loud.
+    var seekedAt: Double?
+
+    /// A seek's own fade-in: short, so trying a few spots isn't seconds of quiet each time.
+    static let seekFade = 1.5
     /// Crossfade halves use sin/cos so the overlap keeps constant power.
     var equalPowerIn = false
     var equalPowerOut = false
@@ -22,6 +27,19 @@ public struct Track: Equatable, Sendable {
 
     /// Envelope gain at any point of the track, so the UI can draw the whole shape.
     public func gain(at t: Double, _ curve: FadeCurve) -> Double {
+        let envelope = baseGain(at: t, curve)
+        guard let seekedAt, t >= seekedAt else { return envelope }
+        return envelope * curve.fadeIn((t - seekedAt) / Self.seekFade)
+    }
+
+    /// Seconds from t during which the gain holds still; 0 while it's moving. The audio clock and the hero both
+    /// slow down for exactly this stretch.
+    public func steady(from t: Double) -> Double {
+        if let seekedAt, t < seekedAt + Self.seekFade { return 0 }
+        return t >= fadeIn && t < outStart ? outStart - t : 0
+    }
+
+    private func baseGain(at t: Double, _ curve: FadeCurve) -> Double {
         if t >= outStart {
             let p = outLength > 0 ? min((t - outStart) / outLength, 1) : 1
             return outFrom * (equalPowerOut ? cos(.pi / 2 * p) : curve.fadeOut(p))
@@ -77,6 +95,7 @@ struct Machine: Sendable {
     enum Event {
         case start, stop, trackStarted(duration: Double), trackFailed, tick(Double), skip, pause, resume
         case sleep(after: Double), sleepAfterCurrent, cancelSleep, sleepNow
+        case seek(to: Double)
     }
 
     /// Stop after `left` more seconds of playing time, easing the volume down over the last `fade` of them;
@@ -91,6 +110,8 @@ struct Machine: Sendable {
 
     enum Effect: Equatable {
         case startNextTrack, setGain(Double), stopTrack(skipped: Bool), pausePlayback, resumePlayback
+        /// Play the current file from this many seconds in.
+        case seekPlayback(Double)
         /// Crossfade: the current deck keeps fading out as the outgoing one; the next track starts on the other deck.
         case handOff, setOutgoingGain(Double), stopOutgoing
     }
@@ -258,6 +279,14 @@ struct Machine: Sendable {
             let wasPaused = paused
             paused = false
             return wasPaused ? [.resumePlayback] : []
+
+        case (.seek(let target), .track(var track)) where !track.skipping:
+            // never past the last half second, which would end the piece before its fade could start
+            let to = min(max(target, 0), max(track.duration - 0.5, 0))
+            track.elapsed = to
+            track.seekedAt = to
+            phase = .track(track)
+            return [.setGain(0), .seekPlayback(to)]
 
         case (.skip, .resting):
             paused = false

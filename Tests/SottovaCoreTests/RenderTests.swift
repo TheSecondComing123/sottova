@@ -100,6 +100,46 @@ struct RenderTests {
         #expect(overlapBlocks > 50)
     }
 
+    /// The first 3 s are quiet and the last 3 s loud, so the level after a seek says where playback really is.
+    @Test func seekPlaysFromTheNewSpotAfterFadingBackIn() throws {
+        let engine = AVAudioEngine()
+        try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
+        let controller = Controller(engine: engine, storage: nil)
+        var settings = Settings()
+        settings.fadeIn = 0.5
+        settings.fadeOut = 0.5
+        controller.settings = settings
+        let format = AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!
+        let half = AVAudioFrameCount(3 * Self.rate)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: half * 2)!
+        buffer.frameLength = half * 2
+        for channel in 0..<2 {
+            buffer.floatChannelData![channel].update(repeating: 0.1, count: Int(half))
+            (buffer.floatChannelData![channel] + Int(half)).update(repeating: 0.5, count: Int(half))
+        }
+        let url = FileManager.default.temporaryDirectory.appending(path: "sottova-seek.caf")
+        try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
+        controller.library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10))
+        controller.refreshTracks()
+        controller.toggle()
+
+        let out = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 480)!
+        func render(seconds: Double) throws -> Double {
+            var level = 0.0
+            for _ in 0..<Int(seconds * 100) {
+                _ = try engine.renderOffline(480, to: out)
+                level = rms(out)
+                controller.advance(480 / Self.rate)
+            }
+            return level
+        }
+        #expect(abs(try render(seconds: 1.5) - 0.1) < 0.01)
+        controller.seek(to: 3.2)
+        #expect(controller.deckGain == 0)
+        // past the 1.5 s seek fade: the loud half, at full gain
+        #expect(abs(try render(seconds: 1.6) - 0.5) < 0.01)
+    }
+
     private func constantFile(channels: AVAudioChannelCount, seconds: Double) throws -> URL {
         let format = AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: channels)!
         let frames = AVAudioFrameCount(seconds * Self.rate)

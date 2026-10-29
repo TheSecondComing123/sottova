@@ -20,10 +20,18 @@ final class NowPlaying {
                 return .success
             }
         }
+        // the scrubber in Control Center and the menu bar's Now Playing
+        commands.changePlaybackPositionCommand.addTarget { [weak controller] event in
+            guard let time = (event as? MPChangePlaybackPositionCommandEvent)?.positionTime else { return .commandFailed }
+            Task { @MainActor in controller?.seek(to: time) }
+            return .success
+        }
     }
 
     func update(status: PlaybackStatus, title: String?, track: Track?) {
         let center = MPNowPlayingInfoCenter.default()
+        // a gap has nothing to scrub through
+        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = status == .playing || status == .paused
         switch status {
         case .idle:
             center.nowPlayingInfo = nil

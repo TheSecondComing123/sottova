@@ -18,7 +18,8 @@ struct PlayerBar: View {
             nowPlaying
                 .frame(minWidth: 170, maxWidth: 280, alignment: .leading)
             Spacer(minLength: 12)
-            VStack(spacing: 8) {
+            // 1 pt, with the line's 24 pt hit area, puts the line where 8 pt and a 10 pt frame had it
+            VStack(spacing: 1) {
                 HStack(spacing: 16) {
                     // balances the skip button so play sits on the progress line's center
                     Color.clear.frame(width: 32, height: 32)
@@ -110,7 +111,9 @@ private struct ProgressLine: View {
             HStack(spacing: 12) {
                 time(track?.elapsed ?? 0)
                 Timeline(controller: controller, compact: true, visible: visible)
-                    .frame(height: 10)
+                    // 24 pt to aim at, around a line that's at most 4 pt thick
+                    .frame(height: 24)
+                    .seeker(controller)
                 time(track?.duration ?? 0)
             }
         }

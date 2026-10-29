@@ -118,3 +118,72 @@ struct Timeline: View {
         gc.fill(shape, with: .color(Theme.decor.opacity(0.3)))
     }
 }
+
+/// Click or drag along a piece to move in it. Dragging only shows where; the jump comes on release, because every
+/// jump fades back in from silence. x maps through the drawing's own fade shares, so the time shown is the time
+/// under the pointer, not a straight fraction of the length.
+struct Seeker: ViewModifier {
+    let controller: Controller
+    /// The share of the width the piece is drawn across: the hero leaves room for the gap and the next fade-in.
+    var span: CGFloat = 1
+    @State private var pointer: CGFloat?
+    @State private var dragging = false
+    @State private var width: CGFloat = 0
+
+    private var seekable: Track? {
+        guard controller.status == .playing || controller.status == .paused else { return nil }
+        return controller.track
+    }
+
+    private var piece: CGFloat { width * span }
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .overlay(alignment: .topLeading) {
+                if let track = seekable, let x = pointer, x >= 0, x <= piece {
+                    Rectangle()
+                        .fill(Theme.text)
+                        .frame(width: 1)
+                        .offset(x: x)
+                        .allowsHitTesting(false)
+                    Text(Format.time(track.time(at: Double(x / piece))))
+                        .font(.system(size: 11, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Theme.raised, in: .rect(cornerRadius: 4))
+                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.border))
+                        .fixedSize()
+                        // centered on the tick but kept over the line, 8 pt above it
+                        .alignmentGuide(.leading) { $0.width / 2 - min(max(x, $0.width / 2), piece - $0.width / 2) }
+                        .alignmentGuide(.top) { $0.height + 8 }
+                        .allowsHitTesting(false)
+                }
+            }
+            .contentShape(.rect)
+            .onContinuousHover { phase in
+                guard !dragging else { return }
+                if case .active(let point) = phase { pointer = point.x } else { pointer = nil }
+            }
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { drag in
+                    guard seekable != nil else { return }
+                    dragging = true
+                    pointer = min(max(drag.location.x, 0), piece)
+                }
+                .onEnded { drag in
+                    dragging = false
+                    pointer = nil
+                    guard seekable != nil, piece > 0, drag.startLocation.x <= piece else { return }
+                    controller.seek(to: controller.track?.time(at: Double(min(max(drag.location.x, 0), piece) / piece)) ?? 0)
+                })
+    }
+}
+
+extension View {
+    func seeker(_ controller: Controller, span: CGFloat = 1) -> some View {
+        modifier(Seeker(controller: controller, span: span))
+    }
+}

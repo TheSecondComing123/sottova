@@ -175,8 +175,8 @@ public final class Controller {
         guard status == .playing, machine.outgoing == nil, case .track(let track) = machine.phase else {
             return status == .playing ? .milliseconds(10) : .milliseconds(500)
         }
-        let holdLeft = track.outStart - 0.5 - track.elapsed
-        guard track.elapsed >= track.fadeIn, holdLeft > 0.01 else { return .milliseconds(10) }
+        let holdLeft = track.steady(from: track.elapsed) - 0.5
+        guard holdLeft > 0.01 else { return .milliseconds(10) }
         return .milliseconds(Int(min(0.5, holdLeft) * 1000))
     }
 
@@ -490,6 +490,14 @@ public final class Controller {
         command(.skip)
     }
 
+    /// Bumped on every seek, so views drawing the unobserved `track` know to start over.
+    public private(set) var seeks = 0
+
+    /// Jumps within the playing piece; the sound comes back up from silence over a second and a half.
+    public func seek(to seconds: Double) {
+        command(.seek(to: seconds))
+    }
+
     /// The sleep timer as the UI shows it. Set on commands and status changes, never per tick.
     public enum SleepTimer: Equatable, Sendable {
         case at(Date)
@@ -668,6 +676,18 @@ public final class Controller {
         case .pausePlayback:
             players.forEach { $0.pause() }
             engine.pause()
+        case .seekPlayback:
+            seeks += 1
+            if status == .paused {
+                // picked up from the new spot on resume, like after a device change
+                needsReschedule = true
+            } else {
+                reschedule()
+                deck.play()
+            }
+            if case .track(let track) = machine.phase {
+                nowPlaying?.update(status: status, title: title, track: track)
+            }
         case .resumePlayback:
             do {
                 try engine.start()

@@ -99,6 +99,8 @@ private struct Hero: View {
     var body: some View {
         let idle = controller.status == .idle
         let resting = controller.status == .resting
+        // a seek starts the envelope over somewhere else; reading this rebuilds the schedules below from the new spot
+        let _ = controller.seeks
         HStack(alignment: .bottom, spacing: 32) {
             Group {
                 if idle {
@@ -157,6 +159,8 @@ private struct Hero: View {
                 if !idle {
                     Timeline(controller: controller, visible: visible)
                         .frame(height: 44)
+                        // the piece takes the first 70%; the rest is the gap and the next fade-in
+                        .seeker(controller, span: 0.7)
                         .padding(.top, 8)
                         .transition(.opacity)
                 } else if controller.tracks.isEmpty {
@@ -351,9 +355,8 @@ private struct FadeSchedule: TimelineSchedule {
         return AnyIterator {
             defer {
                 if active, let track {
-                    let t = track.elapsed + next.timeIntervalSince(taken)
-                    let holding = t >= track.fadeIn && t < track.outStart
-                    next += holding ? max(0.1, min(1, track.outStart - t)) : 0.1
+                    let steady = track.steady(from: track.elapsed + next.timeIntervalSince(taken))
+                    next += steady > 0 ? max(0.1, min(1, steady)) : 0.1
                 } else {
                     next += 60
                 }
