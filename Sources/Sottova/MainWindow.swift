@@ -4,10 +4,7 @@ import SottovaCore
 
 struct MainWindow: View {
     @Environment(Controller.self) private var controller
-    @State private var route = Route.home
-    @State private var back: [Route] = []
-    @State private var forward: [Route] = []
-    @State private var query = ""
+    @Environment(Router.self) private var router
     @State private var visible = true
     @State private var mouseButtons: Any?
     @State private var escapeKey: Any?
@@ -17,16 +14,15 @@ struct MainWindow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(section: route.section) { root in
-                query = ""
-                go(to: root)
+            Sidebar(section: router.route.section) { root in
+                router.go(to: root)
             }
             .frame(width: 228)
 
             Rectangle().fill(Theme.border).frame(width: 1)
 
             VStack(spacing: 0) {
-                TopBar(query: $query, canGoBack: !back.isEmpty, canGoForward: !forward.isEmpty, goBack: goBack, goForward: goForward)
+                TopBar()
                 page
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .trailing) {
@@ -52,8 +48,7 @@ struct MainWindow: View {
         .environment(\.windowVisible, visible)
         .environment(\.renaming, $renaming)
         .environment(\.navigate, Navigate { route in
-            query = ""
-            go(to: route)
+            router.go(to: route)
         })
         // drop music folders anywhere on the window
         .dropDestination(for: URL.self) { urls, _ in
@@ -67,10 +62,10 @@ struct MainWindow: View {
     @ViewBuilder
     private var page: some View {
         Group {
-            if !query.isEmpty {
-                SearchPage(query: query)
+            if !router.query.isEmpty {
+                SearchPage(query: router.query)
             } else {
-                switch route {
+                switch router.route {
                 case .home: HomePage()
                 case .songs: SongsPage()
                 case .albums: AlbumsPage()
@@ -81,34 +76,9 @@ struct MainWindow: View {
                 }
             }
         }
-        .id(query.isEmpty ? AnyHashable(route) : AnyHashable("search"))
+        .id(router.query.isEmpty ? AnyHashable(router.route) : AnyHashable("search"))
         // the old page leaves fast, so the two never sit on top of each other at full strength
         .transition(.asymmetric(insertion: .opacity, removal: .opacity.animation(Theme.curve(0.08))))
-    }
-
-    private func go(to destination: Route) {
-        guard destination != route else { return }
-        withAnimation(Theme.page) {
-            back.append(route)
-            forward.removeAll()
-            route = destination
-        }
-    }
-
-    private func goBack() {
-        guard let previous = back.popLast() else { return }
-        withAnimation(Theme.page) {
-            forward.append(route)
-            route = previous
-        }
-    }
-
-    private func goForward() {
-        guard let next = forward.popLast() else { return }
-        withAnimation(Theme.page) {
-            back.append(route)
-            route = next
-        }
     }
 
     private func toggleQueue() {
@@ -128,8 +98,8 @@ struct MainWindow: View {
         guard mouseButtons == nil else { return }
         mouseButtons = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { event in
             switch event.buttonNumber {
-            case 3: goBack()
-            case 4: goForward()
+            case 3: router.goBack()
+            case 4: router.goForward()
             default: return event
             }
             return nil
@@ -329,29 +299,30 @@ private struct Sidebar: View {
 }
 
 private struct TopBar: View {
-    @Binding var query: String
-    let canGoBack: Bool
-    let canGoForward: Bool
-    let goBack: () -> Void
-    let goForward: () -> Void
+    @Environment(Router.self) private var router
     @FocusState private var searching: Bool
 
     var body: some View {
+        @Bindable var router = router
         HStack(spacing: 12) {
-            arrow(.caretLeft, enabled: canGoBack, help: "back", action: goBack)
-            arrow(.caretRight, enabled: canGoForward, help: "forward", action: goForward)
+            arrow(.caretLeft, enabled: !router.back.isEmpty, help: "back", action: router.goBack)
+            arrow(.caretRight, enabled: !router.forward.isEmpty, help: "forward", action: router.goForward)
 
             HStack(spacing: 8) {
                 Ph.magnifyingGlass.icon(size: 16)
                     .foregroundStyle(Theme.muted)
-                TextField("search songs, albums, artists", text: $query)
+                TextField("search songs, albums, artists", text: $router.query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.text)
                     .focused($searching)
-                    .onExitCommand { query = ""; searching = false }
-                if !query.isEmpty {
-                    Button { query = "" } label: {
+                    .onExitCommand { router.query = ""; searching = false }
+                    .onChange(of: searching) { _, focused in router.typing = focused }
+                    .onChange(of: router.searchRequests) { searching = true }
+                    // AppKit hands a new window's focus to its first text field; here that would swallow Space
+                    .onAppear { DispatchQueue.main.async { searching = false } }
+                if !router.query.isEmpty {
+                    Button { router.query = "" } label: {
                         Ph.x.icon(.bold, size: 12)
                             .foregroundStyle(Theme.muted)
                     }

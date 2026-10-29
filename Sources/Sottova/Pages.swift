@@ -656,6 +656,7 @@ struct PlaylistPage: View {
     @State private var art: CGFloat = 232
     /// Renaming moves the file, so the id changes under the page.
     @State private var renamedTo: String?
+    @Environment(Router.self) private var router
     @State private var editing = false
     @State private var name = ""
     @State private var target: Int?
@@ -754,6 +755,7 @@ struct PlaylistPage: View {
                 .onSubmit { commitRename() }
                 .onExitCommand { endRename() }
                 .onChange(of: typing) { _, focused in
+                    router.typing = focused
                     if !focused { commitRename() }
                 }
         } else {

@@ -8,6 +8,7 @@ struct SottovaApp: App {
     private let controller = Controller(playlistFolder: .musicDirectory.appending(path: "Sottova Playlists"))
     /// Theme.palette is set before this changes, so re-keying the scenes below redraws them in the new colors.
     @AppStorage("palette") private var palette = Palette.monochrome.id
+    @State private var router = Router()
 
     init() {
         let controller = controller
@@ -33,11 +34,13 @@ struct SottovaApp: App {
             MainWindow()
                 .id(palette)
                 .environment(controller)
+                .environment(router)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 800)
         // otherwise every sottova:// link opens another window
         .handlesExternalEvents(matching: [])
+        .commands { SottovaCommands(controller: controller, router: router) }
 
         MenuBarExtra {
             Panel(controller: controller)
