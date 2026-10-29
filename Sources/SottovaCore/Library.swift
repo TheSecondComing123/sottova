@@ -14,11 +14,14 @@ struct Library: Codable {
         var loudness: Loudness?
         var meta: TrackMeta?
         var unplayable = false
+        /// When the file landed in its folder, as Finder's Date Added. Optional so older library.json files still load.
+        var added: Date?
     }
 
     struct FileStamp: Equatable {
         var size: Int
         var modified: Date
+        var added: Date?
     }
 
     var folders: [Folder] = []
@@ -45,6 +48,7 @@ struct Library: Codable {
             } else {
                 merged[path] = Entry(size: stamp.size, modified: stamp.modified)
             }
+            merged[path]?.added = stamp.added
         }
         entries = merged
     }
@@ -65,7 +69,7 @@ struct Library: Codable {
     /// Stat-only walk: no file is opened, so rescans stay cheap.
     static func scan(_ folders: [URL]) -> [String: FileStamp] {
         var found: [String: FileStamp] = [:]
-        let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]
+        let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey, .addedToDirectoryDateKey]
         for folder in folders {
             let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys)
             while let url = files?.nextObject() as? URL {
@@ -73,7 +77,8 @@ struct Library: Codable {
                       let values = try? url.resourceValues(forKeys: Set(keys)),
                       values.isRegularFile == true
                 else { continue }
-                found[url.path] = FileStamp(size: values.fileSize ?? 0, modified: values.contentModificationDate ?? .distantPast)
+                found[url.path] = FileStamp(size: values.fileSize ?? 0, modified: values.contentModificationDate ?? .distantPast,
+                                            added: values.addedToDirectoryDate)
             }
         }
         return found

@@ -492,24 +492,103 @@ struct InvertedButton: ButtonStyle {
 
 struct SongsPage: View {
     @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
+    @AppStorage("songSort") private var sort = SongSort.title
+    @State private var filter = ""
+    @FocusState private var filtering: Bool
 
     var body: some View {
-        let songs = controller.catalog.songs
-        if songs.isEmpty {
+        let all = controller.catalog.songs
+        if all.isEmpty {
             EmptyLibrary(what: "songs")
         } else {
+            let needle = filter.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            let songs = sort.sorted(needle.isEmpty ? all : all.filter { $0.searchKey.contains(needle) })
             PageScroll {
                 let art = songs.contains { $0.artwork != nil }
                 let albums = Set(songs.map(\.albumID)).count > 1
-                PageHeader(title: "Songs", detail: "\(Format.count(songs.count, "song")), \(Format.length(songs.reduce(0) { $0 + $1.duration }))", songs: songs)
-                SongColumns(showsArt: art, showsAlbum: albums)
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                        SongRow(song: song, number: index + 1, showsArt: art, showsAlbum: albums) { controller.play(songs, from: index) }
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Songs")
+                            .font(.system(size: 48, weight: .bold))
+                            .tracking(-1.2)
+                            .foregroundStyle(Theme.text)
+                        HStack(spacing: 8) {
+                            Text((needle.isEmpty ? Format.count(all.count, "song") : "\(songs.count) of \(all.count) songs")
+                                 + ", \(Format.length(songs.reduce(0) { $0 + $1.duration })) ·")
+                                .foregroundStyle(Theme.muted)
+                            sortMenu
+                        }
+                        .font(.system(size: 13))
+                    }
+                    HStack(spacing: 16) {
+                        PlayRow(songs: songs)
+                        Spacer(minLength: 0)
+                        filterField
+                    }
+                }
+                .padding(.bottom, 20)
+                if songs.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("no songs match “\(filter)”")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                        LinkText(text: "clear filter") { filter = "" }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .padding(.top, 24)
+                } else {
+                    SongColumns(showsArt: art, showsAlbum: albums)
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                            SongRow(song: song, number: index + 1, showsArt: art, showsAlbum: albums) { controller.play(songs, from: index) }
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// The order, read as part of the sentence above the list: "72 songs, 6 h 2 min · by title ⌄".
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort", selection: $sort) {
+                ForEach(SongSort.allCases, id: \.self) { Text($0.label.prefix(1).uppercased() + $0.label.dropFirst()).tag($0) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: 4) {
+                Text(sort.label)
+                Ph.caretDown.icon(.bold, size: 10)
+            }
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Theme.text)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+    }
+
+    private var filterField: some View {
+        HStack(spacing: 8) {
+            Ph.magnifyingGlass.icon(size: 14)
+                .foregroundStyle(Theme.faint)
+            TextField("filter songs", text: $filter)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.text)
+                .focused($filtering)
+                .onExitCommand { filter = ""; filtering = false }
+                .onChange(of: filtering) { _, focused in router.typing = focused }
+        }
+        .padding(.horizontal, 12)
+        .frame(width: 200, height: 32)
+        .background(Theme.raised, in: .rect(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(filtering ? Theme.muted : Theme.border))
+        .animation(Theme.quick, value: filtering)
     }
 }
 

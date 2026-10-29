@@ -49,6 +49,26 @@ struct CatalogTests {
         #expect(catalog.composers == ["Frédéric Chopin", "Johann Sebastian Bach"])
     }
 
+    @Test func songSortsReadLikeAProgram() {
+        func song(_ title: String, _ artist: String, composer: String?, album: String, track: Int, seconds: Double, added: Double?) -> Song {
+            let (work, detail) = Catalog.splitWork(title)
+            return Song(id: title + artist, title: title, work: work, detail: detail, artist: artist, album: album, albumID: album,
+                        albumArtist: "", composer: composer, trackNumber: track, discNumber: nil, year: nil, duration: seconds,
+                        artwork: nil, searchKey: "", added: added.map { Date(timeIntervalSince1970: $0) })
+        }
+        let songs = [
+            song("Polonaise in G-flat major, B. 108", "A", composer: "Chopin", album: "y", track: 2, seconds: 300, added: 1),
+            song("Polonaise in G-flat major, B. 36", "B", composer: "Chopin", album: "y", track: 1, seconds: 100, added: 3),
+            song("Air", "C", composer: nil, album: "x", track: 1, seconds: 200, added: nil),
+            song("Fugue", "D", composer: "Bach", album: "x", track: 2, seconds: 50, added: 2),
+        ]
+        #expect(SongSort.title.sorted(songs).map(\.artist) == ["C", "D", "B", "A"])
+        #expect(SongSort.composer.sorted(songs).map(\.artist) == ["D", "B", "A", "C"])
+        #expect(SongSort.album.sorted(songs).map(\.artist) == ["C", "D", "B", "A"])
+        #expect(SongSort.longest.sorted(songs).map(\.artist) == ["A", "C", "B", "D"])
+        #expect(SongSort.newest.sorted(songs).map(\.artist) == ["B", "D", "A", "C"])
+    }
+
     @Test func performersAndComposersBothGetPages() {
         let catalog = Catalog(entries: [
             "/m/1.flac": entry(title: "Nocturne", artist: "Luke Faulkner"),

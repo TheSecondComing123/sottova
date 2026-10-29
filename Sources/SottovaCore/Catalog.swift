@@ -20,6 +20,8 @@ public struct Song: Identifiable, Hashable, Sendable {
     public let artwork: String?
     /// Title, artist and album folded once, so search doesn't fold 20k strings per keystroke.
     public let searchKey: String
+    /// When the file landed in its folder.
+    public var added: Date? = nil
 }
 
 /// One song waiting to play. Its own id, so the same song queued twice moves and goes away on its own.
@@ -67,7 +69,7 @@ public struct Catalog: Sendable {
     public init() {}
 
     init(entries: [String: Library.Entry]) {
-        songs = entries.compactMap { path, entry in entry.unplayable ? nil : Self.song(path: path, meta: entry.meta) }
+        songs = entries.compactMap { path, entry in entry.unplayable ? nil : Self.song(path: path, meta: entry.meta, added: entry.added) }
             .sorted(by: Self.libraryOrder)
         songsByID = Dictionary(uniqueKeysWithValues: songs.map { ($0.id, $0) })
 
@@ -98,7 +100,7 @@ public struct Catalog: Sendable {
         artistsByName = Dictionary(uniqueKeysWithValues: artists.map { ($0.name, $0) })
     }
 
-    private static func song(path: String, meta: TrackMeta?) -> Song {
+    private static func song(path: String, meta: TrackMeta?, added: Date?) -> Song {
         let url = URL(filePath: path)
         let folder = url.deletingLastPathComponent()
         let artist = meta?.artist ?? "Unknown Artist"
@@ -118,7 +120,8 @@ public struct Catalog: Sendable {
             id: path, title: title, work: work, detail: detail, artist: artist, album: album, albumID: albumID, albumArtist: albumArtist,
             composer: meta?.composer,
             trackNumber: meta?.trackNumber, discNumber: meta?.discNumber, year: meta?.year, duration: meta?.duration ?? 0,
-            artwork: meta?.artwork, searchKey: "\(title) \(artist) \(albumArtist) \(meta?.composer ?? "") \(album)".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            artwork: meta?.artwork, searchKey: "\(title) \(artist) \(albumArtist) \(meta?.composer ?? "") \(album)".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil),
+            added: added
         )
     }
 
@@ -188,5 +191,45 @@ extension Catalog {
     static func catalogNumber(of song: Song) -> String? {
         guard let first = song.detail?.components(separatedBy: " · ").first, let c = first.first, !"“\"‘'".contains(c) else { return nil }
         return first
+    }
+}
+
+/// The orders the Songs page offers.
+public enum SongSort: String, CaseIterable, Sendable {
+    case title, composer, album, longest, newest
+
+    public var label: String {
+        switch self {
+        case .title: "by title"
+        case .composer: "by composer"
+        case .album: "by album"
+        case .longest: "longest first"
+        case .newest: "newest first"
+        }
+    }
+
+    /// Titles sort as a program would: by work, then catalog number in number order (B. 36 before B. 108).
+    public func sorted(_ songs: [Song]) -> [Song] {
+        func byTitle(_ a: Song, _ b: Song) -> Bool {
+            let key = { (s: Song) in "\(s.work) \(s.detail ?? "") \(s.artist)" }
+            return key(a).localizedStandardCompare(key(b)) == .orderedAscending
+        }
+        return songs.sorted { a, b in
+            switch self {
+            case .title: return byTitle(a, b)
+            case .composer:
+                if a.composer != b.composer {
+                    guard let x = a.composer else { return false }
+                    guard let y = b.composer else { return true }
+                    return x.localizedStandardCompare(y) == .orderedAscending
+                }
+                return byTitle(a, b)
+            case .album:
+                if a.album != b.album { return a.album.localizedStandardCompare(b.album) == .orderedAscending }
+                return (a.discNumber ?? 0, a.trackNumber ?? 0) < (b.discNumber ?? 0, b.trackNumber ?? 0)
+            case .longest: return a.duration > b.duration
+            case .newest: return (a.added ?? .distantPast) > (b.added ?? .distantPast)
+            }
+        }
     }
 }

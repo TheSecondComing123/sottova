@@ -330,7 +330,6 @@ struct PageHeader: View {
     }
 }
 
-/// Play in order, or shuffled; gaps either way.
 /// "Add to Playlist ▸": every playlist, then a new one named after what's being added.
 struct AddToPlaylist: View {
     let songs: [Song]
@@ -350,6 +349,7 @@ struct AddToPlaylist: View {
     }
 }
 
+/// Play in order, or shuffled; gaps either way.
 struct PlayRow: View {
     let songs: [Song]
     /// A playlist's id, whose gaps these play with.
