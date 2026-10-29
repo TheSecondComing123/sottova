@@ -91,3 +91,43 @@ extension Settings: Codable {
         try c.encode(Level(targetLufs: targetLufs, ceilingDbtp: ceilingDbtp), forKey: .loudness)
     }
 }
+
+extension Settings {
+    /// These gaps and fades over `base`'s curve, shuffle and loudness, for an album that plays with its own gaps.
+    public func gaps(over base: Settings) -> Settings {
+        var s = base
+        s.name = name
+        (s.gapMin, s.gapMax) = (gapMin, gapMax)
+        (s.fadeIn, s.fadeOut) = (fadeIn, fadeOut)
+        (s.crossfade, s.crossfadeSec) = (crossfade, crossfadeSec)
+        return s
+    }
+}
+
+/// profile.json: the user's own settings at the top level, plus the albums that play with their own gaps.
+struct ProfileFile: Codable {
+    var settings: Settings
+    var albums: [String: Settings]
+
+    private enum Keys: String, CodingKey {
+        case albums
+    }
+
+    init(settings: Settings, albums: [String: Settings]) {
+        self.settings = settings
+        self.albums = albums
+    }
+
+    init(from decoder: any Decoder) throws {
+        settings = try Settings(from: decoder)
+        albums = try decoder.container(keyedBy: Keys.self).decodeIfPresent([String: Settings].self, forKey: .albums) ?? [:]
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        try settings.encode(to: encoder)
+        if !albums.isEmpty {
+            var c = encoder.container(keyedBy: Keys.self)
+            try c.encode(albums, forKey: .albums)
+        }
+    }
+}

@@ -35,6 +35,24 @@ public final class Controller {
             saveProfile()
         }
     }
+    /// Albums that play with their own gaps and fades, by album id.
+    public var albumSettings: [String: Settings] = [:] {
+        didSet {
+            saveProfile()
+            // a change to the album that's playing takes effect now
+            if let playingAlbum {
+                useAlbumSettings(for: playingAlbum)
+            }
+        }
+    }
+    /// While an album plays with its own gaps: which one, the user's settings to go back to, and what the album put in their place.
+    @ObservationIgnored private var playingAlbum: String?
+    @ObservationIgnored private var ownSettings: Settings?
+    @ObservationIgnored private var albumApplied: Settings?
+    /// The user's own settings, even while an album plays with its own gaps in their place.
+    public var yourSettings: Settings {
+        ownSettings != nil && settings == albumApplied ? ownSettings! : settings
+    }
     public var keepsMacAwake = UserDefaults.standard.object(forKey: "keepsMacAwake") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(keepsMacAwake, forKey: "keepsMacAwake")
@@ -85,8 +103,10 @@ public final class Controller {
         self.engine = engine
         self.storage = storage
         artwork = storage.map { _ in ArtworkStore(directory: .cachesDirectory.appending(path: "Sottova/Artwork")) }
-        let profile = Self.loadProfile(from: storage) ?? Settings.presets.first { $0.name == "Short" }!
+        let file = Self.loadProfile(from: storage)
+        let profile = file?.settings ?? Settings.presets.first { $0.name == "Short" }!
         settings = profile
+        albumSettings = file?.albums ?? [:]
         machine = Machine(settings: profile)
         // Both decks are wired once with a fixed format; the player converts each file to it.
         // A player connected while the engine runs starts late, by about 8% of the time the engine has been running.
@@ -167,12 +187,37 @@ public final class Controller {
     public func play(_ songs: [Song], from index: Int = 0) {
         guard songs.indices.contains(index) else { return }
         queue = songs[index...].map(\.id)
+        let albums = Set(songs[index...].map(\.albumID))
+        useAlbumSettings(for: albums.count == 1 ? albums.first : nil)
         if status == .idle {
             failures = 0
             command(.start)
         } else {
             // fades the current track out over a second (resuming it for that second if paused); from a gap it starts right away
             command(.skip)
+        }
+    }
+
+    /// An album with its own gaps plays with them; anything else goes back to the user's own settings, unless they
+    /// changed them by hand while the album played, in which case their change stays.
+    func useAlbumSettings(for id: String?) {
+        let untouched = ownSettings != nil && settings == albumApplied
+        if let id, let album = albumSettings[id] {
+            let own = yourSettings
+            playingAlbum = id
+            ownSettings = own
+            albumApplied = album.gaps(over: own)
+            settings = albumApplied!
+            // didSet can rename the result Custom, which the comparison above has to see
+            albumApplied = settings
+            saveProfile()
+        } else if ownSettings != nil {
+            if untouched {
+                settings = ownSettings!
+            }
+            playingAlbum = nil
+            ownSettings = nil
+            albumApplied = nil
         }
     }
 
@@ -389,6 +434,8 @@ public final class Controller {
         let queued = queue.isEmpty ? nil : queue.removeFirst()
         if let queued {
             shuffler.note(queued)
+        } else {
+            useAlbumSettings(for: nil)
         }
         guard let path = queued ?? shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng) else {
             send(.stop)
@@ -490,9 +537,9 @@ public final class Controller {
         return max(1, Int(cores) - 1)
     }
 
-    private static func loadProfile(from storage: URL?) -> Settings? {
+    private static func loadProfile(from storage: URL?) -> ProfileFile? {
         guard let url = storage?.appending(path: "profile.json"), let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(Settings.self, from: data)
+        return try? JSONDecoder().decode(ProfileFile.self, from: data)
     }
 
     private func saveProfile() {
@@ -501,7 +548,8 @@ public final class Controller {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try encoder.encode(settings).write(to: url, options: .atomic)
+            // while an album plays with its own gaps, the user's settings are what a restart should come back to
+            try encoder.encode(ProfileFile(settings: yourSettings, albums: albumSettings)).write(to: url, options: .atomic)
         } catch {
             problem = "couldn't save the profile: \(error.localizedDescription)"
         }

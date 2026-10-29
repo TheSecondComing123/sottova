@@ -104,7 +104,7 @@ enum Ph: String {
     case musicNote = "music-note", vinylRecord = "vinyl-record", microphoneStage = "microphone-stage"
     case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
-    case caretLeft = "caret-left", caretRight = "caret-right", skipForward = "skip-forward"
+    case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
     case folder, plus, minus, palette, arrowsClockwise = "arrows-clockwise"
 
     enum IconWeight: String {

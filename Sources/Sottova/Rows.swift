@@ -226,6 +226,19 @@ struct AlbumTile: View {
             Button("Play") { controller.play(album.songs) }
             Button("Play Next") { controller.playNext(album.songs) }
             Button("Go to Artist") { navigate(.artist(album.artist)) }
+            Picker("Gaps", selection: Binding(
+                get: { controller.albumSettings[album.id]?.name ?? "" },
+                set: { name in
+                    // Custom is edited on the album page; picking it here keeps what's there
+                    guard name != "Custom" else { return }
+                    controller.albumSettings[album.id] = SottovaCore.Settings.presets.first { $0.name == name }
+                })) {
+                Text("Your Setting").tag("")
+                ForEach(SottovaCore.Settings.presets, id: \.name) { Text($0.name).tag($0.name) }
+                if controller.albumSettings[album.id]?.name == "Custom" {
+                    Text("Custom").tag("Custom")
+                }
+            }
         }
     }
 }

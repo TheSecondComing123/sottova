@@ -527,6 +527,114 @@ struct AlbumsPage: View {
     }
 }
 
+/// "about 9 h with Minecraft gaps", which opens the choice of gaps this album plays with.
+private struct AlbumGapsButton: View {
+    let album: Album
+    @Environment(Controller.self) private var controller
+    @State private var open = false
+    @State private var hovering = false
+
+    var body: some View {
+        let s = controller.albumSettings[album.id]?.gaps(over: controller.yourSettings) ?? controller.yourSettings
+        let paced = s.lengthWithGaps(count: album.songs.count, music: album.duration)
+        Button { open = true } label: {
+            HStack(spacing: 4) {
+                Text(s.crossfade ? "crossfades, no gaps" : paced > album.duration ? "about \(Format.length(paced)) with \(s.name) gaps" : "\(s.name) gaps")
+                    .underline(hovering)
+                Ph.caretDown.icon(.bold, size: 10)
+            }
+            .font(.system(size: 13, weight: controller.albumSettings[album.id] == nil ? .regular : .medium))
+            .foregroundStyle(controller.albumSettings[album.id] == nil ? Theme.muted : Theme.text)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        // pinned to the label's start, which stays put while the label's length changes with each choice
+        .popover(isPresented: $open, attachmentAnchor: .point(.bottomLeading), arrowEdge: .bottom) {
+            AlbumGaps(album: album)
+        }
+    }
+}
+
+/// Which gaps an album plays with, laid out like Settings > Playback: the score of what it'll sound like, then the
+/// choices as cards, then the range and fades when it has its own.
+private struct AlbumGaps: View {
+    let album: Album
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        let own = controller.albumSettings[album.id]
+        let yours = controller.yourSettings
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Gaps for \(album.title)")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+            Text("it plays with these, then goes back to yours")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.muted)
+                .padding(.top, 2)
+                .padding(.bottom, 16)
+
+            ScoreDiagram(settings: own?.gaps(over: yours) ?? yours, height: 112)
+                .padding(.bottom, 12)
+
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                GridRow {
+                    card(named("Yours", yours), active: own == nil, accent: nil) { controller.albumSettings[album.id] = nil }
+                    preset(0, own)
+                    preset(1, own)
+                }
+                GridRow {
+                    preset(2, own)
+                    preset(3, own)
+                    card(named("Custom", own ?? yours), active: own?.name == "Custom", accent: 2 + 4 * 4) {
+                        var custom = own ?? yours
+                        custom.name = "Custom"
+                        custom.crossfade = false
+                        controller.albumSettings[album.id] = custom
+                    }
+                }
+            }
+
+            if own?.name == "Custom" {
+                GapRange(low: field(\.gapMin), high: field(\.gapMax))
+                    .padding(.horizontal, 12)
+                    .padding(.top, 20)
+                HStack(spacing: 12) {
+                    ValueStepper(label: "In", value: field(\.fadeIn), range: 0...20, unit: "s")
+                    ValueStepper(label: "Out", value: field(\.fadeOut), range: 0...20, unit: "s")
+                }
+                .padding(.top, 16)
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
+        // its own ground so the edge shows against the page; the cards, score and steppers keep their borders on it
+        .presentationBackground(Theme.raised)
+        .animation(Theme.quick, value: own?.name)
+    }
+
+    private func preset(_ index: Int, _ own: SottovaCore.Settings?) -> some View {
+        let preset = SottovaCore.Settings.presets[index]
+        return card(preset, active: own?.name == preset.name, accent: 2 + 4 * index) { controller.albumSettings[album.id] = preset }
+    }
+
+    private func named(_ name: String, _ settings: SottovaCore.Settings) -> SottovaCore.Settings {
+        var s = settings
+        s.name = name
+        return s
+    }
+
+    private func card(_ settings: SottovaCore.Settings, active: Bool, accent: Int?, action: @escaping () -> Void) -> some View {
+        PresetCard(preset: settings, active: active, accent: accent, action: action)
+    }
+
+    private func field(_ path: WritableKeyPath<SottovaCore.Settings, Double>) -> Binding<Double> {
+        Binding(get: { controller.albumSettings[album.id]?[keyPath: path] ?? 0 },
+                set: { controller.albumSettings[album.id]?[keyPath: path] = $0 })
+    }
+}
+
 struct AlbumPage: View {
     let id: String
     @Environment(Controller.self) private var controller
@@ -552,12 +660,11 @@ struct AlbumPage: View {
                             LinkText(text: album.artist) { navigate(.artist(album.artist)) }
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Theme.text)
-                            let paced = controller.settings.lengthWithGaps(count: album.songs.count, music: album.duration)
-                            Text([album.year.map(String.init), Format.count(album.songs.count, "song"), Format.length(album.duration),
-                                  paced > album.duration ? "about \(Format.length(paced)) with \(controller.settings.name) gaps" : nil]
-                                .compactMap { $0 }.joined(separator: " · "))
+                            Text([album.year.map(String.init), Format.count(album.songs.count, "song"), Format.length(album.duration)]
+                                .compactMap { $0 }.joined(separator: " · ") + " ·")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.muted)
+                            AlbumGapsButton(album: album)
                         }
                     }
                 }

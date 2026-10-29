@@ -179,8 +179,9 @@ private struct PlaybackPage: View {
 
 /// What the settings sound like, drawn: a track fading out, the silence, the next fading in. Not to scale: the gap is
 /// minutes and the fades are seconds, so each gets a fixed part of the width and carries its own number.
-private struct ScoreDiagram: View {
+struct ScoreDiagram: View {
     let settings: SottovaCore.Settings
+    var height: CGFloat = 140
 
     var body: some View {
         Canvas { gc, size in
@@ -230,7 +231,7 @@ private struct ScoreDiagram: View {
             label(Format.range(settings), at: w / 2)
             label("\(Int(settings.fadeIn)) s in", at: (inStart + inEnd) / 2)
         }
-        .frame(height: 140)
+        .frame(height: height)
         .background(Theme.raised, in: .rect(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
         .animation(Theme.quick, value: settings)
@@ -238,10 +239,11 @@ private struct ScoreDiagram: View {
     }
 }
 
-private struct PresetCard: View {
+struct PresetCard: View {
     let preset: SottovaCore.Settings
     let active: Bool
-    let accent: Int
+    /// nil draws the active border in the text color.
+    let accent: Int?
     let action: () -> Void
 
     var body: some View {
@@ -261,7 +263,7 @@ private struct PresetCard: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.raised, in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(active ? Theme.accent(accent) : Theme.border, lineWidth: active ? 1.5 : 1))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(active ? accent.map { Theme.accent($0) } ?? Theme.text : Theme.border, lineWidth: active ? 1.5 : 1))
             .hoverable(radius: 12)
         }
         .buttonStyle(PressStyle(scale: 0.98))
@@ -271,7 +273,7 @@ private struct PresetCard: View {
 }
 
 /// The shortest and longest gap on one track, on a log scale so 30 s and 20 min both get room. Snaps to 30 s.
-private struct GapRange: View {
+struct GapRange: View {
     @Binding var low: Double
     @Binding var high: Double
     private let maximum = 1200.0
@@ -330,7 +332,7 @@ private struct GapRange: View {
 }
 
 /// − value + in one bordered strip, for whole numbers.
-private struct ValueStepper: View {
+struct ValueStepper: View {
     var label: String?
     @Binding var value: Double
     let range: ClosedRange<Double>
