@@ -380,36 +380,39 @@ struct PlayRow: View {
     var body: some View {
         let running = current != nil && (controller.status == .playing || controller.status == .resting)
         HStack(spacing: 16) {
-            // while these play it's their pause button; paused, it picks them up again instead of starting over
-            PlayCircle(size: 52, playing: running) {
-                if current != nil {
-                    controller.toggle()
-                } else {
-                    controller.play(songs, source: source)
+            // nothing to play: no live play button, only the extra actions
+            if !songs.isEmpty {
+                // while these play it's their pause button; paused, it picks them up again instead of starting over
+                PlayCircle(size: 52, playing: running) {
+                    if current != nil {
+                        controller.toggle()
+                    } else {
+                        controller.play(songs, source: source)
+                    }
                 }
-            }
-            // labeled, not a bare icon: it's a one-shot "play these shuffled", and alone the icon read as a toggle
-            // whose on and off looked the same
-            let shuffling = current?.shuffled == true
-            // lit while these play shuffled; pressed again it deals a new order
-            Button { controller.play(songs.shuffled(), source: source, shuffled: true) } label: {
-                HStack(spacing: 8) {
-                    Ph.shuffle.icon(shuffling ? .bold : .duotone, size: 16)
-                        .foregroundStyle(shuffling ? Theme.accent(for: key) : Theme.text)
-                    Text(shuffling ? "Shuffling" : "Shuffle")
-                        .font(.system(size: 13, weight: .semibold))
-                        .contentTransition(.opacity)
+                // labeled, not a bare icon: it's a one-shot "play these shuffled", and alone the icon read as a toggle
+                // whose on and off looked the same
+                let shuffling = current?.shuffled == true
+                // lit while these play shuffled; pressed again it deals a new order
+                Button { controller.play(songs.shuffled(), source: source, shuffled: true) } label: {
+                    HStack(spacing: 8) {
+                        Ph.shuffle.icon(shuffling ? .bold : .duotone, size: 16)
+                            .foregroundStyle(shuffling ? Theme.accent(for: key) : Theme.text)
+                        Text(shuffling ? "Shuffling" : "Shuffle")
+                            .font(.system(size: 13, weight: .semibold))
+                            .contentTransition(.opacity)
+                    }
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 16)
+                    .frame(height: 40)
+                    .background(shuffling ? Theme.hover : .clear, in: .rect(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(shuffling ? Theme.accent(for: key) : Theme.border, lineWidth: shuffling ? 1.5 : 1))
+                    .hoverable(radius: 8)
                 }
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 16)
-                .frame(height: 40)
-                .background(shuffling ? Theme.hover : .clear, in: .rect(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(shuffling ? Theme.accent(for: key) : Theme.border, lineWidth: shuffling ? 1.5 : 1))
-                .hoverable(radius: 8)
+                .buttonStyle(PressStyle(scale: 0.97))
+                .animation(Theme.quick, value: shuffling)
+                .help(shuffling ? "shuffle again" : "play these in random order")
             }
-            .buttonStyle(PressStyle(scale: 0.97))
-            .animation(Theme.quick, value: shuffling)
-            .help(shuffling ? "shuffle again" : "play these in random order")
             if let more {
                 more
             }

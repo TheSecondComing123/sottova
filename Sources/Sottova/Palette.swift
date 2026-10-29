@@ -38,15 +38,16 @@ struct Palette: Identifiable, Equatable {
                       primary: 0x0A0A0A, onPrimary: 0xF5F5F5,
                       covers: [0xFFFFFF, 0xF0F0F0, 0xE6E6E6], coverInk: 0x0A0A0A, accents: []))
 
-    /// catppuccin.com/palette: Mocha for dark, Latte for light, all fourteen accents.
+    /// catppuccin.com/palette: Mocha for dark, Latte for light, all fourteen accents. Faint text is a step up from the
+    /// palettes' own overlay grays, which fall under 4.5:1 for 11–13 pt type.
     static let catppuccin = Palette(
         id: "catppuccin", name: "Catppuccin", detail: "Mocha in dark, Latte in light",
         dark: Tokens(background: 0x1E1E2E, raised: 0x181825, hover: 0x313244, border: 0x313244,
-                     text: 0xCDD6F4, muted: 0xA6ADC8, faint: 0x7F849C, decor: 0x585B70,
+                     text: 0xCDD6F4, muted: 0xA6ADC8, faint: 0x9399B2, decor: 0x585B70,
                      primary: 0xCBA6F7, onPrimary: 0x11111B,
                      covers: [0x181825], coverInk: 0x11111B, accents: mocha),
         light: Tokens(background: 0xEFF1F5, raised: 0xE6E9EF, hover: 0xCCD0DA, border: 0xCCD0DA,
-                      text: 0x4C4F69, muted: 0x6C6F85, faint: 0x8C8FA1, decor: 0xACB0BE,
+                      text: 0x4C4F69, muted: 0x5C5F77, faint: 0x65687E, decor: 0xACB0BE,
                       primary: 0x8839EF, onPrimary: 0xEFF1F5,
                       covers: [0xE6E9EF], coverInk: 0xEFF1F5, accents: latte))
 
@@ -60,11 +61,11 @@ struct Palette: Identifiable, Equatable {
     static let gruvbox = Palette(
         id: "gruvbox", name: "Gruvbox", detail: "warm browns, bright accents",
         dark: Tokens(background: 0x282828, raised: 0x1D2021, hover: 0x3C3836, border: 0x3C3836,
-                     text: 0xEBDBB2, muted: 0xBDAE93, faint: 0x928374, decor: 0x665C54,
+                     text: 0xEBDBB2, muted: 0xBDAE93, faint: 0xA89984, decor: 0x665C54,
                      primary: 0xFABD2F, onPrimary: 0x1D2021,
                      covers: [0x1D2021], coverInk: 0x1D2021, accents: bright),
         light: Tokens(background: 0xFBF1C7, raised: 0xF9F5D7, hover: 0xEBDBB2, border: 0xD5C4A1,
-                      text: 0x3C3836, muted: 0x665C54, faint: 0x7C6F64, decor: 0xBDAE93,
+                      text: 0x3C3836, muted: 0x504945, faint: 0x665C54, decor: 0xBDAE93,
                       primary: 0xB57614, onPrimary: 0xF9F5D7,
                       covers: [0xF9F5D7], coverInk: 0xF9F5D7, accents: faded))
 

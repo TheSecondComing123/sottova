@@ -802,17 +802,17 @@ struct PlaylistPage: View {
                     Artwork(key: controller.playlistCovers[pid] ?? songs.first?.artwork, size: art, radius: 12, outlined: true,
                             title: playlist.name)
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("playlist")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Theme.muted)
                         title(playlist)
-                        HStack(spacing: 8) {
+                        // one separator, " · ", between every part of the line
+                        HStack(spacing: 0) {
                             Text([Format.count(playlist.paths.count, "song"), Format.length(duration), missing > 0 ? "\(missing) missing" : nil]
-                                .compactMap { $0 }.joined(separator: " · ") + " ·")
+                                .compactMap { $0 }.joined(separator: " · ") + (songs.isEmpty ? "" : " · "))
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.muted)
-                            GapsButton(title: playlist.name, songs: songs, gaps: Binding(
-                                get: { playlist.gaps }, set: { controller.setGaps($0, for: pid) }))
+                            if !songs.isEmpty {
+                                GapsButton(title: playlist.name, songs: songs, gaps: Binding(
+                                    get: { playlist.gaps }, set: { controller.setGaps($0, for: pid) }))
+                            }
                         }
                         CoverCredit(url: Controller.coverURL(forPlaylist: pid), key: controller.playlistCovers[pid])
                         AlarmLine(source: pid)
@@ -821,7 +821,7 @@ struct PlaylistPage: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { art = Format.heroArt(for: $0) }
                 .background(alignment: .top) {
-                    if let key = songs.first?.artwork {
+                    if let key = controller.playlistCovers[pid] ?? songs.first?.artwork {
                         ArtWash(key: key)
                             .frame(height: art + 200)
                             .padding(.horizontal, -32)
@@ -895,7 +895,6 @@ struct PlaylistPage: View {
                 .tracking(-1.2)
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
-                .minimumScaleFactor(0.5)
                 .onTapGesture(count: 2) { startRename(playlist) }
                 .help("double-click to rename")
         }
@@ -1030,21 +1029,17 @@ struct AlbumPage: View {
                 HStack(alignment: .bottom, spacing: 32) {
                     Artwork(key: album.artwork, size: art, radius: 12, outlined: true, title: album.title, subtitle: album.artist)
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("album")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Theme.muted)
                         Text(album.title)
                             .font(.system(size: 48, weight: .bold))
                             .tracking(-1.2)
                             .foregroundStyle(Theme.text)
                             .lineLimit(2)
-                            .minimumScaleFactor(0.5)
-                        HStack(spacing: 8) {
+                        HStack(spacing: 0) {
                             LinkText(text: album.artist) { navigate(.artist(album.artist)) }
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Theme.text)
-                            Text([album.year.map(String.init), Format.count(album.songs.count, "song"), Format.length(album.duration)]
-                                .compactMap { $0 }.joined(separator: " · ") + " ·")
+                            Text(" · " + [album.year.map(String.init), Format.count(album.songs.count, "song"), Format.length(album.duration)]
+                                .compactMap { $0 }.joined(separator: " · ") + " · ")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.muted)
                             GapsButton(title: album.title, songs: album.songs, gaps: Binding(
@@ -1070,7 +1065,6 @@ struct AlbumPage: View {
                 PlayRow(songs: album.songs)
                     .padding(.bottom, 24)
 
-                SongColumns(showsArt: false, showsAlbum: false)
                 LazyVStack(spacing: 0) {
                     ForEach(Array(album.songs.enumerated()), id: \.element.id) { index, song in
                         SongRow(song: song, number: song.trackNumber ?? index + 1, showsArt: false, showsAlbum: false, albumArtist: album.artist) {
@@ -1153,21 +1147,17 @@ struct ComposerPage: View {
             let songs = works.flatMap(\.recordings)
             PageScroll {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("composer")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Theme.muted)
                     Text(name)
                         .font(.system(size: 48, weight: .bold))
                         .tracking(-1.2)
                         .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
+                        .lineLimit(2)
                     Text([Format.count(works.count, "work"), Format.count(songs.count, "recording"),
                           Format.length(songs.reduce(0) { $0 + $1.duration })].joined(separator: " · "))
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.muted)
                 }
-                .padding(.top, 40)
+                .padding(.top, 24)
                 .padding(.bottom, 32)
 
                 PlayRow(songs: songs)
@@ -1178,11 +1168,11 @@ struct ComposerPage: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text(work.title)
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.system(size: 17, weight: .semibold))
                                     .foregroundStyle(Theme.text)
                                 if let number = work.catalogNumber {
                                     Text(number)
-                                        .font(.system(size: 15))
+                                        .font(.system(size: 17))
                                         .foregroundStyle(Theme.faint)
                                 }
                             }
@@ -1209,23 +1199,22 @@ struct ArtistPage: View {
             let art = songs.contains { $0.artwork != nil }
             PageScroll {
                 HStack(alignment: .bottom, spacing: 32) {
-                    Artwork(key: artist.artwork, size: 200, circle: true, outlined: true, title: artist.name)
+                    // initials on a 200 pt disc would be the loudest thing on the page; without a picture the name leads
+                    if artist.artwork != nil {
+                        Artwork(key: artist.artwork, size: 200, circle: true, outlined: true, title: artist.name)
+                    }
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("artist")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Theme.muted)
                         Text(artist.name)
                             .font(.system(size: 48, weight: .bold))
                             .tracking(-1.2)
                             .foregroundStyle(Theme.text)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                        HStack(spacing: 8) {
+                            .lineLimit(2)
+                        HStack(spacing: 0) {
                             Text("\(Format.count(artist.albums.count, "album")) · \(Format.count(songs.count, "song"))")
                                 .foregroundStyle(Theme.muted)
                             let works = controller.catalog.works(by: name).count
                             if works > 0 {
-                                Text("·").foregroundStyle(Theme.muted)
+                                Text(" · ").foregroundStyle(Theme.muted)
                                 LinkText(text: "\(Format.count(works, "work")) by work") { navigate(.composer(name)) }
                                     .fontWeight(.semibold)
                                     .foregroundStyle(Theme.text)
@@ -1239,16 +1228,20 @@ struct ArtistPage: View {
                 PlayRow(songs: songs)
                     .padding(.bottom, 32)
 
-                SectionTitle(title: "Albums")
-                    .padding(.bottom, 8)
-                Shelf(items: artist.albums.filter { !controller.albumsInPlaylists.contains($0.id) }) { AlbumTile(album: $0) }
-                    .padding(.bottom, 32)
+                let albums = artist.albums.filter { !controller.albumsInPlaylists.contains($0.id) }
+                if !albums.isEmpty {
+                    SectionTitle(title: "Albums")
+                        .padding(.bottom, 8)
+                    Shelf(items: albums) { AlbumTile(album: $0) }
+                        .padding(.bottom, 32)
+                }
 
                 SectionTitle(title: "Songs")
                     .padding(.bottom, 8)
                 LazyVStack(spacing: 0) {
                     ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                        SongRow(song: song, number: index + 1, showsArt: art) { controller.play(songs, from: index) }
+                        // the artist's own name under every title would only repeat the page's
+                        SongRow(song: song, number: index + 1, showsArt: art, albumArtist: name) { controller.play(songs, from: index) }
                     }
                 }
             }
@@ -1272,17 +1265,13 @@ struct SearchPage: View {
             if searched, songs.isEmpty, albums.isEmpty, artists.isEmpty {
                 Missing(text: "nothing in your library matches “\(query)”")
             } else {
+                // the few artists and albums first, then every matching song; eight songs used to push them out of view
                 PageScroll {
-                    if !songs.isEmpty {
-                        let art = songs.prefix(8).contains { $0.artwork != nil }
-                        SectionTitle(title: "Songs")
+                    if !artists.isEmpty {
+                        SectionTitle(title: "Artists")
                             .padding(.bottom, 8)
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(songs.prefix(8).enumerated()), id: \.element.id) { index, song in
-                                SongRow(song: song, number: index + 1, showsArt: art) { controller.play(songs, from: index) }
-                            }
-                        }
-                        .padding(.bottom, 32)
+                        Shelf(items: Array(artists.prefix(20))) { ArtistTile(artist: $0) }
+                            .padding(.bottom, 32)
                     }
                     if !albums.isEmpty {
                         SectionTitle(title: "Albums")
@@ -1290,10 +1279,15 @@ struct SearchPage: View {
                         Shelf(items: Array(albums.prefix(20))) { AlbumTile(album: $0) }
                             .padding(.bottom, 32)
                     }
-                    if !artists.isEmpty {
-                        SectionTitle(title: "Artists")
+                    if !songs.isEmpty {
+                        let art = songs.contains { $0.artwork != nil }
+                        SectionTitle(title: "Songs")
                             .padding(.bottom, 8)
-                        Shelf(items: Array(artists.prefix(20))) { ArtistTile(artist: $0) }
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                                SongRow(song: song, number: index + 1, showsArt: art) { controller.play(songs, from: index) }
+                            }
+                        }
                     }
                 }
             }
