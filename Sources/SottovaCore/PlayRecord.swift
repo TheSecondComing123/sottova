@@ -18,20 +18,6 @@ struct PlayRecord: Codable {
         }
     }
 
-    /// The plays that started on `day`, with how much of each was heard and how long the quiet after it really lasted.
-    /// Lines from before heardSec was logged fall back to the track's length, or the time until the next start if that's
-    /// shorter. A gap never counts longer than planned: the time until the next start can include a pause or a quit.
-    static func plays(_ records: [PlayRecord], on day: Date, calendar: Calendar = .current, duration: (String) -> Double?) -> [Play] {
-        let records = records.filter { calendar.isDate($0.startedAt, inSameDayAs: day) }
-        return records.indices.compactMap { i in
-            let record = records[i]
-            let next = i + 1 < records.count ? records[i + 1].startedAt.timeIntervalSince(record.startedAt) : nil
-            guard let played = record.heardSec ?? duration(record.file).map({ min($0, next ?? $0) }), played > 0 else { return nil }
-            let gap = next.map { min(max(0, $0 - played), record.gapAfterSec) } ?? 0
-            return Play(file: record.file, startedAt: record.startedAt, played: played, gapAfter: gap)
-        }
-    }
-
     func append(to url: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -47,12 +33,4 @@ struct PlayRecord: Codable {
         try handle.seekToEnd()
         try handle.write(contentsOf: line)
     }
-}
-
-public struct Play: Equatable, Sendable {
-    public let file: String
-    public let startedAt: Date
-    /// Seconds heard: the whole track unless it was skipped.
-    public let played: Double
-    public let gapAfter: Double
 }

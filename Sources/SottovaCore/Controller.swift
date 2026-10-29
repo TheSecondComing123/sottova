@@ -16,8 +16,6 @@ public final class Controller {
     public private(set) var catalog = Catalog()
     public private(set) var current: Song?
     public private(set) var recent: [Song] = []
-    /// What played today, oldest first, for drawing the day as a score.
-    public private(set) var today: [Play] = []
     public var volume = UserDefaults.standard.object(forKey: "volume") as? Double ?? 1 {
         didSet {
             UserDefaults.standard.set(volume, forKey: "volume")
@@ -77,8 +75,6 @@ public final class Controller {
     @ObservationIgnored private var trackGain = 1.0
     @ObservationIgnored private var outgoingGain = 1.0
     @ObservationIgnored private var lastTrack: Track?
-    /// plays.jsonl, read once at launch and appended to after, so drawing today never rereads the file.
-    @ObservationIgnored private var playLog: [PlayRecord] = []
     @ObservationIgnored private(set) var startedAt = Date()
     @ObservationIgnored private var failures = 0
     @ObservationIgnored private var needsReschedule = false
@@ -132,9 +128,8 @@ public final class Controller {
         }
         engine.mainMixerNode.outputVolume = Float(volume)
         if let storage {
-            playLog = PlayRecord.read(storage.appending(path: "plays.jsonl"))
             // avoid-last-N survives a relaunch
-            shuffler.recent = playLog.suffix(20).map(\.file)
+            shuffler.recent = PlayRecord.read(storage.appending(path: "plays.jsonl"), last: 20).map(\.file)
         }
         loadLibrary()
         loadPlaylists()
@@ -915,8 +910,6 @@ public final class Controller {
                 }
             }
             refreshRecent()
-            // today's plays take their lengths from the tags, which may only just have been read
-            refreshToday()
         }
     }
 
@@ -1204,13 +1197,6 @@ public final class Controller {
         } catch {
             problem = "couldn't write the play log: \(error.localizedDescription)"
         }
-        playLog.append(record)
-        refreshToday()
-    }
-
-    private func refreshToday() {
-        let songs = catalog.songsByID
-        today = PlayRecord.plays(playLog, on: .now) { songs[$0]?.duration }
     }
 
     /// The engine is paused during gaps, so nothing else stops idle sleep there.
