@@ -229,6 +229,7 @@ struct AlbumTile: View {
     let album: Album
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
+    @Environment(Router.self) private var router
 
     var body: some View {
         Tile(artwork: album.artwork, coverTitle: album.title, coverSubtitle: album.artist, play: { controller.play(album.songs) }, open: { navigate(.album(album.id)) }) {
@@ -245,6 +246,7 @@ struct AlbumTile: View {
             Button("Play Next") { controller.playNext(album.songs) }
             AddToPlaylist(songs: album.songs, name: album.title)
             Button("Go to Artist") { navigate(.artist(album.artist)) }
+            Button("Choose Cover…") { router.coverFor = .album(album.id) }
             Picker("Gaps", selection: Binding(
                 get: { controller.albumSettings[album.id]?.name ?? "" },
                 set: { name in

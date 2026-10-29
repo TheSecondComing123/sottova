@@ -247,6 +247,58 @@ public final class Controller {
         upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: 0)
     }
 
+    // MARK: Covers
+
+    /// Art keys for playlists with a picture beside their file.
+    public private(set) var playlistCovers: [String: String] = [:]
+
+    /// Writes cover.jpg into the album's folder (an old one goes to the Trash) and reads the album's art again.
+    /// Art embedded in the files still wins over it.
+    public func setCover(_ data: Data, credit: String?, forAlbum id: String) {
+        guard let album = catalog.albumsByID[id], let first = album.songs.first else { return }
+        let url = URL(filePath: first.id).deletingLastPathComponent().appending(path: "cover.jpg")
+        guard replaceCover(at: url, with: data, credit: credit) else { return }
+        for song in album.songs {
+            library.entries[song.id]?.meta = nil
+        }
+        analyzePending()
+    }
+
+    /// Writes the picture beside the playlist's file, as "<name>.jpg".
+    public func setCover(_ data: Data, credit: String?, forPlaylist id: String) {
+        guard replaceCover(at: Self.coverURL(forPlaylist: id), with: data, credit: credit) else { return }
+        loadPlaylistCovers()
+    }
+
+    public static func coverURL(forPlaylist id: String) -> URL {
+        URL(filePath: id).deletingPathExtension().appendingPathExtension("jpg")
+    }
+
+    private func replaceCover(at url: URL, with data: Data, credit: String?) -> Bool {
+        do {
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            }
+            try CoverFile.write(data, to: url, credit: credit)
+            return true
+        } catch {
+            problem = "couldn't save the cover: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func loadPlaylistCovers() {
+        var covers: [String: String] = [:]
+        for playlist in playlists {
+            if let data = try? Data(contentsOf: Self.coverURL(forPlaylist: playlist.id)), let key = artwork?.save(data) {
+                covers[playlist.id] = key
+            }
+        }
+        if covers != playlistCovers {
+            playlistCovers = covers
+        }
+    }
+
     // MARK: Resume
 
     /// resume.json: the piece and how far in (or the gap's time left), what's queued, and whose gaps are playing.
@@ -386,6 +438,8 @@ public final class Controller {
         }
         do {
             try FileManager.default.moveItem(at: URL(filePath: id), to: url)
+            // the picture keeps the playlist's name
+            try? FileManager.default.moveItem(at: Self.coverURL(forPlaylist: id), to: Self.coverURL(forPlaylist: url.path))
         } catch {
             problem = "couldn't rename \(playlists[index].name): \(error.localizedDescription)"
             return nil
@@ -398,6 +452,7 @@ public final class Controller {
             playingAlbum = url.path
         }
         playlists.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        loadPlaylistCovers()
         return url.path
     }
 
@@ -405,6 +460,7 @@ public final class Controller {
     public func trashPlaylist(_ id: String) {
         do {
             try FileManager.default.trashItem(at: URL(filePath: id), resultingItemURL: nil)
+            try? FileManager.default.trashItem(at: Self.coverURL(forPlaylist: id), resultingItemURL: nil)
             playlists.removeAll { $0.id == id }
         } catch {
             problem = "couldn't move the playlist to the Trash: \(error.localizedDescription)"
@@ -458,6 +514,7 @@ public final class Controller {
         if loaded != playlists {
             playlists = loaded
         }
+        loadPlaylistCovers()
         watchPlaylists()
     }
 

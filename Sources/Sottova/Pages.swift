@@ -750,7 +750,8 @@ struct PlaylistPage: View {
             let missing = playlist.paths.count - songs.count
             PageScroll {
                 HStack(alignment: .bottom, spacing: 32) {
-                    Artwork(key: songs.first?.artwork, size: art, radius: 12, outlined: true, title: playlist.name, subtitle: "playlist")
+                    Artwork(key: controller.playlistCovers[pid] ?? songs.first?.artwork, size: art, radius: 12, outlined: true,
+                            title: playlist.name, subtitle: "playlist")
                     VStack(alignment: .leading, spacing: 12) {
                         Text("playlist")
                             .font(.system(size: 13, weight: .medium))
@@ -764,6 +765,7 @@ struct PlaylistPage: View {
                             GapsButton(title: playlist.name, songs: songs, gaps: Binding(
                                 get: { playlist.gaps }, set: { controller.setGaps($0, for: pid) }))
                         }
+                        CoverCredit(url: Controller.coverURL(forPlaylist: pid), key: controller.playlistCovers[pid])
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -852,6 +854,7 @@ struct PlaylistPage: View {
     private func menu(_ playlist: Playlist) -> some View {
         Menu {
             Button("Rename") { startRename(playlist) }
+            Button("Choose Cover…") { router.coverFor = .playlist(pid) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {
@@ -996,6 +999,8 @@ struct AlbumPage: View {
                             GapsButton(title: album.title, songs: album.songs, gaps: Binding(
                                 get: { controller.albumSettings[album.id] }, set: { controller.albumSettings[album.id] = $0 }))
                         }
+                        CoverCredit(url: album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") },
+                                    key: album.artwork)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

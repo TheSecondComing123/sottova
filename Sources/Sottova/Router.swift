@@ -13,6 +13,8 @@ final class Router {
     private(set) var searchRequests = 0
     /// A text field has focus: ⌘→ moves its cursor there, so playback commands step aside.
     var typing = false
+    /// The album or playlist whose cover is being chosen, shown as a sheet.
+    var coverFor: CoverTarget?
 
     func go(to destination: Route) {
         query = ""

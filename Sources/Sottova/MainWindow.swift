@@ -57,6 +57,8 @@ struct MainWindow: View {
             return !folders.isEmpty
         }
         .onAppear(perform: watchMouseButtons)
+        // at the window, never inside a lazy row that could be recycled with the sheet open
+        .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
     }
 
     @ViewBuilder
@@ -371,13 +373,14 @@ private struct PlaylistRow: View {
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
     @Environment(\.renaming) private var renaming
+    @Environment(Router.self) private var router
     @State private var targeted = false
 
     var body: some View {
         let first = playlist.paths.lazy.compactMap { controller.catalog.songsByID[$0] }.first
         Button(action: select) {
             HStack(spacing: 12) {
-                Artwork(key: first?.artwork, size: 16, radius: 4)
+                Artwork(key: controller.playlistCovers[playlist.id] ?? first?.artwork, size: 16, radius: 4)
                     .frame(width: 20)
                 Text(playlist.name)
                     .font(.system(size: 13, weight: selected ? .semibold : .medium))
@@ -415,6 +418,7 @@ private struct PlaylistRow: View {
                 renaming.wrappedValue = playlist.id
                 select()
             }
+            Button("Choose Cover…") { router.coverFor = .playlist(playlist.id) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) }
             Divider()
             Button("Move to Trash") {
