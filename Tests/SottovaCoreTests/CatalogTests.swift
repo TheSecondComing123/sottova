@@ -28,6 +28,27 @@ struct CatalogTests {
         #expect(split.detail == nil)
     }
 
+    @Test func worksGroupRecordingsAndFollowCatalogOrder() {
+        func song(_ path: String, _ title: String, _ artist: String, composer: String? = "Frédéric Chopin") -> (String, Library.Entry) {
+            var meta = TrackMeta(title: title, artist: artist, album: "x", duration: 60)
+            meta.composer = composer
+            return (path, Library.Entry(size: 0, modified: .now, meta: meta))
+        }
+        let catalog = Catalog(entries: Dictionary(uniqueKeysWithValues: [
+            song("/1", "Nocturne in C minor, Op. 48 No. 1", "B"),
+            song("/2", "Nocturne in C minor, B. 108", "A"),
+            song("/3", "Nocturne in E-flat major, Op. 9 No. 2", "C"),
+            song("/4", "Nocturne in C minor, Op. 48 No. 1", "A"),
+            song("/5", "Polonaise in G-flat major, B. 36", "D"),
+            song("/6", "Berceuse", "E"),
+            song("/7", "Goldberg Variation 13, BWV 988", "F", composer: "Johann Sebastian Bach"),
+        ]))
+        let works = catalog.works(by: "Frédéric Chopin")
+        #expect(works.map { $0.catalogNumber ?? $0.title } == ["B. 36", "B. 108", "Op. 9 No. 2", "Op. 48 No. 1", "Berceuse"])
+        #expect(works[3].recordings.map(\.artist) == ["A", "B"])
+        #expect(catalog.composers == ["Frédéric Chopin", "Johann Sebastian Bach"])
+    }
+
     @Test func performersAndComposersBothGetPages() {
         let catalog = Catalog(entries: [
             "/m/1.flac": entry(title: "Nocturne", artist: "Luke Faulkner"),

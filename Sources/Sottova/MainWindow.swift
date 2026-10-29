@@ -73,6 +73,7 @@ struct MainWindow: View {
                 case .album(let id): AlbumPage(id: id)
                 case .artist(let name): ArtistPage(name: name)
                 case .playlist(let id): PlaylistPage(id: id)
+                case .composer(let name): ComposerPage(name: name)
                 }
             }
         }

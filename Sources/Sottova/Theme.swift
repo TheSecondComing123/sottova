@@ -137,12 +137,13 @@ enum Route: Hashable {
     case artist(String)
     /// By the playlist's file path.
     case playlist(String)
+    case composer(String)
 
     /// The sidebar section a page lives under.
     var section: Route {
         switch self {
         case .album: .albums
-        case .artist: .artists
+        case .artist, .composer: .artists
         default: self
         }
     }

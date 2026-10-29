@@ -959,6 +959,16 @@ struct ArtistsPage: View {
         } else {
             PageScroll {
                 PageHeader(title: "Artists", detail: Format.count(artists.count, "artist"), songs: [])
+                // composers known only from tags; one with a page of its own links to its works from there
+                let composers = controller.catalog.composers.filter { controller.catalog.artistsByName[$0] == nil }
+                if !composers.isEmpty {
+                    SectionTitle(title: "Composers")
+                        .padding(.bottom, 8)
+                    Shelf(items: composers.map(ComposerName.init)) { ComposerTile(name: $0.id) }
+                        .padding(.bottom, 32)
+                    SectionTitle(title: "Performers")
+                        .padding(.bottom, 8)
+                }
                 LazyVGrid(columns: albumGrid, alignment: .leading, spacing: 16) {
                     ForEach(artists) { ArtistTile(artist: $0) }
                 }
@@ -968,9 +978,94 @@ struct ArtistsPage: View {
     }
 }
 
+private struct ComposerName: Identifiable {
+    let id: String
+}
+
+private struct ComposerTile: View {
+    let name: String
+    @Environment(Controller.self) private var controller
+    @Environment(\.navigate) private var navigate
+
+    var body: some View {
+        let works = controller.catalog.works(by: name)
+        Tile(artwork: nil, circle: true, coverTitle: name, play: { controller.play(works.flatMap(\.recordings).shuffled()) },
+             open: { navigate(.composer(name)) }) {
+            VStack(spacing: 2) {
+                Text(name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                Text(Format.count(works.count, "work"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+            }
+        }
+    }
+}
+
+/// A composer's works set like a concert program: each work with its catalog number, then every recording of it.
+struct ComposerPage: View {
+    let name: String
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        let works = controller.catalog.works(by: name)
+        if works.isEmpty {
+            Missing(text: "nothing by \(name) in your library anymore")
+        } else {
+            let songs = works.flatMap(\.recordings)
+            PageScroll {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("composer")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                    Text(name)
+                        .font(.system(size: 48, weight: .bold))
+                        .tracking(-1.2)
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    Text([Format.count(works.count, "work"), Format.count(songs.count, "recording"),
+                          Format.length(songs.reduce(0) { $0 + $1.duration })].joined(separator: " · "))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.muted)
+                }
+                .padding(.top, 40)
+                .padding(.bottom, 32)
+
+                PlayRow(songs: songs)
+                    .padding(.bottom, 32)
+
+                VStack(alignment: .leading, spacing: 24) {
+                    ForEach(works) { work in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(work.title)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Theme.text)
+                                if let number = work.catalogNumber {
+                                    Text(number)
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.faint)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            ForEach(Array(work.recordings.enumerated()), id: \.element.id) { index, song in
+                                SongRow(song: song, number: index + 1, performerFirst: true) { controller.play(work.recordings, from: index) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct ArtistPage: View {
     let name: String
     @Environment(Controller.self) private var controller
+    @Environment(\.navigate) private var navigate
 
     var body: some View {
         if let artist = controller.catalog.artistsByName[name] {
@@ -989,9 +1084,18 @@ struct ArtistPage: View {
                             .foregroundStyle(Theme.text)
                             .lineLimit(1)
                             .minimumScaleFactor(0.5)
-                        Text("\(Format.count(artist.albums.count, "album")) · \(Format.count(songs.count, "song"))")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.muted)
+                        HStack(spacing: 8) {
+                            Text("\(Format.count(artist.albums.count, "album")) · \(Format.count(songs.count, "song"))")
+                                .foregroundStyle(Theme.muted)
+                            let works = controller.catalog.works(by: name).count
+                            if works > 0 {
+                                Text("·").foregroundStyle(Theme.muted)
+                                LinkText(text: "\(Format.count(works, "work")) by work") { navigate(.composer(name)) }
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Theme.text)
+                            }
+                        }
+                        .font(.system(size: 13))
                     }
                 }
                 .padding(.bottom, 32)

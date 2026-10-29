@@ -12,6 +12,8 @@ struct SongRow: View {
     var albumArtist: String?
     /// On a playlist page: takes the song out of the playlist.
     var remove: (() -> Void)?
+    /// Under a work's heading the title would repeat it, so the performer leads.
+    var performerFirst = false
     let play: () -> Void
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
@@ -27,8 +29,15 @@ struct SongRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Title(song: song)
-                if song.artist != albumArtist {
+                if performerFirst {
+                    Text(song.artist)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                } else {
+                    Title(song: song)
+                }
+                if song.artist != albumArtist, !performerFirst {
                     Text(song.artist)
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.muted)
@@ -69,6 +78,9 @@ struct SongRow: View {
             Divider()
             Button("Go to Album") { navigate(.album(song.albumID)) }
             Button("Go to Artist") { navigate(.artist(song.artist)) }
+            if let composer = song.composer {
+                Button("Go to Composer") { navigate(.composer(composer)) }
+            }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) }
         }
     }

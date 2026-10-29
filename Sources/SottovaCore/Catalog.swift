@@ -147,3 +147,46 @@ public struct Catalog: Sendable {
         return a.title.localizedStandardCompare(b.title) == .orderedAscending
     }
 }
+
+/// One work by a composer and every recording of it in the library.
+public struct Work: Identifiable, Sendable {
+    public var id: String { "\(title)\u{1f}\(catalogNumber ?? "")" }
+    public let title: String
+    /// "Op. 48 No. 2", "B. 36", "BWV 988"; nil when the title carries none.
+    public let catalogNumber: String?
+    public let recordings: [Song]
+}
+
+extension Catalog {
+    /// A composer's works, as a concert program would list them: numbered works in catalog order (B. 36 before
+    /// B. 108, Op. 9 before Op. 48), then the rest by title. Two pieces with one title and different numbers stay apart.
+    public func works(by composer: String) -> [Work] {
+        let songs = songs.filter { $0.composer == composer }
+        let groups = Dictionary(grouping: songs) { song -> String in
+            "\(song.work)\u{1f}\(Self.catalogNumber(of: song) ?? "")"
+        }
+        return groups.values.map { recordings in
+            Work(title: recordings[0].work, catalogNumber: Self.catalogNumber(of: recordings[0]),
+                 recordings: recordings.sorted { $0.artist.localizedStandardCompare($1.artist) == .orderedAscending })
+        }
+        .sorted { a, b in
+            switch (a.catalogNumber, b.catalogNumber) {
+            case let (x?, y?) where x != y: x.localizedStandardCompare(y) == .orderedAscending
+            case (_?, nil): true
+            case (nil, _?): false
+            default: a.title.localizedStandardCompare(b.title) == .orderedAscending
+            }
+        }
+    }
+
+    /// Composers with at least one tagged recording, by name.
+    public var composers: [String] {
+        Set(songs.compactMap(\.composer)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    /// The part of the detail before the nickname: "Op. 48 No. 2" of "Op. 48 No. 2 · “Lament”".
+    static func catalogNumber(of song: Song) -> String? {
+        guard let first = song.detail?.components(separatedBy: " · ").first, let c = first.first, !"“\"‘'".contains(c) else { return nil }
+        return first
+    }
+}
