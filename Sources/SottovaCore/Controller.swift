@@ -331,22 +331,28 @@ public final class Controller {
             alarmActivity = nil
             return
         }
-        // keeps the app awake to its timer, while still letting the Mac itself sleep
+        // keeps the app awake to its timer, and the Mac from sleeping when idle; the screen still turns off
         alarmActivity = alarmActivity ?? ProcessInfo.processInfo.beginActivity(
-            options: [.userInitiatedAllowingIdleSystemSleep], reason: "an alarm is set")
+            options: [.userInitiated], reason: "an alarm is set")
         let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
         timer.schedule(wallDeadline: .now() + max(at.timeIntervalSinceNow, 0), leeway: .milliseconds(100))
         timer.setEventHandler { [weak self] in
-            MainActor.assumeIsolated { self?.fire(alarm.id) }
+            MainActor.assumeIsolated { self?.fire(alarm.id, due: at) }
         }
         timer.resume()
         alarmTimer = timer
     }
 
-    func fire(_ id: Alarm.ID) {
+    /// How late an alarm may still start: a Mac that slept through it and wakes at noon stays quiet.
+    static let alarmLateness: TimeInterval = 10 * 60
+
+    func fire(_ id: Alarm.ID, due: Date, now: Date = .now) {
         guard let alarm = alarms.first(where: { $0.id == id }) else { return }
         let songs = playlists.first { $0.id == alarm.source }.map(songs(of:)) ?? catalog.albumsByID[alarm.source]?.songs ?? []
-        if !songs.isEmpty {
+        if now.timeIntervalSince(due) > Self.alarmLateness {
+            problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
+        } else if !songs.isEmpty {
+            if let volume = alarm.volume { self.volume = volume }
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
             play(alarm.shuffled ? songs.shuffled() : songs, source: playlist, shuffled: alarm.shuffled)
             if status == .paused { toggle() }

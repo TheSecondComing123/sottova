@@ -16,6 +16,8 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     public var shuffled = false
     /// Off keeps it in the list without it going off.
     public var on = true
+    /// What the volume is set to as it starts, so a speaker left loud isn't a jolt; nil leaves it.
+    public var volume: Double?
 
     public init(source: String, name: String, hour: Int, minute: Int, weekdays: Set<Int> = [], day: Date? = nil, shuffled: Bool = false) {
         self.source = source
@@ -28,7 +30,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, name, hour, minute, weekdays, day, shuffled, on
+        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume
     }
 
     // alarms.json from before alarms could be turned off has no `on`
@@ -43,6 +45,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         day = try c.decodeIfPresent(Date.self, forKey: .day)
         shuffled = try c.decode(Bool.self, forKey: .shuffled)
         on = try c.decodeIfPresent(Bool.self, forKey: .on) ?? true
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume)
     }
 
     /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.
@@ -50,6 +53,17 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         guard weekdays.isEmpty else { return }
         day = now
         if next(after: now, calendar: calendar) == nil { day = calendar.date(byAdding: .day, value: 1, to: now) }
+    }
+
+    /// Every time it goes off after `now` and before `end`, soonest first.
+    public func times(after now: Date, until end: Date, calendar: Calendar = .current) -> [Date] {
+        var times: [Date] = []
+        var from = now
+        while let at = next(after: from, calendar: calendar), at < end {
+            times.append(at)
+            from = at
+        }
+        return times
     }
 
     /// The next time it goes off after `now`, or nil for a one-off that's past.

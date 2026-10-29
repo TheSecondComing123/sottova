@@ -60,4 +60,21 @@ struct AlarmTests {
         alarm.scheduleOnce(after: date(2026, 10, 29, 7, 8), calendar: calendar)
         #expect(alarm.next(after: date(2026, 10, 29, 7, 8), calendar: calendar) == date(2026, 10, 30, 7, 2))
     }
+
+    @Test func anAlarmMoreThanTenMinutesLateStaysQuiet() {
+        let c = Controller(storage: nil)
+        let alarm = Alarm(source: "a", name: "A", hour: 7, minute: 2, weekdays: Set(1...7))
+        c.addAlarm(alarm)
+        let due = Date.now.addingTimeInterval(-11 * 60)
+        c.fire(alarm.id, due: due)
+        #expect(c.problem?.hasPrefix("the A alarm didn't play") == true)
+        #expect(c.status == .idle)
+    }
+
+    @Test func timesListsEveryWeekdayInTheWindow() {
+        let alarm = Alarm(source: "a", name: "A", hour: 7, minute: 2, weekdays: [2, 3, 4, 5, 6])
+        // Thu 10/29 08:00 to Thu 11/5 08:00: Fri, Mon, Tue, Wed, Thu
+        let times = alarm.times(after: date(2026, 10, 29, 8, 0), until: date(2026, 11, 5, 8, 0), calendar: calendar)
+        #expect(times == [date(2026, 10, 30, 7, 2), date(2026, 11, 2, 7, 2), date(2026, 11, 3, 7, 2), date(2026, 11, 4, 7, 2), date(2026, 11, 5, 7, 2)])
+    }
 }
