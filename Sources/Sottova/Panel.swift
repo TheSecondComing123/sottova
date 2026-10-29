@@ -10,12 +10,11 @@ struct Panel: View {
     @State private var visible = false
 
     var body: some View {
-        let color = Theme.text
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(controller.headline)
                     .font(.custom("Comic Mono", size: 17).bold())
-                    .foregroundStyle(controller.status == .playing ? color : Theme.text)
+                    .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 TimelineView(.periodic(from: .now, by: 15)) { context in
                     VStack(alignment: .leading, spacing: 2) {
@@ -25,7 +24,7 @@ struct Panel: View {
                                 .lineLimit(1)
                         }
                     }
-                    .font(.callout)
+                    .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
                 }
             }
@@ -33,17 +32,17 @@ struct Panel: View {
             Timeline(controller: controller, visible: visible)
                 .frame(height: 44)
                 .padding(12)
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
+                .glassEffect(.regular, in: .rect(cornerRadius: 12))
 
             if let problem = controller.problem {
                 Text(problem)
-                    .font(.callout)
-                    .foregroundStyle(Color.red)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.text)
             }
 
             HStack {
                 if controller.tracks.isEmpty {
-                    Button("add a music folder…", action: controller.chooseFolders)
+                    Button("Add a music folder", action: controller.chooseFolders)
                         .buttonStyle(.glassProminent)
                 } else {
                     Controls(controller: controller)
@@ -51,25 +50,24 @@ struct Panel: View {
                 Spacer()
                 SleepButton()
                 Menu {
-                    Button("open sottova") { openWindow(id: "main"); NSApp.activate() }
+                    Button("Open Sottova") { openWindow(id: "main"); NSApp.activate() }
                     Divider()
-                    Button("add folder…", action: controller.chooseFolders)
+                    Button("Add folder…", action: controller.chooseFolders)
                     if !controller.folders.isEmpty {
-                        Menu("remove folder") {
+                        Menu("Remove folder") {
                             ForEach(controller.folders, id: \.self) { folder in
                                 Button(folder.lastPathComponent) { controller.removeFolder(folder) }
                             }
                         }
                     }
                     Divider()
-                    Button("settings…") { openSettings() }
-                    Button("quit sottova") { NSApplication.shared.terminate(nil) }
+                    Button("Settings…") { openSettings() }
+                    Button("Quit Sottova") { NSApplication.shared.terminate(nil) }
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .semibold))
+                    Ph.dotsThree.icon(.bold, size: 16)
+                        .foregroundStyle(Theme.muted)
                         .frame(width: 32, height: 32)
-                        .contentShape(.circle)
-                        .glassEffect(.regular.interactive(), in: .circle)
+                        .hoverable(radius: 8)
                 }
                 .menuStyle(.button)
                 .menuIndicator(.hidden)
@@ -80,32 +78,31 @@ struct Panel: View {
             gapSection
 
             Text(controller.libraryLine)
-                .font(.caption)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Theme.faint)
         }
         .padding(16)
         .frame(width: 320)
-        .tint(color)
+        .tint(Theme.text)
         .preferredColorScheme(.dark)
         .onAppear { visible = true }
         .onDisappear { visible = false }
     }
 
     private var gapSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation(.spring(duration: 0.35, bounce: 0.1)) { showsGap.toggle() }
+                withAnimation(Theme.settle) { showsGap.toggle() }
             } label: {
                 HStack(spacing: 8) {
                     Text(controller.settings.name).foregroundStyle(Theme.muted)
                     Text(controller.settings.crossfade
                         ? "crossfade \(Int(controller.settings.crossfadeSec)) s"
-                        : "\(duration(controller.settings.gapRange.lowerBound)) – \(duration(controller.settings.gapRange.upperBound))")
+                        : Format.range(controller.settings))
                         .monospacedDigit()
                         .foregroundStyle(Theme.text)
                     Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
+                    Ph.caretDown.icon(.bold, size: 12)
                         .foregroundStyle(Theme.faint)
                         .rotationEffect(.degrees(showsGap ? 180 : 0))
                 }
@@ -116,29 +113,26 @@ struct Panel: View {
             if showsGap {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                     GridRow {
-                        Text("preset")
+                        Text("Preset")
                         PresetPicker(controller: controller)
                             .labelsHidden()
                     }
+                    // the log-scale range from Settings: on a linear slider 30 s sat 2.5% along
                     GridRow {
-                        Text("shortest")
-                        Slider(value: $controller.settings.gapMin, in: 0...1200, step: 30)
+                        GapRange(low: $controller.settings.gapMin, high: $controller.settings.gapMax)
+                            .gridCellColumns(2)
                     }
                     GridRow {
-                        Text("longest")
-                        Slider(value: $controller.settings.gapMax, in: 0...1200, step: 30)
-                    }
-                    GridRow {
-                        Text("fade")
+                        Text("Fade")
                         Picker("fade", selection: $controller.settings.curve) {
-                            Text("quartic").tag(FadeCurve.quartic)
-                            Text("dB-linear").tag(FadeCurve.dbLinear)
+                            Text("Quartic").tag(FadeCurve.quartic)
+                            Text("Even").tag(FadeCurve.dbLinear)
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
                     }
                 }
-                .font(.callout)
+                .font(.system(size: 13))
                 .foregroundStyle(Theme.muted)
                 .transition(.opacity)
             }

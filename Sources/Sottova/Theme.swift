@@ -194,9 +194,11 @@ extension View {
 /// Presses down a little, like a real button. Wide targets get a smaller scale so they don't visibly shrink.
 struct PressStyle: ButtonStyle {
     var scale: CGFloat = 0.96
+    @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .opacity(enabled ? 1 : 0.4)
             .contentShape(.rect)
             .scaleEffect(configuration.isPressed ? scale : 1)
             .animation(Theme.quick, value: configuration.isPressed)

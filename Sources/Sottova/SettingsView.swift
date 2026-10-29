@@ -79,17 +79,19 @@ struct SettingsView: View {
 
 private struct PageTitle: View {
     let title: String
-    let detail: String
+    var detail: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 28, weight: .bold))
-                .tracking(-0.6)
+                .font(.system(size: 22, weight: .bold))
+                .tracking(-0.4)
                 .foregroundStyle(Theme.text)
-            Text(detail)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.muted)
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+            }
         }
         .padding(.bottom, 24)
     }
@@ -126,7 +128,8 @@ private struct PlaybackPage: View {
     var body: some View {
         let s = controller.settings
         VStack(alignment: .leading, spacing: 0) {
-            PageTitle(title: "Playback", detail: "\(s.name): \(Format.gaps(s)), \(Int(s.fadeIn)) s in, \(Int(s.fadeOut)) s out")
+            // the diagram is the summary; a line restating it would be the fourth "10–20 min" on screen
+            PageTitle(title: "Playback")
             ScoreDiagram(settings: s)
 
             Heading(title: "Mode")
@@ -144,14 +147,17 @@ private struct PlaybackPage: View {
 
             Heading(title: "Fades")
             HStack(spacing: 12) {
+                // each in its half, so Out sits over the second curve card below
                 ValueStepper(label: "In", value: $controller.settings.fadeIn, range: 0...20, unit: "s")
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 ValueStepper(label: "Out", value: $controller.settings.fadeOut, range: 0...20, unit: "s")
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 12) {
-                CurveCard(curve: .quartic, title: "Quartic", detail: "quiet for longer, then rises", selected: s.curve == .quartic) {
+                CurveCard(curve: .quartic, title: "Quartic", detail: "quiet for longer, then rises", selected: s.curve == .quartic, accent: 1) {
                     controller.settings.curve = .quartic
                 }
-                CurveCard(curve: .dbLinear, title: "Even", detail: "loudness rises at a steady rate", selected: s.curve == .dbLinear) {
+                CurveCard(curve: .dbLinear, title: "Even", detail: "loudness rises at a steady rate", selected: s.curve == .dbLinear, accent: 5) {
                     controller.settings.curve = .dbLinear
                 }
             }
@@ -398,6 +404,8 @@ private struct CurveCard: View {
     let title: String
     let detail: String
     let selected: Bool
+    /// Marks it selected the way Mode and Loudness mark theirs; monochrome falls back to the text color.
+    let accent: Int
     let action: () -> Void
 
     var body: some View {
@@ -409,7 +417,7 @@ private struct CurveCard: View {
                     for x in stride(from: 0, through: size.width, by: 1) {
                         p.addLine(to: CGPoint(x: x, y: size.height - CGFloat(curve.fadeIn(Double(x / size.width))) * size.height))
                     }
-                    gc.stroke(p, with: .color(selected ? Theme.text : Theme.muted), lineWidth: 1.5)
+                    gc.stroke(p, with: .color(selected ? Theme.accent(accent) : Theme.muted), lineWidth: 1.5)
                 }
                 .frame(width: 44, height: 28)
                 VStack(alignment: .leading, spacing: 2) {
@@ -425,7 +433,7 @@ private struct CurveCard: View {
             .padding(12)
             .frame(maxWidth: .infinity)
             .background(Theme.raised, in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Theme.text : Theme.border, lineWidth: selected ? 1.5 : 1))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Theme.accent(accent) : Theme.border, lineWidth: selected ? 1.5 : 1))
             .hoverable(radius: 12)
         }
         .buttonStyle(PressStyle(scale: 0.98))
@@ -553,7 +561,7 @@ private struct ThemePage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageTitle(title: "Theme", detail: "Every color in the app; light or dark still follows the system")
+            PageTitle(title: "Theme", detail: "light or dark still follows the system")
             // a plain grid, not a lazy one: lazy cells arrive a pass after the page, so it showed up empty first
             Grid(horizontalSpacing: 16, verticalSpacing: 16) {
                 ForEach(Array(stride(from: 0, to: Palette.all.count, by: 2)), id: \.self) { start in
@@ -787,7 +795,7 @@ private struct GeneralPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            PageTitle(title: "General", detail: "How Sottova fits around the rest of your Mac")
+            PageTitle(title: "General")
             SwitchRow(title: "Open at login", detail: "starts in the menu bar when you log in", isOn: $opensAtLogin)
                 .onChange(of: opensAtLogin) { _, on in setOpensAtLogin(on) }
             if let loginProblem {
@@ -820,10 +828,6 @@ private struct GeneralPage: View {
         // the user can also change this in System Settings, so read back what actually happened
         opensAtLogin = SMAppService.mainApp.status == .enabled
     }
-}
-
-func duration(_ seconds: Double) -> String {
-    seconds < 60 ? "\(Int(seconds)) s" : String(format: "%g min", seconds / 60)
 }
 
 struct PresetPicker: View {

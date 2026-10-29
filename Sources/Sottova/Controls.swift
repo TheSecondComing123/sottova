@@ -2,39 +2,22 @@ import AppKit
 import SwiftUI
 import SottovaCore
 
+/// Play and skip as the player bar draws them, so the panel and the window agree.
 struct Controls: View {
     let controller: Controller
-    var size: CGFloat = 32
 
     private var running: Bool {
         controller.status == .playing || controller.status == .resting
     }
 
     var body: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 8) {
-                Button {
-                    controller.toggle()
-                } label: {
-                    Image(systemName: running ? "pause.fill" : "play.fill")
-                        .contentTransition(.symbolEffect(.replace))
-                        .frame(width: size, height: size)
-                }
-                .help(running ? "pause" : "play")
+        HStack(spacing: 8) {
+            PlayCircle(size: 32, playing: running) { controller.toggle() }
                 .disabled(controller.tracks.isEmpty)
-
-                Button {
-                    controller.skip()
-                } label: {
-                    Image(systemName: "forward.end.fill")
-                        .frame(width: size, height: size)
-                }
-                .help("skip to the next track")
-                .disabled(controller.status == .idle)
+            IconButton(icon: .skipForward, weight: .fill, help: controller.status == .resting ? "end the gap" : "skip", size: 32) {
+                controller.skip()
             }
-            .font(.system(size: size * 0.42, weight: .semibold))
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
+            .disabled(controller.status == .idle)
         }
     }
 }
