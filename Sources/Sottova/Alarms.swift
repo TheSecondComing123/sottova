@@ -15,7 +15,7 @@ enum AlarmRequest: Identifiable {
     }
 }
 
-/// "Start at…": a time, once or on repeat, for an album or playlist to start by itself.
+/// "Start at…": a time, once or on repeat, for a collection to start by itself.
 struct AlarmSheet: View {
     let request: AlarmRequest
     @Environment(Controller.self) private var controller
@@ -107,17 +107,15 @@ struct AlarmSheet: View {
                 .foregroundStyle(Theme.text)
             if picking {
                 Menu {
+                    // one list, yours first
+                    ForEach(controller.playlists) { playlist in Button(playlist.name) { source = playlist.id } }
                     if !controller.playlists.isEmpty {
-                        Section("Playlists") {
-                            ForEach(controller.playlists) { playlist in Button(playlist.name) { source = playlist.id } }
-                        }
+                        Divider()
                     }
-                    Section("Albums") {
-                        ForEach(controller.catalog.albums) { album in Button(album.title) { source = album.id } }
-                    }
+                    ForEach(controller.shownAlbums) { album in Button(album.title) { source = album.id } }
                 } label: {
                     HStack(spacing: 8) {
-                        Text(name ?? "Choose an album or playlist")
+                        Text(name ?? "Choose a collection")
                             .foregroundStyle(name == nil ? Theme.muted : Theme.text)
                             .lineLimit(1)
                         Spacer(minLength: 8)
@@ -359,7 +357,7 @@ struct AlarmsPage: View {
         }
         PageScroll {
             PageHeader(title: "Alarms", detail: controller.nextAlarm().map { "next: \(AlarmLine.headline($0.alarm, at: $0.at))" }
-                       ?? (alarms.isEmpty ? "an album or playlist that starts by itself" : "all off"), songs: [])
+                       ?? (alarms.isEmpty ? "a collection that starts by itself" : "all off"), songs: [])
                 .padding(.bottom, -8)
             WakeLine(alarms: alarms)
                 .padding(.bottom, 16)
@@ -368,7 +366,7 @@ struct AlarmsPage: View {
                 .buttonStyle(InvertedButton())
                 .padding(.bottom, 24)
             if alarms.isEmpty {
-                Text("set one here, or with Start at… on any album or playlist")
+                Text("set one here, or with Start at… on any collection")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
             } else {

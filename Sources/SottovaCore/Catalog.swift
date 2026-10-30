@@ -202,7 +202,7 @@ public enum SongSort: String, CaseIterable, Sendable {
         switch self {
         case .title: "by title"
         case .composer: "by composer"
-        case .album: "by album"
+        case .album: "by collection"
         case .longest: "longest first"
         case .newest: "newest first"
         }

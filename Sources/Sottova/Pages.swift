@@ -69,7 +69,7 @@ struct HomePage: View {
         // the hero already shows what's playing
         let playing = controller.status == .idle ? nil : controller.current?.id
         let recent = controller.recent.filter { $0.id != playing }
-        let albums = controller.shownAlbums
+        let collections = controller.collections
         PageScroll {
             Hero()
                 .padding(.bottom, 48)
@@ -90,10 +90,11 @@ struct HomePage: View {
                 }
                 .padding(.bottom, 32)
             }
-            if !albums.isEmpty {
-                SectionTitle(title: "Albums", action: Shelf<Album, AlbumTile>.overflows(albums.count, in: width) ? ("Show all", { navigate(.albums) }) : nil)
+            if !collections.isEmpty {
+                SectionTitle(title: "Collections",
+                             action: Shelf<MusicCollection, CollectionTile>.overflows(collections.count, in: width) ? ("Show all", { navigate(.collections) }) : nil)
                     .padding(.bottom, 8)
-                Shelf(items: Array(albums.prefix(24))) { AlbumTile(album: $0) }
+                Shelf(items: Array(collections.prefix(24))) { CollectionTile(collection: $0) }
             }
         }
     }
@@ -507,20 +508,19 @@ struct SongsPage: View {
     }
 }
 
-struct AlbumsPage: View {
+/// Yours and the ones that came with your files, in one grid.
+struct CollectionsPage: View {
     @Environment(Controller.self) private var controller
 
     var body: some View {
-        let albums = controller.shownAlbums
-        if albums.isEmpty, !controller.catalog.albums.isEmpty {
-            Missing(text: "no albums. your folders are playlists now")
-        } else if albums.isEmpty {
-            EmptyLibrary(what: "albums")
+        let collections = controller.collections
+        if collections.isEmpty {
+            EmptyLibrary(what: "collections")
         } else {
             PageScroll {
-                PageHeader(title: "Albums", detail: Format.count(albums.count, "album"), songs: [])
+                PageHeader(title: "Collections", detail: Format.count(collections.count, "collection"), songs: [])
                 LazyVGrid(columns: albumGrid, alignment: .leading, spacing: 16) {
-                    ForEach(albums) { AlbumTile(album: $0) }
+                    ForEach(collections) { CollectionTile(collection: $0) }
                 }
                 .padding(.horizontal, -8)
             }
@@ -528,7 +528,7 @@ struct AlbumsPage: View {
     }
 }
 
-/// Beside Shuffle: the gaps an album or playlist plays with and how long they make it, opening the choice. Its border
+/// Beside Shuffle: the gaps a collection plays with and how long they make it, opening the choice. Its border
 /// darkens when it has gaps of its own, like a filter that's on.
 struct GapsButton: View {
     let title: String
@@ -756,7 +756,7 @@ struct PlaylistPage: View {
                 if new == pid { startRename(playlist) }
             }
         } else {
-            Missing(text: "this playlist isn't in your library anymore")
+            Missing(text: "this collection isn't in your library anymore")
         }
     }
 
@@ -849,7 +849,7 @@ struct PlaylistPage: View {
             .frame(height: 60)
             .help(path)
             .sottovaMenu {
-                [.item("Remove from playlist") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }]
+                [.item("Remove from this collection") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }]
             }
         }
     }
@@ -961,7 +961,7 @@ struct AlbumPage: View {
                 }
             }
         } else {
-            Missing(text: "this album isn't in your library anymore")
+            Missing(text: "this collection isn't in your library anymore")
         }
     }
 }
@@ -1083,6 +1083,7 @@ struct ArtistPage: View {
     var body: some View {
         if let artist = controller.catalog.artistsByName[name] {
             let songs = artist.songs
+            let albums = artist.albums.filter { !controller.albumsInPlaylists.contains($0.id) }
             let art = songs.contains { $0.artwork != nil }
             PageScroll {
                 HStack(alignment: .bottom, spacing: 32) {
@@ -1097,7 +1098,7 @@ struct ArtistPage: View {
                             .foregroundStyle(Theme.text)
                             .lineLimit(2)
                         HStack(spacing: 0) {
-                            Text("\(Format.count(artist.albums.count, "album")) · \(Format.count(songs.count, "song"))")
+                            Text("\(Format.count(albums.count, "collection")) · \(Format.count(songs.count, "song"))")
                                 .foregroundStyle(Theme.muted)
                             let works = controller.catalog.works(by: name).count
                             if works > 0 {
@@ -1115,9 +1116,8 @@ struct ArtistPage: View {
                 PlayRow(songs: songs)
                     .padding(.bottom, 32)
 
-                let albums = artist.albums.filter { !controller.albumsInPlaylists.contains($0.id) }
                 if !albums.isEmpty {
-                    SectionTitle(title: "Albums")
+                    SectionTitle(title: "Collections")
                         .padding(.bottom, 8)
                     Shelf(items: albums) { AlbumTile(album: $0) }
                         .padding(.bottom, 32)
@@ -1143,16 +1143,16 @@ struct SearchPage: View {
     let query: String
     @Environment(Controller.self) private var controller
     @State private var songs: [Song] = []
-    @State private var albums: [Album] = []
+    @State private var collections: [MusicCollection] = []
     @State private var artists: [Artist] = []
     @State private var searched = false
 
     var body: some View {
         Group {
-            if searched, songs.isEmpty, albums.isEmpty, artists.isEmpty {
+            if searched, songs.isEmpty, collections.isEmpty, artists.isEmpty {
                 Missing(text: "nothing in your library matches “\(query)”")
             } else {
-                // the few artists and albums first, then every matching song; eight songs used to push them out of view
+                // the few artists and collections first, then every matching song; eight songs used to push them out of view
                 PageScroll {
                     if !artists.isEmpty {
                         SectionTitle(title: "Artists")
@@ -1160,10 +1160,10 @@ struct SearchPage: View {
                         Shelf(items: Array(artists.prefix(20))) { ArtistTile(artist: $0) }
                             .padding(.bottom, 32)
                     }
-                    if !albums.isEmpty {
-                        SectionTitle(title: "Albums")
+                    if !collections.isEmpty {
+                        SectionTitle(title: "Collections")
                             .padding(.bottom, 8)
-                        Shelf(items: Array(albums.prefix(20))) { AlbumTile(album: $0) }
+                        Shelf(items: Array(collections.prefix(20))) { CollectionTile(collection: $0) }
                             .padding(.bottom, 32)
                     }
                     if !songs.isEmpty {
@@ -1185,7 +1185,10 @@ struct SearchPage: View {
             let needle = query.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
             let catalog = controller.catalog
             songs = catalog.songs.filter { $0.searchKey.contains(needle) }
-            albums = controller.shownAlbums.filter { $0.title.localizedStandardContains(query) || $0.artist.localizedStandardContains(query) }
+            collections = controller.collections.filter { collection in
+                if case .album(let album) = collection, album.artist.localizedStandardContains(query) { return true }
+                return collection.title.localizedStandardContains(query)
+            }
             artists = catalog.artists.filter { $0.name.localizedStandardContains(query) }
             searched = true
         }

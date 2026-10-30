@@ -564,7 +564,7 @@ public final class Controller {
 
     /// A new playlist named `name`, or "name 2" when that's taken. Returns its id.
     @discardableResult
-    public func newPlaylist(named name: String = "New playlist", songs: [Song] = [], fromAlbum: String? = nil) -> String? {
+    public func newPlaylist(named name: String = "New collection", songs: [Song] = [], fromAlbum: String? = nil) -> String? {
         guard let store = playlistStore else { return nil }
         var candidate = name, n = 2
         while playlists.contains(where: { $0.name.localizedCaseInsensitiveCompare(candidate) == .orderedSame }) {
@@ -611,7 +611,7 @@ public final class Controller {
         guard let store = playlistStore, let index = playlists.firstIndex(where: { $0.id == id }), !name.isEmpty else { return nil }
         let url = store.url(for: name)
         guard url.path == id || !FileManager.default.fileExists(atPath: url.path) else {
-            problem = "there's already a playlist called \(name)"
+            problem = "there's already a collection called \(name)"
             return nil
         }
         do {
@@ -641,7 +641,7 @@ public final class Controller {
             try? FileManager.default.trashItem(at: Self.coverURL(forPlaylist: id), resultingItemURL: nil)
             playlists.removeAll { $0.id == id }
         } catch {
-            problem = "couldn't move the playlist to the Trash: \(error.localizedDescription)"
+            problem = "couldn't move the collection to the Trash: \(error.localizedDescription)"
         }
     }
 

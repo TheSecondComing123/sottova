@@ -71,15 +71,15 @@ struct SongRow: View {
             var entries: [MenuEntry] = [
                 .item("Play", action: play),
                 .item("Play next") { controller.playNext([song]) },
-                .addToPlaylist([song], name: song.work, controller: controller),
+                .addToCollection([song], name: song.work, controller: controller),
             ]
             entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })
             if let remove {
-                entries.append(.item("Remove from playlist", action: remove))
+                entries.append(.item("Remove from this collection", action: remove))
             }
             entries += [
                 .divider,
-                .item("Go to album") { navigate(.album(song.albumID)) },
+                .item("Go to \(song.album)") { navigate(.album(song.albumID)) },
                 .item("Go to artist") { navigate(.artist(song.artist)) },
             ]
             if let composer = song.composer {
@@ -174,7 +174,7 @@ struct SongColumns: View {
             Text("Title")
                 .frame(maxWidth: .infinity, alignment: .leading)
             if showsAlbum {
-                Text("Album").frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
+                Text("Collection").frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
             }
             Ph.clock.icon(size: 14).frame(width: 48, alignment: .trailing)
         }
@@ -262,7 +262,7 @@ struct AlbumTile: View {
             return [
                 .item("Play") { controller.play(album.songs) },
                 .item("Play next") { controller.playNext(album.songs) },
-                .addToPlaylist(album.songs, name: album.title, controller: controller),
+                .addToCollection(album.songs, name: album.title, controller: controller),
                 .item("Go to artist") { navigate(.artist(album.artist)) },
                 .divider,
                 .item("Choose cover…") { router.coverFor = .album(album.id) },
@@ -270,6 +270,61 @@ struct AlbumTile: View {
                 .submenu("Gaps", choices),
             ]
         }
+    }
+}
+
+/// A set of songs you press play on: an album that came with your files, or one of yours.
+enum MusicCollection: Identifiable {
+    case album(Album)
+    case yours(Playlist)
+
+    var id: String {
+        switch self {
+        case .album(let album): album.id
+        case .yours(let playlist): playlist.id
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .album(let album): album.title
+        case .yours(let playlist): playlist.name
+        }
+    }
+}
+
+struct CollectionTile: View {
+    let collection: MusicCollection
+
+    var body: some View {
+        switch collection {
+        case .album(let album): AlbumTile(album: album)
+        case .yours(let playlist): PlaylistTile(playlist: playlist)
+        }
+    }
+}
+
+/// One of yours: its cover, or its first song's, over its name and how many songs it holds.
+struct PlaylistTile: View {
+    let playlist: Playlist
+    @Environment(Controller.self) private var controller
+    @Environment(\.navigate) private var navigate
+    @Environment(Router.self) private var router
+    @Environment(\.renaming) private var renaming
+
+    var body: some View {
+        let songs = controller.songs(of: playlist)
+        Tile(artwork: controller.playlistCovers[playlist.id] ?? songs.first?.artwork, coverTitle: playlist.name,
+             play: { controller.play(songs, source: playlist.id) }, open: { navigate(.playlist(playlist.id)) }) {
+            VStack(alignment: .leading, spacing: 2) {
+                NowPlayingTitle(text: playlist.name, playing: controller.sounding != nil && controller.origin?.key == playlist.id, key: playlist.name)
+                Text(Format.count(playlist.paths.count, "song"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+            }
+        }
+        .sottovaMenu { MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming) }
     }
 }
 
@@ -344,14 +399,36 @@ struct PageHeader: View {
 }
 
 extension MenuEntry {
-    /// "Add to playlist ▸": every playlist, then a new one named after what's being added.
-    @MainActor static func addToPlaylist(_ songs: [Song], name: String, controller: Controller) -> MenuEntry {
+    /// "Add to collection ▸": every one of yours, then a new one named after what's being added.
+    @MainActor static func addToCollection(_ songs: [Song], name: String, controller: Controller) -> MenuEntry {
         var entries = controller.playlists.map { playlist in MenuEntry.item(playlist.name) { controller.add(songs, to: playlist.id) } }
         if !entries.isEmpty {
             entries.append(.divider)
         }
-        entries.append(.item("New playlist") { controller.newPlaylist(named: name, songs: songs) })
-        return .submenu("Add to playlist", entries)
+        entries.append(.item("New collection") { controller.newPlaylist(named: name, songs: songs) })
+        return .submenu("Add to collection", entries)
+    }
+
+    /// One of yours, from the sidebar or a tile. Rename opens its page with the name selected.
+    @MainActor static func yours(_ playlist: Playlist, controller: Controller, router: Router, navigate: Navigate,
+                                 renaming: Binding<String?>) -> [MenuEntry] {
+        [
+            .item("Play") { controller.play(controller.songs(of: playlist), source: playlist.id) },
+            .item("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) },
+            .divider,
+            .item("Rename") {
+                renaming.wrappedValue = playlist.id
+                navigate(.playlist(playlist.id))
+            },
+            .item("Choose cover…") { router.coverFor = .playlist(playlist.id) },
+            .item("Start at…") { router.alarm = .new(.playlist(playlist.id)) },
+            .item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
+            .divider,
+            .item("Move to Trash") {
+                if router.route == .playlist(playlist.id) { navigate(.home) }
+                controller.trashPlaylist(playlist.id)
+            },
+        ]
     }
 }
 

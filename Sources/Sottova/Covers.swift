@@ -30,8 +30,8 @@ struct CoverPicker: View {
 
     private var name: String {
         switch target {
-        case .album(let id): controller.catalog.albumsByID[id]?.title ?? "this album"
-        case .playlist(let id): controller.playlists.first { $0.id == id }?.name ?? "this playlist"
+        case .album(let id): controller.catalog.albumsByID[id]?.title ?? "this collection"
+        case .playlist(let id): controller.playlists.first { $0.id == id }?.name ?? "this collection"
         }
     }
 

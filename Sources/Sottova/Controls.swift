@@ -70,6 +70,11 @@ extension Controller {
         return hidden.isEmpty ? catalog.albums : catalog.albums.filter { !hidden.contains($0.id) }
     }
 
+    /// Yours first, then the albums from your files.
+    var collections: [MusicCollection] {
+        playlists.map(MusicCollection.yours) + shownAlbums.map(MusicCollection.album)
+    }
+
     var libraryLine: String {
         guard !folders.isEmpty else { return "no folder yet" }
         var parts = [Format.count(tracks.count, "song")]

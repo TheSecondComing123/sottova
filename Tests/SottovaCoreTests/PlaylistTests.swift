@@ -43,7 +43,7 @@ struct PlaylistTests {
         let c = Controller(storage: nil, playlistFolder: dir)
         let first = try #require(c.newPlaylist(songs: [song("/s/1.flac")]))
         let second = try #require(c.newPlaylist())
-        #expect(c.playlists.map(\.name) == ["New playlist", "New playlist 2"])
+        #expect(c.playlists.map(\.name) == ["New collection", "New collection 2"])
         c.playNext([song("/s/1.flac")], source: second)
         let renamed = try #require(c.rename(second, to: "Évening"))
         #expect(FileManager.default.fileExists(atPath: renamed))
@@ -51,7 +51,7 @@ struct PlaylistTests {
         #expect(c.upNext.first?.source == renamed)
         #expect(c.rename(first, to: "Évening") == nil)
         // a fresh controller reads the same files back
-        #expect(Controller(storage: nil, playlistFolder: dir).playlists.map(\.name) == ["Évening", "New playlist"])
+        #expect(Controller(storage: nil, playlistFolder: dir).playlists.map(\.name) == ["Évening", "New collection"])
     }
 
     @Test func aPlaylistsSongsPlayWithItsGaps() throws {

@@ -85,7 +85,7 @@ struct MainWindow: View {
                 switch router.route {
                 case .home: HomePage()
                 case .songs: SongsPage()
-                case .albums: AlbumsPage()
+                case .collections: CollectionsPage()
                 case .artists: ArtistsPage()
                 case .alarms: AlarmsPage()
                 case .shelf: ShelfPage()
@@ -173,7 +173,7 @@ private struct Sidebar: View {
     private let items: [(Route, String, Ph)] = [
         (.home, "Home", .house),
         (.songs, "Songs", .musicNote),
-        (.albums, "Albums", .vinylRecord),
+        (.collections, "Collections", .stack),
         (.artists, "Artists", .microphoneStage),
         (.alarms, "Alarms", .alarm),
         (.shelf, "Free music", .archive),
@@ -200,7 +200,7 @@ private struct Sidebar: View {
             }
             .padding(.horizontal, 12)
 
-            // the two lists scroll together, so many playlists never push the footer off the window
+            // the two lists scroll together, so many of yours never push the footer off the window
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Listening")
@@ -221,11 +221,11 @@ private struct Sidebar: View {
                     .padding(.horizontal, 12)
 
                     HStack {
-                        Text("Playlists")
+                        Text("Yours")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.faint)
                         Spacer()
-                        IconButton(icon: .plus, weight: .bold, help: "new playlist", size: 24) {
+                        IconButton(icon: .plus, weight: .bold, help: "new collection", size: 24) {
                             guard let id = controller.newPlaylist() else { return }
                             renaming.wrappedValue = id
                             select(.playlist(id))
@@ -390,7 +390,7 @@ private struct SearchField: View {
         HStack(spacing: 8) {
             Ph.magnifyingGlass.icon(size: 16)
                 .foregroundStyle(Theme.muted)
-            TextField("search songs, albums, artists", text: $router.query)
+            TextField("search songs, collections, artists", text: $router.query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text)
@@ -412,7 +412,7 @@ private struct SearchField: View {
     }
 }
 
-/// A playlist in the sidebar: its cover, name and count. Songs dropped on it are added, and the count ticks up.
+/// One of yours in the sidebar: its cover, name and count. Songs dropped on it are added, and the count ticks up.
 private struct PlaylistRow: View {
     let playlist: Playlist
     let selected: Bool
@@ -457,24 +457,6 @@ private struct PlaylistRow: View {
             // the highlight comes on at once and leaves on the quick curve
             withAnimation(on ? nil : Theme.quick) { targeted = on }
         }
-        .sottovaMenu {
-            [
-                .item("Play") { controller.play(controller.songs(of: playlist), source: playlist.id) },
-                .item("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) },
-                .divider,
-                .item("Rename") {
-                    renaming.wrappedValue = playlist.id
-                    select()
-                },
-                .item("Choose cover…") { router.coverFor = .playlist(playlist.id) },
-                .item("Start at…") { router.alarm = .new(.playlist(playlist.id)) },
-                .item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
-                .divider,
-                .item("Move to Trash") {
-                    if selected { navigate(.home) }
-                    controller.trashPlaylist(playlist.id)
-                },
-            ]
-        }
+        .sottovaMenu { MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming) }
     }
 }

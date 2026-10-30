@@ -106,7 +106,7 @@ extension Font {
 /// package ships an asset catalog, which `swift build` can't compile. Only the name-weight pairs in use are vendored.
 enum Ph: String {
     case house, clock, alarm, check, shuffle, x, waveform, play, pause, archive
-    case musicNote = "music-note", vinylRecord = "vinyl-record", microphoneStage = "microphone-stage"
+    case stack, musicNote = "music-note", microphoneStage = "microphone-stage"
     case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
     case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
@@ -137,7 +137,7 @@ enum Ph: String {
 }
 
 enum Route: Hashable {
-    case home, songs, albums, artists, alarms, shelf
+    case home, songs, collections, artists, alarms, shelf
     case album(String)
     case artist(String)
     /// By the playlist's file path.
@@ -147,7 +147,7 @@ enum Route: Hashable {
     /// The sidebar section a page lives under.
     var section: Route {
         switch self {
-        case .album: .albums
+        case .album: .collections
         case .artist, .composer: .artists
         default: self
         }
