@@ -24,8 +24,6 @@ final class Router {
     var trimming: Song?
     /// The alarm being set or changed, shown as a sheet.
     var alarm: AlarmRequest?
-    /// The starter shelf of free music, shown as a sheet.
-    var shelf = false
 
     func go(to destination: Route) {
         query = ""

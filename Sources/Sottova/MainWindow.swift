@@ -74,7 +74,6 @@ struct MainWindow: View {
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
         .sheet(item: Binding(get: { router.trimming }, set: { router.trimming = $0 })) { TrimSheet(song: $0) }
-        .sheet(isPresented: Binding(get: { router.shelf }, set: { router.shelf = $0 })) { ShelfSheet(controller: controller) }
     }
 
     @ViewBuilder
@@ -89,6 +88,7 @@ struct MainWindow: View {
                 case .albums: AlbumsPage()
                 case .artists: ArtistsPage()
                 case .alarms: AlarmsPage()
+                case .shelf: ShelfPage()
                 case .album(let id): AlbumPage(id: id)
                 case .artist(let name): ArtistPage(name: name)
                 case .playlist(let id): PlaylistPage(id: id)
@@ -176,6 +176,7 @@ private struct Sidebar: View {
         (.albums, "Albums", .vinylRecord),
         (.artists, "Artists", .microphoneStage),
         (.alarms, "Alarms", .alarm),
+        (.shelf, "Free music", .archive),
     ]
 
     var body: some View {

@@ -1216,7 +1216,7 @@ private struct EmptyLibrary: View {
                     Button("Add a music folder", action: controller.chooseFolders)
                         .buttonStyle(InvertedButton())
                     // no music yet: something to hear in a minute or two, legally
-                    Button("Get free music") { router.shelf = true }
+                    Button("Get free music") { router.go(to: .shelf) }
                         .buttonStyle(QuietButton())
                 }
             }

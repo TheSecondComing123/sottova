@@ -1,63 +1,49 @@
 import SwiftUI
 import SottovaCore
 
-/// "Get free music": the starter shelf. Pick sets, and they download into Music › Sottova Library, which Sottova
-/// watches, so each piece shows up as it lands. The download carries on with the sheet closed.
-struct ShelfSheet: View {
-    let controller: Controller
-    @Environment(\.dismiss) private var dismiss
+/// Free music: the starter shelf. Pick sets, and they download into Music › Sottova Library, which Sottova watches,
+/// so each piece shows up as it lands. The download carries on while you're on another page.
+struct ShelfPage: View {
+    @Environment(Controller.self) private var controller
     @State private var picked: Set<ShelfSet.ID> = Set(Shelf.sets.filter { !ShelfDownload.isDone($0) }.map(\.id))
     private let shelf = ShelfDownload.shelf
 
     var body: some View {
         let chosen = Shelf.sets.filter { picked.contains($0.id) && !ShelfDownload.isDone($0) }
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Free music")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                Text("public domain and Creative Commons recordings from archive.org, saved to Music › Sottova Library as plain files")
+        PageScroll {
+            PageHeader(title: "Free music",
+                       detail: "public domain and Creative Commons recordings from archive.org, saved to Music › Sottova Library as plain files",
+                       songs: [])
+                .padding(.bottom, 16)
+            // where Play sits on the other pages
+            Group {
+                if shelf.running {
+                    Button("Stop") { ShelfDownload.task?.cancel() }
+                } else {
+                    Button(chosen.isEmpty ? "Everything's in your library" : "Download \(Self.size(chosen.reduce(0) { $0 + $1.megabytes }))") {
+                        start(chosen)
+                    }
+                    .disabled(chosen.isEmpty)
+                }
+            }
+            .buttonStyle(InvertedButton())
+            .padding(.bottom, 8)
+            if let problem = shelf.problem {
+                Text(problem)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             ForEach(ShelfSet.Kind.allCases, id: \.self) { kind in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(kind.rawValue)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.faint)
-                        .padding(.bottom, 4)
+                SectionTitle(title: kind.rawValue)
+                    .padding(.top, 24)
+                    .padding(.bottom, 8)
+                VStack(spacing: 2) {
                     ForEach(Shelf.sets.filter { $0.kind == kind }) { row($0) }
                 }
-            }
-
-            if let problem = shelf.problem {
-                Text(problem)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.muted)
-            }
-
-            HStack(spacing: 12) {
-                Spacer()
-                Button(shelf.running ? "Close" : "Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .buttonStyle(QuietButton())
-                if shelf.running {
-                    Button("Stop") { ShelfDownload.task?.cancel() }
-                        .buttonStyle(InvertedButton())
-                } else {
-                    Button("Download \(Self.size(chosen.reduce(0) { $0 + $1.megabytes }))") { start(chosen) }
-                        .buttonStyle(InvertedButton())
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(chosen.isEmpty)
-                }
+                .frame(maxWidth: 720)
             }
         }
-        .padding(24)
-        .frame(width: 520)
-        .background(Theme.background)
-        .presentationBackground(Theme.background)
     }
 
     private func row(_ set: ShelfSet) -> some View {
@@ -78,17 +64,17 @@ struct ShelfSheet: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.text)
                     Text("\(set.creator) · \(set.license)")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 13))
                         .foregroundStyle(Theme.muted)
                 }
                 Spacer(minLength: 12)
                 Text(done ? "in your library" : progress.map { "\(Int($0 * 100))%" } ?? Self.size(set.megabytes))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 13))
                     .monospacedDigit()
                     .foregroundStyle(Theme.faint)
             }
-            .padding(.horizontal, 8)
-            .frame(height: 44)
+            .padding(.horizontal, 12)
+            .frame(height: 56)
             .overlay(alignment: .bottom) {
                 // the set's share of the download, a hairline under its row
                 if let progress, !done {
@@ -96,7 +82,7 @@ struct ShelfSheet: View {
                         Rectangle().fill(Theme.text).frame(width: geo.size.width * progress, height: 1)
                     }
                     .frame(height: 1)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 12)
                 }
             }
             .contentShape(.rect)
@@ -122,7 +108,7 @@ struct ShelfSheet: View {
     }
 }
 
-/// One download for the app, so it outlives the sheet and both windows show the same one.
+/// One download for the app, so it outlives the page.
 @MainActor
 enum ShelfDownload {
     static let shelf = Shelf()

@@ -642,7 +642,6 @@ private struct PaletteCard: View {
 private struct LibraryPage: View {
     let controller: Controller
     @State private var showsSkipped = false
-    @State private var showsShelf = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -671,12 +670,8 @@ private struct LibraryPage: View {
                 }
                 .buttonStyle(PressStyle(scale: 0.97))
                 .help("look through the folders again now, instead of waiting for a change")
-                Button("Get free music") { showsShelf = true }
-                    .buttonStyle(QuietButton())
-                    .help("public domain and Creative Commons recordings from archive.org")
             }
             .padding(.top, 16)
-            .sheet(isPresented: $showsShelf) { ShelfSheet(controller: controller) }
 
             if !controller.skippedFiles.isEmpty {
                 Heading(title: "Can't be played", value: Format.count(controller.skippedFiles.count, "file"))
