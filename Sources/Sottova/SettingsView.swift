@@ -133,7 +133,8 @@ private struct PlaybackPage: View {
             ScoreDiagram(settings: s)
 
             Heading(title: "Mode")
-            HStack(spacing: 12) {
+            // three to a row: five in one squeezed the names into two lines
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
                 ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
                     PresetCard(preset: preset, active: s.name == preset.name,
                            accent: 2 + 4 * (SottovaCore.Settings.presets.firstIndex { $0.name == preset.name } ?? 0)) { controller.apply(preset) }
@@ -292,12 +293,13 @@ struct PresetCard: View {
     }
 }
 
-/// The shortest and longest gap on one track, on a log scale so 30 s and 20 min both get room. Snaps to 30 s.
+/// The shortest and longest gap on one track, on a log scale so 2 s and 20 min both get room. Snaps to a second
+/// below 30 s and to 30 s above.
 struct GapRange: View {
     @Binding var low: Double
     @Binding var high: Double
     private let maximum = 1200.0
-    private let ticks: [(Double, String)] = [(0, "0"), (30, "30 s"), (120, "2 min"), (300, "5 min"), (600, "10 min"), (1200, "20 min")]
+    private let ticks: [(Double, String)] = [(0, "0"), (10, "10 s"), (30, "30 s"), (120, "2 min"), (300, "5 min"), (600, "10 min"), (1200, "20 min")]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -328,8 +330,8 @@ struct GapRange: View {
         }
         .padding(.horizontal, 8)
         .accessibilityRepresentation {
-            Slider(value: $low, in: 0...maximum, step: 30) { Text("Shortest gap") }
-            Slider(value: $high, in: 0...maximum, step: 30) { Text("Longest gap") }
+            Slider(value: $low, in: 0...maximum, step: 1) { Text("Shortest gap") }
+            Slider(value: $high, in: 0...maximum, step: 1) { Text("Longest gap") }
         }
     }
 
@@ -347,7 +349,8 @@ struct GapRange: View {
 
     private func seconds(at position: CGFloat) -> Double {
         let p = Double(min(max(position, 0), 1))
-        return ((pow(101, p) - 1) / 100 * maximum / 30).rounded() * 30
+        let s = (pow(101, p) - 1) / 100 * maximum
+        return s < 30 ? s.rounded() : (s / 30).rounded() * 30
     }
 }
 

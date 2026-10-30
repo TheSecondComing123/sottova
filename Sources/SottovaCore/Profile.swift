@@ -31,6 +31,8 @@ public struct Settings: Equatable, Sendable {
         preset("Minecraft", gap: 600...1200, fadeIn: 6, fadeOut: 8),
         preset("Sparse", gap: 180...480, fadeIn: 6, fadeOut: 8),
         preset("Short", gap: 30...120, fadeIn: 4, fadeOut: 6),
+        // seconds, what people ask other players for: a breath between pieces, not a pause
+        preset("Breath", gap: 2...15, fadeIn: 3, fadeOut: 4),
         preset("Continuous", gap: 0...0, fadeIn: 3, fadeOut: 3, crossfade: true),
     ]
 

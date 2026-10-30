@@ -45,6 +45,17 @@ struct MachineTests {
         #expect(tick(&m, seconds: 0.11) == [.startNextTrack])
     }
 
+    @Test func breathRestsAFewSeconds() {
+        let breath = Settings.presets.first { $0.name == "Breath" }!
+        for seed in UInt64(1)...200 {
+            var m = Machine(settings: breath, seed: seed)
+            _ = m.handle(.start)
+            _ = m.handle(.trackStarted(duration: 20))
+            _ = tick(&m, seconds: 20.01)
+            #expect((2...15).contains(m.restRemaining ?? -1))
+        }
+    }
+
     @Test func fullTrackFadesInHoldsFadesOutThenRests() {
         var m = playing()
         let effects = tick(&m, seconds: 181)

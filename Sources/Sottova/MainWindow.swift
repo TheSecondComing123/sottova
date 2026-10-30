@@ -297,7 +297,7 @@ private struct Sidebar: View {
 
     /// Spread across the accents so neighbors differ: 2, 6, 10, 14…
     private func presetAccent(_ preset: SottovaCore.Settings) -> Int {
-        2 + 4 * (SottovaCore.Settings.presets.firstIndex { $0.name == preset.name } ?? 4)
+        2 + 4 * (SottovaCore.Settings.presets.firstIndex { $0.name == preset.name } ?? SottovaCore.Settings.presets.count)
     }
 
     private func presetRow(_ preset: SottovaCore.Settings) -> some View {

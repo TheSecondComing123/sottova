@@ -602,12 +602,16 @@ private struct AlbumGaps: View {
                 GridRow {
                     preset(2, own)
                     preset(3, own)
-                    card(named("Custom", own ?? yours), active: own?.name == "Custom", accent: 2 + 4 * 4) {
+                    preset(4, own)
+                }
+                GridRow {
+                    card(named("Custom", own ?? yours), active: own?.name == "Custom", accent: 2 + 4 * SottovaCore.Settings.presets.count) {
                         var custom = own ?? yours
                         custom.name = "Custom"
                         custom.crossfade = false
                         gaps = custom
                     }
+                    .gridCellColumns(3)
                 }
             }
 
