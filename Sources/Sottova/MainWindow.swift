@@ -74,6 +74,7 @@ struct MainWindow: View {
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
         .sheet(item: Binding(get: { router.trimming }, set: { router.trimming = $0 })) { TrimSheet(song: $0) }
+        .sheet(isPresented: Binding(get: { router.shelf }, set: { router.shelf = $0 })) { ShelfSheet(controller: controller) }
     }
 
     @ViewBuilder

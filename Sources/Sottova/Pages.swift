@@ -1196,6 +1196,7 @@ struct SearchPage: View {
 private struct EmptyLibrary: View {
     let what: String
     @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
 
     var body: some View {
         VStack(spacing: 16) {
@@ -1211,8 +1212,13 @@ private struct EmptyLibrary: View {
             .font(.system(size: 13))
             .foregroundStyle(Theme.muted)
             if controller.pendingAnalysis == 0 {
-                Button("Add a music folder", action: controller.chooseFolders)
-                    .buttonStyle(InvertedButton())
+                HStack(spacing: 12) {
+                    Button("Add a music folder", action: controller.chooseFolders)
+                        .buttonStyle(InvertedButton())
+                    // no music yet: something to hear in a minute or two, legally
+                    Button("Get free music") { router.shelf = true }
+                        .buttonStyle(QuietButton())
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
