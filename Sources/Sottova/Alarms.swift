@@ -562,9 +562,12 @@ final class SystemWake {
             .compactMap { Self.format.date(from: String($0.1)) })
     }
 
-    /// A sudoers rule that lets this user schedule wakes, and nothing else, without a password. It goes in with
-    /// the one password prompt, so later wakes are added as the days go by without asking again.
-    static let rule = "/etc/sudoers.d/sottova"
+    /// A sudoers rule that lets this user schedule a wake at a date and time, and nothing else, without a password.
+    /// It goes in with the one password prompt, so later wakes are added as the days go by without asking again.
+    static let rule = "/etc/sudoers.d/sottova-2"
+    /// The first rule ended in `*`, which also matches spaces, so it let extra arguments through. It still schedules
+    /// wakes, and the next password prompt replaces it. The app can't read either file, only see which one exists.
+    static let looseRule = "/etc/sudoers.d/sottova"
     var trusted: Bool { FileManager.default.fileExists(atPath: Self.rule) }
 
     /// The wakes the alarms that are on need in the next two weeks, soonest first.
@@ -587,19 +590,22 @@ final class SystemWake {
 
     /// Fills in the wakes without asking, once the rule is in. Runs at launch and on every wake from sleep.
     func renew(for alarms: [Alarm]) {
-        if trusted { schedule(for: alarms) }
+        if trusted || FileManager.default.fileExists(atPath: Self.looseRule) { schedule(for: alarms, asking: false) }
     }
 
     /// Schedules every missing wake, asking for the password first if the rule isn't in yet. A wake left from a
     /// deleted alarm stays: it only wakes the Mac, which goes back to sleep.
-    func schedule(for alarms: [Alarm]) {
+    func schedule(for alarms: [Alarm], asking: Bool = true) {
         refresh()
         let dates = missing(for: alarms)
-        guard !dates.isEmpty else { return }
-        if !trusted {
-            // written and checked under a name with a dot, which sudo skips, so a bad rule never takes effect
-            let line = "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron *"
-            let install = "echo '\(line)' > /etc/sudoers.d/.sottova && chmod 440 /etc/sudoers.d/.sottova && /usr/sbin/visudo -cf /etc/sudoers.d/.sottova && mv /etc/sudoers.d/.sottova /etc/sudoers.d/sottova || { rm -f /etc/sudoers.d/.sottova; exit 1; }"
+        // the loose rule keeps wakes topped up, so nothing may be missing; saving an alarm still swaps it out
+        let loose = !trusted && FileManager.default.fileExists(atPath: Self.looseRule)
+        guard !dates.isEmpty || (loose && asking) else { return }
+        if !trusted, asking {
+            // written and checked under a name with a dot, which sudo skips, so a bad rule never takes effect; the
+            // loose first rule goes once the new one is in
+            let line = "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron \(Self.datePattern)"
+            let install = "echo '\(line)' > /etc/sudoers.d/.sottova && chmod 440 /etc/sudoers.d/.sottova && /usr/sbin/visudo -cf /etc/sudoers.d/.sottova && mv /etc/sudoers.d/.sottova \(Self.rule) && rm -f \(Self.looseRule) || { rm -f /etc/sudoers.d/.sottova; exit 1; }"
             var error: NSDictionary?
             NSAppleScript(source: "do shell script \"\(install)\" with administrator privileges")?.executeAndReturnError(&error)
             if let error {
@@ -613,6 +619,10 @@ final class SystemWake {
         failure = failed.isEmpty ? nil : "couldn't schedule \(failed.count) of the wakes: pmset said no"
         refresh()
     }
+
+    /// `format` as a sudoers glob, digits only so nothing can follow it: "10/30/2026 06:58:00". The colons are `?`
+    /// because sudoers wants a colon escaped.
+    static let datePattern = "[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9] [0-9][0-9]?[0-9][0-9]?[0-9][0-9]"
 
     private static func pmset(_ date: Date) -> Bool {
         let sudo = Process()

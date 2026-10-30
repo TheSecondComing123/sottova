@@ -113,16 +113,16 @@ nothing leaves your Mac. there's no account and no analytics. the only network a
 alarms need the Mac awake, so sottova schedules a system wake two minutes before each one with `pmset`. scheduling a wake needs root. the first time you save an alarm, sottova asks for your password once and adds this rule:
 
 ```
-/etc/sudoers.d/sottova
-<you> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron *
+/etc/sudoers.d/sottova-2
+<you> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron [0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9] [0-9][0-9]?[0-9][0-9]?[0-9][0-9]
 ```
 
-it lets sottova add wakes, and nothing else, without asking again. it's checked with `visudo` before it goes in. wakes are kept two weeks ahead, topped up at launch and whenever the Mac wakes. cancel the password prompt and alarms only play when the Mac is already awake.
+it lets sottova add a wake at a date and time, and nothing else, without asking again. it's checked with `visudo` before it goes in. wakes are kept two weeks ahead, topped up at launch and whenever the Mac wakes. cancel the password prompt and alarms only play when the Mac is already awake.
 
 to undo it:
 
 ```sh
-sudo rm /etc/sudoers.d/sottova
+sudo rm /etc/sudoers.d/sottova-2
 pmset -g sched                  # see what's scheduled
 sudo pmset schedule cancelall   # removes every scheduled wake, not only sottova's
 ```
