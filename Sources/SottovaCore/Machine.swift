@@ -99,6 +99,8 @@ struct Machine: Sendable {
         /// After a relaunch: the piece at this point, or a gap with this much left, paused. Nothing plays until resume.
         case restoreTrack(duration: Double, at: Double)
         case restoreRest(left: Double)
+        /// The answer to `planGap`: how long this silence lasts.
+        case gap(Double)
     }
 
     /// Stop after `left` more seconds of playing time, easing the volume down over the last `fade` of them;
@@ -117,6 +119,8 @@ struct Machine: Sendable {
         case seekPlayback(Double)
         /// Crossfade: the current deck keeps fading out as the outgoing one; the next track starts on the other deck.
         case handOff, setOutgoingGain(Double), stopOutgoing
+        /// A piece ended and the silence began: choose its length, now that what comes next can be seen.
+        case planGap
     }
 
     var settings: Settings
@@ -334,8 +338,13 @@ struct Machine: Sendable {
                 phase = .loading
                 return [.setGain(0), .stopTrack(skipped: true), .startNextTrack]
             }
+            // a draw from these settings stands until `planGap` is answered, as it never is when the machine runs alone
             phase = .resting(elapsed: 0, gap: Double.random(in: settings.gapRange, using: &rng))
-            return [.setGain(0), .stopTrack(skipped: false)]
+            return [.setGain(0), .planGap, .stopTrack(skipped: false)]
+
+        case (.gap(let gap), .resting(let elapsed, _)):
+            phase = .resting(elapsed: elapsed, gap: gap)
+            return []
 
         case (.tick(let dt), .resting(let elapsed, let gap)) where !paused:
             guard elapsed + dt >= gap else {

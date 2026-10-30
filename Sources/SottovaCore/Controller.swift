@@ -703,6 +703,16 @@ public final class Controller {
         return albums.count == 1 ? albums.first : nil
     }
 
+    /// The silence before a piece belongs to where it comes from: an album or playlist with gaps of its own brings
+    /// them, anything else (or the shuffler's pick, when nothing is queued) has the user's. Worked out the way
+    /// `useAlbumSettings` will apply them when the piece starts, without applying them.
+    func gapRange(beforeNext entry: QueueEntry?) -> ClosedRange<Double> {
+        if let id = entry?.source, let album = albumSettings[id] ?? playlists.first(where: { $0.id == id })?.gaps {
+            return album.gaps(over: yourSettings).gapRange
+        }
+        return yourSettings.gapRange
+    }
+
     /// The next path to play, putting its source's gaps in place, or nil when the shuffler should pick.
     func dequeue() -> String? {
         guard !upNext.isEmpty else {
@@ -948,6 +958,8 @@ public final class Controller {
         switch effect {
         case .startNextTrack:
             startNextTrack()
+        case .planGap:
+            send(.gap(Double.random(in: gapRange(beforeNext: upNext.first), using: &rng)))
         case .setGain(let gain):
             // above 1 boosts: measured on macOS 26 despite the documented 0–1 range, and covered by RenderTests
             mixers[active].outputVolume = Float(gain * trackGain)

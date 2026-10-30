@@ -34,6 +34,17 @@ struct MachineTests {
         #expect(m.status == .playing)
     }
 
+    @Test func theGapIsChosenAsThePieceEnds() {
+        var m = playing(duration: 10)
+        let effects = tick(&m, seconds: 10.01)
+        // asked for before the stop, so the play log records the gap that was chosen
+        #expect(effects.suffix(3) == [.setGain(0), .planGap, .stopTrack(skipped: false)])
+        #expect(m.handle(.gap(7)) == [])
+        #expect(m.restRemaining == 7)
+        #expect(tick(&m, seconds: 6.9).isEmpty)
+        #expect(tick(&m, seconds: 0.11) == [.startNextTrack])
+    }
+
     @Test func fullTrackFadesInHoldsFadesOutThenRests() {
         var m = playing()
         let effects = tick(&m, seconds: 181)

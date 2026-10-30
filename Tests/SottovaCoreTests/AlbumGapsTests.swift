@@ -67,6 +67,18 @@ struct AlbumGapsTests {
         #expect(reopened.albumSettings == ["compline": minecraft])
     }
 
+    @Test func theSilenceBeforeAPieceIsWhereItComesFrom() {
+        let (c, _) = controller()
+        let yours = c.settings.gapRange
+        // shuffle playing, Compline queued next: its own silence comes before it
+        #expect(c.gapRange(beforeNext: QueueEntry(path: "/a.flac", source: "compline")) == minecraft.gapRange)
+        // Compline ending, nothing queued: the shuffler's pick comes back with yours at once
+        c.useAlbumSettings(for: "compline")
+        #expect(c.gapRange(beforeNext: nil) == yours)
+        #expect(c.gapRange(beforeNext: QueueEntry(path: "/b.flac", source: "lauds")) == yours)
+        #expect(c.gapRange(beforeNext: QueueEntry(path: "/c.flac", source: "compline")) == minecraft.gapRange)
+    }
+
     @Test func aProfileThisBuildCantReadIsSetAsideNotOverwritten() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-album-gaps-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
