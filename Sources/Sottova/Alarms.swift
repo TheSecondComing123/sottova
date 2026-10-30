@@ -169,6 +169,12 @@ struct AlarmSheet: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                     .transition(.opacity)
+                    // the machine's rise, Machine.riseLength
+                    Text("starts silent and rises to this over a minute and a half")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.faint)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(.opacity)
                 }
             }
             .toggleStyle(KnobToggle())
@@ -195,7 +201,7 @@ struct AlarmSheet: View {
                 if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
                         .buttonStyle(QuietButton())
-                        .help("a few seconds of how it starts, at its volume")
+                        .help("a few seconds at the volume it rises to")
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }

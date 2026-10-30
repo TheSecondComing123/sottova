@@ -68,7 +68,7 @@ public final class Controller {
     @ObservationIgnored private var active = 0
     @ObservationIgnored private let storage: URL?
     @ObservationIgnored var library = Library()
-    @ObservationIgnored private var machine: Machine
+    @ObservationIgnored private(set) var machine: Machine
     @ObservationIgnored private var shuffler = Shuffler()
     @ObservationIgnored private var rng = SystemRandomNumberGenerator()
     @ObservationIgnored private var file: AVAudioFile?
@@ -168,8 +168,10 @@ public final class Controller {
 
     private var tickInterval: Duration {
         let envelope = envelopeInterval
-        // the sleep timer's ease-down moves the gain too: at 10 Hz its steps are 0.03 dB
-        guard status == .playing, case .timer(let left, let fade)? = machine.sleep else { return envelope }
+        // the sleep timer's ease-down moves the gain too: at 10 Hz its steps are 0.03 dB; an alarm's rise, 0.07 dB
+        guard status == .playing else { return envelope }
+        if machine.rise != nil { return min(envelope, .milliseconds(100)) }
+        guard case .timer(let left, let fade)? = machine.sleep else { return envelope }
         return min(envelope, .milliseconds(Int(max(0.1, left - fade) * 1000)))
     }
 
@@ -376,6 +378,7 @@ public final class Controller {
             play(alarm.shuffled ? Self.alarmOrder(songs, at: alarm, due: due, history: history, using: &rng) : songs,
                  source: playlist, shuffled: alarm.shuffled)
             if status == .paused { toggle() }
+            command(.rise)
             if let minutes = alarm.minutes { sleep(minutes: Double(minutes)) }
         } else {
             problem = "the \(alarm.name) alarm went off, but there's nothing in it to play"

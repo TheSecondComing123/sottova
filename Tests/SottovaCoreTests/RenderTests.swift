@@ -209,6 +209,8 @@ struct RenderTests {
         print("alarm due \(fireAt.timeIntervalSince1970), piece started \(controller.startedAt.timeIntervalSince1970)")
         #expect(controller.current?.album == "Lauds")
         #expect(controller.alarms.isEmpty)
+        // it rose from silence, and is still rising 4 s in
+        #expect(controller.machine.rise != nil)
         // it stops an hour after it started, through the sleep timer's ease-down
         guard case .at(let end) = controller.sleepTimer else { Issue.record("no sleep timer"); return }
         #expect(abs(end.timeIntervalSince(fireAt) - 3600) < 10)

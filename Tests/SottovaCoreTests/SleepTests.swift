@@ -131,4 +131,37 @@ struct SleepTests {
         _ = playingNow.handle(.sleep(after: 3600))
         #expect(playingNow.handle(.sleepNow) == [.setGain(0), .stopTrack(skipped: false)])
     }
+
+    @Test func anAlarmRisesFromSilenceOverAMinuteAndAHalf() {
+        var m = playing()
+        _ = tick(&m, seconds: 10)
+        #expect(gains(m.handle(.rise)) == [0])
+        let g = gains(tick(&m, seconds: 45))
+        #expect(zip(g, g.dropFirst()).allSatisfy { $0 <= $1 })
+        // halfway, dB-linear from −60 dB: −30 dB
+        #expect(abs(g.last! - FadeCurve.dbLinear.fadeIn(0.5)) < 0.001)
+        _ = tick(&m, seconds: 45.5)
+        #expect(m.rise == nil)
+        #expect(gains(tick(&m, seconds: 1)).allSatisfy { $0 == 1 })
+    }
+
+    @Test func aPauseOrAGapHoldsTheRise() {
+        var m = playing(duration: 40)
+        _ = m.handle(.rise)
+        _ = tick(&m, seconds: 30)
+        _ = m.handle(.pause)
+        _ = tick(&m, seconds: 60)
+        _ = m.handle(.resume)
+        #expect(abs(m.rise! - 60) < 0.01)
+        // the piece ends 10 s later, then 25 s of a gap of at least 30 don't count
+        _ = tick(&m, seconds: 35)
+        #expect(m.status == .resting)
+        #expect(abs(m.rise! - 50) < 0.1)
+    }
+
+    @Test func aRiseNeedsSomethingPlaying() {
+        var m = Machine(settings: Self.settings, seed: 1)
+        #expect(m.handle(.rise) == [])
+        #expect(m.rise == nil)
+    }
 }
