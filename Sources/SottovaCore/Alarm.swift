@@ -18,6 +18,8 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     public var on = true
     /// What the volume is set to as it starts, so a speaker left loud isn't a jolt; nil leaves it.
     public var volume: Double?
+    /// How long it plays before easing down to a stop, through the sleep timer; nil plays on.
+    public var minutes: Int?
 
     public init(source: String, name: String, hour: Int, minute: Int, weekdays: Set<Int> = [], day: Date? = nil, shuffled: Bool = false) {
         self.source = source
@@ -30,7 +32,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume
+        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes
     }
 
     // alarms.json from before alarms could be turned off has no `on`
@@ -46,6 +48,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         shuffled = try c.decode(Bool.self, forKey: .shuffled)
         on = try c.decodeIfPresent(Bool.self, forKey: .on) ?? true
         volume = try c.decodeIfPresent(Double.self, forKey: .volume)
+        minutes = try c.decodeIfPresent(Int.self, forKey: .minutes)
     }
 
     /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.

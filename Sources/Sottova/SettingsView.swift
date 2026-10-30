@@ -360,6 +360,7 @@ struct ValueStepper: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let unit: String
+    var step: Double = 1
 
     var body: some View {
         HStack(spacing: 0) {
@@ -370,20 +371,20 @@ struct ValueStepper: View {
                     .padding(.leading, 12)
                     .padding(.trailing, 8)
             }
-            step(.minus, by: -1)
+            step(.minus, by: -step)
             Text("\(Int(value)) \(unit)")
                 .font(.system(size: 13, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(Theme.text)
                 .frame(minWidth: 64)
                 .contentTransition(.numericText(value: value))
-            step(.plus, by: 1)
+            step(.plus, by: step)
         }
         .frame(height: 32)
         .background(Theme.raised, in: .rect(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
         .accessibilityRepresentation {
-            Stepper("\(label ?? "") \(Int(value)) \(unit)", value: $value, in: range, step: 1)
+            Stepper("\(label ?? "") \(Int(value)) \(unit)", value: $value, in: range, step: step)
         }
     }
 

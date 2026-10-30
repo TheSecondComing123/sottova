@@ -25,6 +25,7 @@ struct AlarmSheet: View {
     @State private var repeats: Repeat
     @State private var shuffled: Bool
     @State private var volume: Double?
+    @State private var minutes: Int?
     private let preview = AlarmPreview.shared
 
     enum Repeat: String, CaseIterable {
@@ -52,12 +53,14 @@ struct AlarmSheet: View {
             _shuffled = State(initialValue: false)
             // quiet by default: whatever the speaker is turned up to, this is what wakes you
             _volume = State(initialValue: 0.15)
+            _minutes = State(initialValue: nil)
         case .edit(let alarm):
             _source = State(initialValue: alarm.source)
             _time = State(initialValue: Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: .now)!)
             _repeats = State(initialValue: Repeat.allCases.first { $0.days == alarm.weekdays } ?? .weekdays)
             _shuffled = State(initialValue: alarm.shuffled)
             _volume = State(initialValue: alarm.volume)
+            _minutes = State(initialValue: alarm.minutes)
         }
     }
 
@@ -88,6 +91,7 @@ struct AlarmSheet: View {
         let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
         var alarm = Alarm(source: source, name: name, hour: parts.hour ?? 7, minute: parts.minute ?? 0, weekdays: repeats.days, shuffled: shuffled)
         alarm.volume = volume
+        alarm.minutes = minutes
         if case .edit(let old) = request {
             alarm.id = old.id
             alarm.on = old.on
@@ -169,6 +173,24 @@ struct AlarmSheet: View {
             }
             .toggleStyle(KnobToggle())
             .animation(Theme.quick, value: volume == nil)
+            VStack(spacing: 8) {
+                Toggle("Stop after a while", isOn: Binding(get: { minutes != nil }, set: { minutes = $0 ? 60 : nil }))
+                if let length = minutes {
+                    HStack(spacing: 12) {
+                        ValueStepper(value: Binding(get: { Double(length) }, set: { minutes = Int($0) }), range: 15...480, unit: "min", step: 15)
+                        Spacer(minLength: 0)
+                        // the sleep timer's ease-down, so the last three minutes get quieter
+                        if let alarm {
+                            Text("easing down to a stop at \(AlarmLine.end(of: alarm, minutes: length))")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Theme.faint)
+                        }
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .toggleStyle(KnobToggle())
+            .animation(Theme.quick, value: minutes == nil)
             HStack(spacing: 12) {
                 if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
@@ -373,7 +395,7 @@ private struct AlarmRow: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Theme.text)
                             .lineLimit(1)
-                        Text(AlarmLine.days(alarm) + (alarm.shuffled ? ", shuffled" : ""))
+                        Text(AlarmLine.days(alarm) + (alarm.shuffled ? ", shuffled" : "") + (alarm.minutes.map { ", until \(AlarmLine.end(of: alarm, minutes: $0))" } ?? ""))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.muted)
                     }
@@ -495,7 +517,13 @@ struct AlarmLine: View {
 
     /// "starts at 7:02 tomorrow", "starts at 7:02 on weekdays".
     static func describe(_ alarm: Alarm) -> String {
-        "starts at \(time(alarm)) \(days(alarm))"
+        "starts at \(time(alarm)) \(days(alarm))" + (alarm.minutes.map { ", stops at \(end(of: alarm, minutes: $0))" } ?? "")
+    }
+
+    /// When an alarm that stops after `minutes` goes quiet: "9:00 PM".
+    static func end(of alarm: Alarm, minutes: Int) -> String {
+        ((Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: .now) ?? .now) + Double(minutes) * 60)
+            .formatted(date: .omitted, time: .shortened)
     }
 
     static func time(_ alarm: Alarm) -> String {

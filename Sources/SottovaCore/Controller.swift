@@ -356,6 +356,7 @@ public final class Controller {
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
             play(alarm.shuffled ? songs.shuffled() : songs, source: playlist, shuffled: alarm.shuffled)
             if status == .paused { toggle() }
+            if let minutes = alarm.minutes { sleep(minutes: Double(minutes)) }
         } else {
             problem = "the \(alarm.name) alarm went off, but there's nothing in it to play"
         }

@@ -197,7 +197,9 @@ struct RenderTests {
         let album = try #require(controller.catalog.albums.first)
         let soon = Date.now.addingTimeInterval(60)
         let parts = Calendar.current.dateComponents([.hour, .minute], from: soon)
-        controller.addAlarm(Alarm(source: album.id, name: "Lauds", hour: parts.hour!, minute: parts.minute!, day: soon))
+        var alarm = Alarm(source: album.id, name: "Lauds", hour: parts.hour!, minute: parts.minute!, day: soon)
+        alarm.minutes = 60
+        controller.addAlarm(alarm)
         #expect(controller.status == .idle)
         let fireAt = controller.nextAlarm()!.at
         // a busy main thread can wake this test late, so judge by when the piece really started, not when we looked
@@ -207,6 +209,9 @@ struct RenderTests {
         print("alarm due \(fireAt.timeIntervalSince1970), piece started \(controller.startedAt.timeIntervalSince1970)")
         #expect(controller.current?.album == "Lauds")
         #expect(controller.alarms.isEmpty)
+        // it stops an hour after it started, through the sleep timer's ease-down
+        guard case .at(let end) = controller.sleepTimer else { Issue.record("no sleep timer"); return }
+        #expect(abs(end.timeIntervalSince(fireAt) - 3600) < 10)
     }
 
     /// A file that's a second of silence, like a spoken intro to cut, then two seconds of sound.
