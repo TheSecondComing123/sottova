@@ -78,3 +78,44 @@ struct AlarmTests {
         #expect(times == [date(2026, 10, 30, 7, 2), date(2026, 11, 2, 7, 2), date(2026, 11, 3, 7, 2), date(2026, 11, 4, 7, 2), date(2026, 11, 5, 7, 2)])
     }
 }
+
+struct AlarmOrderTests {
+    private func song(_ path: String) -> Song {
+        Song(id: path, title: path, work: path, detail: nil, artist: "", album: "Lauds", albumID: "Lauds", albumArtist: "",
+             composer: nil, trackNumber: nil, discNumber: nil, year: nil, duration: 60, artwork: nil, searchKey: path)
+    }
+
+    @Test func aShuffledAlarmNeverOpensWithYesterdaysFirstPiece() {
+        let calendar = Calendar(identifier: .gregorian)
+        let songs = (1...10).map { song("/Lauds/\($0).flac") }
+        let alarm = Alarm(source: "Lauds", name: "Lauds", hour: 7, minute: 2, weekdays: [2, 3, 4, 5, 6])
+        let due = calendar.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 7, minute: 2))!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: due)!
+        let history = [
+            PlayRecord(file: "/Lauds/1.flac", startedAt: yesterday + 1, skipped: false, gapAfterSec: 200, heardSec: 453),
+            // later that morning, not an opening
+            PlayRecord(file: "/Lauds/2.flac", startedAt: yesterday + 757, skipped: true, gapAfterSec: 0, heardSec: 84),
+        ]
+        var rng = SplitMix64(seed: 7)
+        var openers = Set<String>()
+        for _ in 0..<500 {
+            let order = Controller.alarmOrder(songs, at: alarm, due: due, history: history, calendar: calendar, using: &rng)
+            #expect(Set(order) == Set(songs))
+            openers.insert(order[0].id)
+        }
+        #expect(!openers.contains("/Lauds/1.flac"))
+        // still a shuffle: every other piece gets to open
+        #expect(openers.count == 9)
+    }
+
+    @Test func withNothingElseLeftItStillPlays() {
+        let only = [song("/Lauds/1.flac")]
+        let alarm = Alarm(source: "Lauds", name: "Lauds", hour: 7, minute: 2)
+        let due = Date(timeIntervalSince1970: 1_793_000_000)
+        let then = Calendar.current.date(bySettingHour: 7, minute: 2, second: 0, of: due - 86_400)!
+        var rng = SplitMix64(seed: 1)
+        let order = Controller.alarmOrder(only, at: alarm, due: due, history: [PlayRecord(file: "/Lauds/1.flac", startedAt: then,
+                                                                                            skipped: false, gapAfterSec: 0)], using: &rng)
+        #expect(order.map(\.id) == ["/Lauds/1.flac"])
+    }
+}

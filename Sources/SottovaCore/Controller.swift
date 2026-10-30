@@ -346,6 +346,24 @@ public final class Controller {
     /// How late an alarm may still start: a Mac that slept through it and wakes at noon stays quiet.
     static let alarmLateness: TimeInterval = 10 * 60
 
+    /// A shuffled alarm doesn't open with what an alarm opened with at the same time on any of the last seven days:
+    /// those pieces move back from the front of the order, as long as something else is left to go first.
+    nonisolated static func alarmOrder(_ songs: [Song], at alarm: Alarm, due: Date, history: [PlayRecord],
+                           calendar: Calendar = .current, using rng: inout some RandomNumberGenerator) -> [Song] {
+        let opened = Set(history.filter { record in
+            (1...7).contains { back in
+                guard let day = calendar.date(byAdding: .day, value: -back, to: due),
+                      let then = calendar.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: day) else { return false }
+                return (0..<120).contains(record.startedAt.timeIntervalSince(then))
+            }
+        }.map(\.file))
+        var order = songs.shuffled(using: &rng)
+        if let fresh = order.firstIndex(where: { !opened.contains($0.id) }) {
+            order.insert(order.remove(at: fresh), at: 0)
+        }
+        return order
+    }
+
     func fire(_ id: Alarm.ID, due: Date, now: Date = .now) {
         guard let alarm = alarms.first(where: { $0.id == id }) else { return }
         let songs = playlists.first { $0.id == alarm.source }.map(songs(of:)) ?? catalog.albumsByID[alarm.source]?.songs ?? []
@@ -354,7 +372,9 @@ public final class Controller {
         } else if !songs.isEmpty {
             if let volume = alarm.volume { self.volume = volume }
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
-            play(alarm.shuffled ? songs.shuffled() : songs, source: playlist, shuffled: alarm.shuffled)
+            let history = storage.map { PlayRecord.read($0.appending(path: "plays.jsonl"), last: 2000) } ?? []
+            play(alarm.shuffled ? Self.alarmOrder(songs, at: alarm, due: due, history: history, using: &rng) : songs,
+                 source: playlist, shuffled: alarm.shuffled)
             if status == .paused { toggle() }
             if let minutes = alarm.minutes { sleep(minutes: Double(minutes)) }
         } else {
