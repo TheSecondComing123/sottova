@@ -55,3 +55,19 @@ struct ID3Tests {
         #expect(frames(tagged) == ["TPE1": "Musopen"])
     }
 }
+
+@MainActor
+struct ShelfTests {
+    @Test func untaggedChopinFilesGetTitlesTheCatalogSplits() {
+        let file = { (name: String) in Shelf.Item.File(name: name, format: "VBR MP3", size: "1", title: nil) }
+        #expect(Shelf.title(file("Ballade no. 1 - Op. 23.mp3")) == "Ballade No. 1, Op. 23")
+        #expect(Shelf.title(file("Prelude Op. 28 no. 10.mp3")) == "Prelude Op. 28 No. 10")
+        #expect(Shelf.title(Shelf.Item.File(name: "x.mp3", format: nil, size: nil, title: "Allegro de concert, Op. 46 in A major"))
+                == "Allegro de concert, Op. 46 in A major")
+    }
+
+    @Test func everySetHasItsOwnFolder() {
+        #expect(Set(Shelf.sets.map(\.folder)).count == Shelf.sets.count)
+        #expect(!Shelf.sets.contains { $0.folder.contains("/") || $0.folder.contains(":") })
+    }
+}
