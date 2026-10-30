@@ -67,6 +67,20 @@ struct AlbumGapsTests {
         #expect(reopened.albumSettings == ["compline": minecraft])
     }
 
+    @Test func aProfileThisBuildCantReadIsSetAsideNotOverwritten() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-album-gaps-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // from a newer build
+        let newer = Data(#"{"schema":2,"settings":{"schema":2}}"#.utf8)
+        try newer.write(to: dir.appending(path: "profile.json"))
+        let c = Controller(storage: dir)
+        #expect(c.problem?.contains("profile.json.unreadable-") == true)
+        c.settings = sparse
+        let files = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+        let aside = try #require(files.first { $0.hasPrefix("profile.json.unreadable-") })
+        #expect(try Data(contentsOf: dir.appending(path: aside)) == newer)
+    }
+
     @Test func aProfileFromBeforeAlbumGapsStillLoads() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-album-gaps-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

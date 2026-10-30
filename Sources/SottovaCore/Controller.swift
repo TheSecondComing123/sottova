@@ -77,6 +77,8 @@ public final class Controller {
     @ObservationIgnored private var lastTrack: Track?
     @ObservationIgnored private(set) var startedAt = Date()
     @ObservationIgnored private var failures = 0
+    /// False when an unreadable profile.json couldn't be moved aside: saving would overwrite it.
+    @ObservationIgnored private var profileWritable = true
     @ObservationIgnored private var needsReschedule = false
     @ObservationIgnored private var pausedForSleep = false
     @ObservationIgnored private var assertion: IOPMAssertionID?
@@ -108,7 +110,8 @@ public final class Controller {
         self.storage = storage
         playlistStore = playlistFolder.map(PlaylistStore.init)
         artwork = storage.map { _ in ArtworkStore(directory: .cachesDirectory.appending(path: "Sottova/Artwork")) }
-        let file = Self.loadProfile(from: storage)
+        let (file, unreadable, writable) = Self.loadProfile(from: storage)
+        profileWritable = writable
         let profile = file?.settings ?? Settings.presets.first { $0.name == "Short" }!
         settings = profile
         albumSettings = file?.albums ?? [:]
@@ -131,6 +134,7 @@ public final class Controller {
             // avoid-last-N survives a relaunch
             shuffler.recent = PlayRecord.read(storage.appending(path: "plays.jsonl"), last: 20).map(\.file)
         }
+        problem = unreadable
         loadLibrary()
         loadPlaylists()
     }
@@ -1099,13 +1103,26 @@ public final class Controller {
         return max(1, Int(cores) - 1)
     }
 
-    private static func loadProfile(from storage: URL?) -> ProfileFile? {
-        guard let url = storage?.appending(path: "profile.json"), let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(ProfileFile.self, from: data)
+    /// A profile that won't decode (damaged, or written by a newer build) is moved aside before the defaults take over,
+    /// so the next save can't overwrite it.
+    private static func loadProfile(from storage: URL?) -> (ProfileFile?, problem: String?, writable: Bool) {
+        guard let url = storage?.appending(path: "profile.json"), let data = try? Data(contentsOf: url) else { return (nil, nil, true) }
+        do {
+            return (try JSONDecoder().decode(ProfileFile.self, from: data), nil, true)
+        } catch {
+            let stamp = Date.now.formatted(.iso8601.year().month().day().dateSeparator(.dash))
+            let aside = url.deletingLastPathComponent().appending(path: "profile.json.unreadable-\(stamp)-\(Int(Date.now.timeIntervalSince1970))")
+            do {
+                try FileManager.default.moveItem(at: url, to: aside)
+            } catch {
+                return (nil, "couldn't read profile.json or move it aside, so settings won't be saved this time: \(error.localizedDescription)", false)
+            }
+            return (nil, "couldn't read your settings, so these are the defaults. the old file is \(aside.lastPathComponent)", true)
+        }
     }
 
     private func saveProfile() {
-        guard let url = storage?.appending(path: "profile.json") else { return }
+        guard profileWritable, let url = storage?.appending(path: "profile.json") else { return }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
