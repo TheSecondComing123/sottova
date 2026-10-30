@@ -61,7 +61,12 @@ struct MainWindow: View {
         .environment(\.windowVisible, visible)
         .environment(\.renaming, $renaming)
         .environment(\.navigate, Navigate { route in
-            router.go(to: route)
+            // an album made yours opens as its copy
+            if case .album(let id) = route, let copy = controller.copy(ofAlbum: id) {
+                router.go(to: .playlist(copy.id))
+            } else {
+                router.go(to: route)
+            }
         })
         // drop music folders anywhere on the window
         .dropDestination(for: URL.self) { urls, _ in

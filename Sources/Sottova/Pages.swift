@@ -163,7 +163,7 @@ private struct Hero: View {
                             HStack(spacing: 8) {
                                 LinkText(text: song.artist) { navigate(.artist(song.artist)) }
                                 Text("·")
-                                LinkText(text: song.album) { navigate(.album(song.albumID)) }
+                                LinkText(text: controller.copy(ofAlbum: song.albumID)?.name ?? song.album) { navigate(.album(song.albumID)) }
                             }
                         }
                     }
@@ -788,7 +788,7 @@ struct PlaylistPage: View {
     }
 
     private func menu(_ playlist: Playlist) -> some View {
-        Menu {
+        MoreMenu {
             Button("Rename") { startRename(playlist) }
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
             Button("Start at…") { router.alarm = .new(.playlist(pid)) }
@@ -798,18 +798,7 @@ struct PlaylistPage: View {
                 navigate(.home)
                 controller.trashPlaylist(pid)
             }
-        } label: {
-            Ph.dotsThree.icon(.bold, size: 16)
-                .foregroundStyle(Theme.text)
-                .frame(width: 40, height: 40)
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
-                .hoverable(radius: 8)
         }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .help("more")
     }
 
     @ViewBuilder
@@ -904,10 +893,33 @@ struct PlaylistPage: View {
     }
 }
 
+/// The … button beside a collection's gaps.
+struct MoreMenu<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            Ph.dotsThree.icon(.bold, size: 16)
+                .foregroundStyle(Theme.text)
+                .frame(width: 40, height: 40)
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+                .hoverable(radius: 8)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("more")
+    }
+}
+
 struct AlbumPage: View {
     let id: String
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
+    @Environment(Router.self) private var router
     @State private var art: CGFloat = 232
 
     var body: some View {
@@ -947,9 +959,17 @@ struct AlbumPage: View {
                 }
                 .padding(.bottom, 32)
 
-                PlayRow(songs: album.songs, more: AnyView(
+                PlayRow(songs: album.songs, more: AnyView(HStack(spacing: 16) {
                     GapsButton(title: album.title, songs: album.songs, gaps: Binding(
-                        get: { controller.albumSettings[album.id] }, set: { controller.albumSettings[album.id] = $0 }))))
+                        get: { controller.albumSettings[album.id] }, set: { controller.albumSettings[album.id] = $0 }))
+                    MoreMenu {
+                        Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
+                            // a copy is a list of files: what lands in the folder later isn't in it
+                            .help("a copy you can reorder and add to. songs added to its folder later won't join it")
+                        Button("Choose cover…") { router.coverFor = .album(album.id) }
+                        Button("Start at…") { router.alarm = .new(.album(album.id)) }
+                    }
+                }))
                     .padding(.bottom, 24)
 
                 LazyVStack(spacing: 0) {
@@ -1083,7 +1103,7 @@ struct ArtistPage: View {
     var body: some View {
         if let artist = controller.catalog.artistsByName[name] {
             let songs = artist.songs
-            let albums = artist.albums.filter { !controller.albumsInPlaylists.contains($0.id) }
+            let collections = artist.albums.map { controller.copy(ofAlbum: $0.id).map(MusicCollection.yours) ?? .album($0) }
             let art = songs.contains { $0.artwork != nil }
             PageScroll {
                 HStack(alignment: .bottom, spacing: 32) {
@@ -1098,7 +1118,7 @@ struct ArtistPage: View {
                             .foregroundStyle(Theme.text)
                             .lineLimit(2)
                         HStack(spacing: 0) {
-                            Text("\(Format.count(albums.count, "collection")) · \(Format.count(songs.count, "song"))")
+                            Text("\(Format.count(collections.count, "collection")) · \(Format.count(songs.count, "song"))")
                                 .foregroundStyle(Theme.muted)
                             let works = controller.catalog.works(by: name).count
                             if works > 0 {
@@ -1116,10 +1136,10 @@ struct ArtistPage: View {
                 PlayRow(songs: songs)
                     .padding(.bottom, 32)
 
-                if !albums.isEmpty {
+                if !collections.isEmpty {
                     SectionTitle(title: "Collections")
                         .padding(.bottom, 8)
-                    Shelf(items: albums) { AlbumTile(album: $0) }
+                    Shelf(items: collections) { CollectionTile(collection: $0) }
                         .padding(.bottom, 32)
                 }
 

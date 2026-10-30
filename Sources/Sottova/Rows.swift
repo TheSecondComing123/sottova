@@ -47,7 +47,7 @@ struct SongRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsAlbum {
-                LinkText(text: song.album) { navigate(.album(song.albumID)) }
+                LinkText(text: controller.copy(ofAlbum: song.albumID)?.name ?? song.album) { navigate(.album(song.albumID)) }
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
                     .frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
@@ -79,7 +79,7 @@ struct SongRow: View {
             }
             entries += [
                 .divider,
-                .item("Go to \(song.album)") { navigate(.album(song.albumID)) },
+                .item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) },
                 .item("Go to artist") { navigate(.artist(song.artist)) },
             ]
             if let composer = song.composer {
@@ -267,6 +267,7 @@ struct AlbumTile: View {
                 .divider,
                 .item("Choose cover…") { router.coverFor = .album(album.id) },
                 .item("Start at…") { router.alarm = .new(.album(album.id)) },
+                .item("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } },
                 .submenu("Gaps", choices),
             ]
         }

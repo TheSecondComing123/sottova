@@ -625,6 +625,7 @@ public final class Controller {
         playlists[index].id = url.path
         playlists[index].name = name
         save(playlists[index])
+        repointAlarms(from: id, to: url.path)
         upNext = upNext.map { $0.source == id ? QueueEntry(path: $0.path, source: url.path) : $0 }
         if playingAlbum == id {
             playingAlbum = url.path
@@ -639,21 +640,51 @@ public final class Controller {
         do {
             try FileManager.default.trashItem(at: URL(filePath: id), resultingItemURL: nil)
             try? FileManager.default.trashItem(at: Self.coverURL(forPlaylist: id), resultingItemURL: nil)
-            playlists.removeAll { $0.id == id }
+            forget(id)
         } catch {
             problem = "couldn't move the collection to the Trash: \(error.localizedDescription)"
         }
     }
 
-    /// Turns albums (folders tagged as one album) into playlists, keeping their gaps; the files stay where they are.
-    /// Backs up library.json and profile.json first.
-    public func makePlaylists(from albums: [Album]) {
-        backUpData()
-        for album in albums where !albumsInPlaylists.contains(album.id) {
-            // the playlist file is written before the album's gaps move into it
-            guard newPlaylist(named: album.title, songs: album.songs, fromAlbum: album.id) != nil else { return }
-            albumSettings[album.id] = nil
+    /// A playlist whose file is gone. One made from an album gives the album back its place, its gaps and its alarms.
+    func forget(_ id: String) {
+        guard let playlist = playlists.first(where: { $0.id == id }) else { return }
+        playlists.removeAll { $0.id == id }
+        if let album = playlist.fromAlbum {
+            albumSettings[album] = playlist.gaps
+            repointAlarms(from: id, to: album)
         }
+    }
+
+    /// Makes an album yours: a copy you can reorder and add to, with its gaps, cover and alarms, shown in the
+    /// album's place. The files stay where they are; library.json and profile.json are backed up first. Returns
+    /// the copy's id.
+    @discardableResult
+    public func makeYours(_ album: Album) -> String? {
+        if let copy = playlists.first(where: { $0.fromAlbum == album.id }) { return copy.id }
+        backUpData()
+        // the playlist file is written before the album's gaps move into it
+        guard let id = newPlaylist(named: album.title, songs: album.songs, fromAlbum: album.id) else { return nil }
+        albumSettings[album.id] = nil
+        if let first = album.songs.first {
+            let cover = URL(filePath: first.id).deletingLastPathComponent().appending(path: "cover.jpg")
+            if (try? FileManager.default.copyItem(at: cover, to: Self.coverURL(forPlaylist: id))) != nil {
+                loadPlaylistCovers()
+            }
+        }
+        repointAlarms(from: album.id, to: id)
+        return id
+    }
+
+    /// Alarms follow a collection whose id changes: made yours, its copy deleted, renamed.
+    private func repointAlarms(from old: String, to new: String) {
+        guard alarms.contains(where: { $0.source == old }) else { return }
+        let name = playlists.first { $0.id == new }?.name ?? catalog.albumsByID[new]?.title
+        for i in alarms.indices where alarms[i].source == old {
+            alarms[i].source = new
+            if let name { alarms[i].name = name }
+        }
+        alarmsChanged()
     }
 
     private func backUpData() {

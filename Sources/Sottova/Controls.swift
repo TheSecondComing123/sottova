@@ -70,6 +70,11 @@ extension Controller {
         return hidden.isEmpty ? catalog.albums : catalog.albums.filter { !hidden.contains($0.id) }
     }
 
+    /// The copy of an album made yours, which shows and opens in the album's place.
+    func copy(ofAlbum id: String) -> Playlist? {
+        playlists.first { $0.fromAlbum == id }
+    }
+
     /// Yours first, then the albums from your files.
     var collections: [MusicCollection] {
         playlists.map(MusicCollection.yours) + shownAlbums.map(MusicCollection.album)

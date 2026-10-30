@@ -79,7 +79,7 @@ struct SottovaCommands: Commands {
             Button("Show playing") {
                 guard let song = controller.current else { return }
                 openWindow(id: "main")
-                router.go(to: .album(song.albumID))
+                router.go(to: controller.copy(ofAlbum: song.albumID).map { .playlist($0.id) } ?? .album(song.albumID))
             }
             .keyboardShortcut("l")
             .disabled(controller.status == .idle || controller.current == nil)

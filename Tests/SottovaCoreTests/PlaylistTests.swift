@@ -67,21 +67,39 @@ struct PlaylistTests {
         #expect(c.settings == own)
     }
 
-    @Test func makingPlaylistsFromAlbumsMovesTheirGapsAndHidesThem() throws {
+    @Test func makingAnAlbumYoursMovesItsGapsAndHidesIt() throws {
         let dir = temp()
         let c = Controller(storage: nil, playlistFolder: dir)
         let album = Album(id: "Compline\u{1f}/m/Compline", title: "Compline", artist: "Various Artists", year: nil, artwork: nil,
                           songs: [song("/m/Compline/1.flac", album: "Compline\u{1f}/m/Compline")])
         c.albumSettings[album.id] = minecraft
-        c.makePlaylists(from: [album])
+        let id = try #require(c.makeYours(album))
         #expect(c.albumSettings.isEmpty)
         #expect(c.albumsInPlaylists == [album.id])
         let reread = Controller(storage: nil, playlistFolder: dir).playlists
         #expect(reread.first?.gaps == minecraft)
         #expect(reread.first?.fromAlbum == album.id)
-        // a second run doesn't make it twice
-        c.makePlaylists(from: [album])
+        // a second time gives back the same copy
+        #expect(c.makeYours(album) == id)
         #expect(c.playlists.count == 1)
+    }
+
+    @Test func alarmsFollowAnAlbumToItsCopyAndBack() throws {
+        let c = Controller(storage: nil, playlistFolder: temp())
+        let album = Album(id: "lauds\u{1f}/m/Lauds", title: "Lauds", artist: "Various Artists", year: nil, artwork: nil,
+                          songs: [song("/m/Lauds/1.flac", album: "lauds\u{1f}/m/Lauds")])
+        c.addAlarm(Alarm(source: album.id, name: "Lauds", hour: 7, minute: 2, weekdays: [2, 3, 4, 5, 6]))
+        c.albumSettings[album.id] = minecraft
+        let id = try #require(c.makeYours(album))
+        #expect(c.alarms.map(\.source) == [id])
+        let renamed = try #require(c.rename(id, to: "Morning"))
+        #expect(c.alarms.map(\.source) == [renamed])
+        #expect(c.alarms.map(\.name) == ["Morning"])
+        // deleting the copy gives the album back its alarm and its gaps
+        c.forget(renamed)
+        #expect(c.alarms.map(\.source) == [album.id])
+        #expect(c.albumSettings[album.id] == minecraft)
+        #expect(c.albumsInPlaylists.isEmpty)
     }
 
     @Test func removingAndMovingSongs() throws {
