@@ -97,6 +97,8 @@ public final class Controller {
     @ObservationIgnored private var alarmsWritable = true
     @ObservationIgnored private var alarmsLoaded = false
     @ObservationIgnored private var alarmsCaughtUp = false
+    /// Where a replaced cover goes; a test keeps it out of the real Trash.
+    @ObservationIgnored var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
     /// How audio starts; a test can make it fail, as a device that's going away does.
     @ObservationIgnored var startEngine: (AVAudioEngine) throws -> Void = { try $0.start() }
     /// A piece waiting for the audio device, which isn't its fault.
@@ -137,11 +139,11 @@ public final class Controller {
     /// `storage` holds library.json, profile.json, status.json and plays.jsonl; tests pass nil to keep nothing on disk.
     /// `playlistFolder` holds the .m3u8 files; nil keeps playlists in memory only.
     public init(engine: AVAudioEngine = AVAudioEngine(), storage: URL? = .applicationSupportDirectory.appending(path: "Sottova"),
-                playlistFolder: URL? = nil) {
+                playlistFolder: URL? = nil, artworkFolder: URL = .cachesDirectory.appending(path: "Sottova/Artwork")) {
         self.engine = engine
         self.storage = storage
         playlistStore = playlistFolder.map(PlaylistStore.init)
-        artwork = storage.map { _ in ArtworkStore(directory: .cachesDirectory.appending(path: "Sottova/Artwork")) }
+        artwork = storage.map { _ in ArtworkStore(directory: artworkFolder) }
         let (file, unreadable, writable) = Self.loadProfile(from: storage)
         profileWritable = writable
         let profile = file?.settings ?? Settings.presets.first { $0.name == "Short" }!
@@ -832,11 +834,15 @@ public final class Controller {
     }
 
     private func replaceCover(at url: URL, with data: Data, credit: String?) -> Bool {
+        // written beside it first, so a picture that can't be written leaves the old one where it is
+        let fresh = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).new")
+        defer { try? FileManager.default.removeItem(at: fresh) }
         do {
+            try CoverFile.write(data, to: fresh, credit: credit)
             if FileManager.default.fileExists(atPath: url.path) {
-                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                try trash(url)
             }
-            try CoverFile.write(data, to: url, credit: credit)
+            try FileManager.default.moveItem(at: fresh, to: url)
             return true
         } catch {
             problem = "couldn't save the cover: \(error.localizedDescription)"
@@ -1636,7 +1642,7 @@ public final class Controller {
     }
 
     func analyzePending() {
-        let pending = library.pending.map { ($0, library.entries[$0]?.loudness == nil) }
+        let pending = library.pending.map { ($0, library.entries[$0]?.loudness == nil) } + purgedCovers().map { ($0, false) }
         guard analysis == nil, !pending.isEmpty else { return }
         let store = artwork
         analysis = Task {
@@ -1689,6 +1695,19 @@ public final class Controller {
             analysis = nil
             // files may have arrived while this pass ran
             analyzePending()
+        }
+    }
+
+    /// Songs whose cover the system purged from Caches: only reading the file again brings it back. Their tags stay
+    /// in place meanwhile, since clearing them would break up their albums for as long as that takes.
+    private func purgedCovers() -> [String] {
+        guard let artwork else { return [] }
+        var there: [String: Bool] = [:]
+        return library.entries.compactMap { path, entry in
+            guard let key = entry.meta?.artwork, !entry.unplayable, entry.unreachable != true else { return nil }
+            let found = there[key] ?? artwork.has(key)
+            there[key] = found
+            return found ? nil : path
         }
     }
 

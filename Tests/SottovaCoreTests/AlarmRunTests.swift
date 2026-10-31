@@ -253,6 +253,78 @@ struct AlarmRunTests {
         #expect(c.problem == nil)
     }
 
+    private func jpeg() throws -> Data {
+        let context = try #require(CGContext(data: nil, width: 8, height: 8, bitsPerComponent: 8, bytesPerRow: 0,
+                                             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let out = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(out, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try #require(context.makeImage()), nil)
+        #expect(CGImageDestinationFinalize(destination))
+        return out as Data
+    }
+
+    @Test func coversPurgedFromCachesComeBackWithTheirTagsInPlace() async throws {
+        let folder = try oneSongFolder()
+        try jpeg().write(to: folder.appending(path: "cover.jpg"))
+        let art = try temp().appending(path: "Artwork")
+        let c = Controller(storage: try temp(), artworkFolder: art)
+        c.addFolders([folder])
+        for _ in 0..<500 where c.catalog.songs.first?.artwork == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let key = try #require(c.catalog.songs.first?.artwork)
+        let path = try #require(c.catalog.songs.first?.id)
+        let file = art.appending(path: "\(key).jpg")
+        #expect(FileManager.default.fileExists(atPath: file.path))
+
+        try FileManager.default.removeItem(at: art)
+        c.rescan()
+        for _ in 0..<500 where !FileManager.default.fileExists(atPath: file.path) {
+            #expect(c.library.entries[path]?.meta != nil)
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(FileManager.default.fileExists(atPath: file.path))
+        #expect(c.library.entries[path]?.meta?.artwork == key)
+    }
+
+    private func playlistWithCover(_ old: Data) throws -> (Controller, URL, trashed: () -> [URL]) {
+        let c = Controller(storage: nil, playlistFolder: try temp())
+        let id = try #require(c.newPlaylist(named: "Mornings"))
+        let cover = Controller.coverURL(forPlaylist: id)
+        try old.write(to: cover)
+        let trashed = Box()
+        c.trash = { trashed.urls.append($0); try FileManager.default.removeItem(at: $0) }
+        return (c, cover, { trashed.urls })
+    }
+
+    private final class Box { var urls: [URL] = [] }
+
+    @Test func aCoverThatCantBeWrittenLeavesTheOldOneInPlace() throws {
+        let old = try jpeg()
+        let (c, cover, trashed) = try playlistWithCover(old)
+        c.setCover(Data("not an image".utf8), credit: nil, forPlaylist: c.playlists[0].id)
+        #expect(c.problem?.contains("cover") == true)
+        #expect(trashed().isEmpty)
+        #expect(try Data(contentsOf: cover) == old)
+    }
+
+    @Test func aCoverThatCantBeTrashedLeavesTheOldOneInPlace() throws {
+        let old = try jpeg()
+        let (c, cover, _) = try playlistWithCover(old)
+        c.trash = { _ in throw CocoaError(.fileWriteNoPermission) }
+        c.setCover(old, credit: "someone", forPlaylist: c.playlists[0].id)
+        #expect(c.problem?.contains("cover") == true)
+        #expect(try Data(contentsOf: cover) == old)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: cover.deletingLastPathComponent().path).filter { $0.contains("jpg") } == [cover.lastPathComponent])
+    }
+
+    @Test func aNewCoverReplacesTheOldOneWhichGoesToTheTrash() throws {
+        let (c, cover, trashed) = try playlistWithCover(Data("old".utf8))
+        c.setCover(try jpeg(), credit: "someone", forPlaylist: c.playlists[0].id)
+        #expect(c.problem == nil)
+        #expect(trashed().map(\.lastPathComponent) == [cover.lastPathComponent])
+        #expect(CoverFile.credit(at: cover) == "someone")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: cover.deletingLastPathComponent().path).filter { $0.contains("jpg") } == [cover.lastPathComponent])
+    }
+
     @Test func aMissingAlarmsFileIsNothingToMention() throws {
         let c = Controller(storage: try temp())
         c.run()

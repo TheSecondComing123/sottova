@@ -53,6 +53,10 @@ public final class ArtworkStore: Sendable {
         return image
     }
 
+    func has(_ key: String) -> Bool {
+        FileManager.default.fileExists(atPath: file(for: key).path)
+    }
+
     private func file(for key: String) -> URL {
         directory.appending(path: "\(key).jpg")
     }
