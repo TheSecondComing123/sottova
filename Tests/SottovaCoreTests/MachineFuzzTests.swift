@@ -12,7 +12,7 @@ struct MachineFuzzTests {
         let tick = [0.01, 0.5, 5, 90, 8.0 * 3600].randomElement(using: &rng)!
         let duration = [0.1, 3, 900].randomElement(using: &rng)!
         let length = Double.random(in: 0...1000, using: &rng)
-        switch Int.random(in: 0..<30, using: &rng) {
+        switch Int.random(in: 0..<31, using: &rng) {
         case 0: return .event(.start)
         case 1: return .event(.stop)
         case 2: return .event(.trackStarted(duration: duration))
@@ -32,6 +32,7 @@ struct MachineFuzzTests {
         case 16: return .event(.wait(length))
         case 17: return .event(.hold(Bool.random(using: &rng)))
         case 18: return .crossfade(Bool.random(using: &rng))
+        case 19: return .event(.restoreLevels(sleep: .timer(left: length, fade: min(180, length)), rise: Double.random(in: 1...90, using: &rng)))
         default: return .event(.tick(tick))
         }
     }

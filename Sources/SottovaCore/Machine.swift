@@ -101,6 +101,8 @@ struct Machine: Sendable {
         /// After a relaunch: the piece at this point, or a gap with this much left, paused. Nothing plays until resume.
         case restoreTrack(duration: Double, at: Double)
         case restoreRest(left: Double)
+        /// After a relaunch: the sleep timer and alarm's rise that were running.
+        case restoreLevels(sleep: Sleep?, rise: Double?)
         /// The answer to `planGap`: how long this silence lasts.
         case gap(Double)
         /// From idle, a silence this long before the first piece.
@@ -111,7 +113,7 @@ struct Machine: Sendable {
 
     /// Stop after `left` more seconds of playing time, easing the volume down over the last `fade` of them;
     /// or stop when the piece playing ends (in a gap: the next one).
-    enum Sleep: Equatable {
+    enum Sleep: Equatable, Codable {
         case timer(left: Double, fade: Double)
         case afterCurrent
     }
@@ -208,6 +210,10 @@ struct Machine: Sendable {
         case .rise:
             guard phase != .idle else { return [] }
             rise = Self.riseLength
+            return currentGains()
+        case .restoreLevels(let saved, let left):
+            guard phase != .idle else { return [] }
+            (sleep, rise) = (saved, left)
             return currentGains()
         case .hold(let on):
             held = on

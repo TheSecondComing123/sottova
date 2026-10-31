@@ -566,6 +566,7 @@ public final class Controller {
             if status == .paused { toggle() }
             command(.rise)
             if let minutes = alarm.minutes { sleep(minutes: Double(minutes)) }
+            saveResume()
         } else {
             problem = "the \(alarm.name) alarm went off, but there's nothing in it to play"
         }
@@ -649,6 +650,8 @@ public final class Controller {
 
     /// The alarm that plays while you're at the Mac whose collection is playing; nil once anything else is played.
     @ObservationIgnored private var hourPlaying: Alarm.ID?
+    /// A relaunch cut an hour off mid-piece or mid-silence, and it hasn't gone on yet.
+    @ObservationIgnored private var resumingHour = false
     /// The row whose part the next piece to start uses up, and the time it's for.
     @ObservationIgnored private var partDue: (id: Alarm.ID, time: Date)?
     @ObservationIgnored private var lastHourCheck = Date.distantPast
@@ -687,8 +690,8 @@ public final class Controller {
                 if case .resting = machine.phase {
                     send(.stop)
                 } else if status != .idle {
-                    sleepAfterCurrent()
                     hourEnding = true
+                    sleepAfterCurrent()
                 }
             }
         }
@@ -731,6 +734,7 @@ public final class Controller {
             refreshNextTrack()
             publish()
         }
+        saveResume()
     }
 
     /// Notes the window an hour started in, so one stopped by hand doesn't start again until its next, even after a relaunch.
@@ -907,7 +911,8 @@ public final class Controller {
             var source: String?
         }
 
-        var path: String
+        /// None in the silence before an hour's first piece.
+        var path: String?
         var elapsed: Double?
         var restLeft: Double?
         var source: String?
@@ -917,6 +922,10 @@ public final class Controller {
         /// What it was started from, so that page's play button still knows.
         var origin: Origin?
         var fromAlarm: Bool?
+        var sleep: Machine.Sleep?
+        var rise: Double?
+        var hourEnding: Bool?
+        var paused: Bool?
     }
 
     /// Brings the clock up to now and saves, for when the app quits.
@@ -932,7 +941,7 @@ public final class Controller {
         let state: ResumeState?
         switch machine.phase {
         case .track(let track): state = path.map { ResumeState(path: $0, elapsed: track.elapsed, restLeft: nil, source: playingAlbum, upNext: [], origin: origin, fromAlarm: fromAlarm) }
-        case .resting: state = path.map { ResumeState(path: $0, elapsed: nil, restLeft: machine.restRemaining, source: playingAlbum, upNext: [], origin: origin, fromAlarm: fromAlarm) }
+        case .resting: state = ResumeState(path: path, elapsed: nil, restLeft: machine.restRemaining, source: playingAlbum, upNext: [], origin: origin, fromAlarm: fromAlarm)
         case .idle: state = nil
         // a moment between pieces; the next status change saves
         case .loading: return
@@ -943,6 +952,7 @@ public final class Controller {
         }
         state.upNext = upNext.map { ResumeState.Entry(path: $0.path, source: $0.source) }
         state.hour = hourPlaying
+        (state.sleep, state.rise, state.hourEnding, state.paused) = (machine.sleep, machine.rise, hourEnding, machine.paused)
         do {
             try JSONEncoder().encode(state).write(to: url, options: .atomic)
         } catch {
@@ -951,12 +961,13 @@ public final class Controller {
     }
 
     /// Picks up where the last run left off, paused: the same piece at the same spot (it fades back in on play), or
-    /// the same gap with the same time left.
+    /// the same gap with the same time left. An hour that was playing goes on by itself while its window is open.
     func restoreResume() {
         guard status == .idle, let url = storage?.appending(path: "resume.json"), let data = try? Data(contentsOf: url),
               let state = try? JSONDecoder().decode(ResumeState.self, from: data) else { return }
-        let fileURL = URL(filePath: state.path)
-        guard let file = try? AVAudioFile(forReading: fileURL) else {
+        let fileURL = state.path.map { URL(filePath: $0) }
+        let file = fileURL.flatMap { try? AVAudioFile(forReading: $0) }
+        if let fileURL, file == nil {
             problem = "couldn't pick up where you left off: \(fileURL.lastPathComponent) isn't there anymore"
             try? FileManager.default.removeItem(at: url)
             return
@@ -965,23 +976,37 @@ public final class Controller {
         origin = state.origin
         fromAlarm = state.fromAlarm ?? false
         // still the hour's while its window is open; past it, the next check ends it like any closing window
-        if let id = state.hour, let hour = alarms.first(where: { $0.id == id }), hour.window(containing: .now) != nil {
-            hourPlaying = id
-            origin = origin(of: hour)
+        hourPlaying = state.hour
+        if state.paused != true, let hour = alarms.first(where: { $0.id == state.hour }), hour.lastFired != nil,
+           hour.window(containing: .now)?.start == hour.lastFired {
+            resumingHour = true
         }
+        hourEnding = state.hourEnding ?? false
         useAlbumSettings(for: state.source)
         self.file = file
-        current = catalog.songsByID[state.path]
-        title = current?.title ?? fileURL.deletingPathExtension().lastPathComponent
-        trackGain = gain(of: state.path)
+        if let path = state.path, let fileURL {
+            current = catalog.songsByID[path]
+            title = current?.title ?? fileURL.deletingPathExtension().lastPathComponent
+            trackGain = gain(of: path)
+        }
         startedAt = Date()
-        if let elapsed = state.elapsed {
+        if let elapsed = state.elapsed, let file {
             // scheduled from that frame when play is pressed, like after a device change
             needsReschedule = true
             send(.restoreTrack(duration: useSpan(of: file), at: elapsed))
         } else {
             send(.restoreRest(left: state.restLeft ?? 0))
         }
+        send(.restoreLevels(sleep: state.sleep, rise: state.rise))
+        refreshSleep()
+        resumeHour()
+    }
+
+    /// Not before there's a catalog, which the hour needs to go round its songs.
+    private func resumeHour() {
+        guard resumingHour, !catalog.songsByID.isEmpty else { return }
+        resumingHour = false
+        if hourPlaying != nil, status == .paused { command(.resume) }
     }
 
     // MARK: Playlists
@@ -1418,6 +1443,7 @@ public final class Controller {
         }
         if timer != sleepTimer {
             sleepTimer = timer
+            saveResume()
         }
     }
 
@@ -1512,6 +1538,7 @@ public final class Controller {
             catalogBuilt = true
             sayEmptyRows()
             catchUpAlarms()
+            resumeHour()
             if let path = file?.url.path {
                 current = catalog.songsByID[path]
                 // a piece restored before the catalog was built has only its file name as a title so far
