@@ -3,7 +3,7 @@ import SwiftUI
 import SottovaCore
 
 /// Color tokens from the active palette, for dark and light. Monochrome's dark values follow monochrome.st's CSS,
-/// with text tokens raised to pass WCAG AA at 11–13 pt.
+/// with text tokens raised to pass WCAG AA at 11–13 pt, on a hovered row too.
 enum Theme {
     /// Read every time a color draws; the scenes re-key on the palette's id, so a change rebuilds them and shows at once.
     nonisolated(unsafe) static var palette = Palette.named(UserDefaults.standard.string(forKey: "palette"))
