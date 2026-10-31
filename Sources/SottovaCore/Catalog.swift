@@ -125,14 +125,20 @@ public struct Catalog: Sendable {
         )
     }
 
+    // a regex literal compiles again at every use: 200 µs per song, nearly all of a build at 10k. These can be shared
+    // between builds, which overlap, where a Regex can't.
+    private static let catalogCut = try! NSRegularExpression(pattern: #", (?=(?:Op\.?|op\.|BWV|BI|B\.|KV|K\.|D\.|S\.|WoO|L\.|RV|HWV) ?\d|(?:Hob\.|KK) ?[IVX\d])"#)
+    private static let nickname = try! NSRegularExpression(pattern: #",?\s*["“]([^"”]+)["”]"#)
+
     /// Splits at the comma before a catalog number (Op., B., BWV, K., D., Hob., ...) and sets a quoted nickname after a dot.
     static func splitWork(_ title: String) -> (work: String, detail: String?) {
         // Hoboken and Kobylańska numbers start with a roman numeral: "Hob. XVI:52", "KK IVa/16"
-        guard let cut = title.firstMatch(of: /, (?=(?:Op\.?|op\.|BWV|BI|B\.|KV|K\.|D\.|S\.|WoO|L\.|RV|HWV) ?\d|(?:Hob\.|KK) ?[IVX\d])/) else {
+        guard let cut = catalogCut.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)).flatMap({ Range($0.range, in: title) }) else {
             return (title, nil)
         }
-        let detail = title[cut.range.upperBound...].replacing(/,?\s*["“]([^"”]+)["”]/) { " · “\($0.1)”" }
-        return (String(title[..<cut.range.lowerBound]), String(detail))
+        let rest = String(title[cut.upperBound...])
+        let detail = nickname.stringByReplacingMatches(in: rest, range: NSRange(rest.startIndex..., in: rest), withTemplate: " · “$1”")
+        return (String(title[..<cut.lowerBound]), detail)
     }
 
     private static func libraryOrder(_ a: Song, _ b: Song) -> Bool {
