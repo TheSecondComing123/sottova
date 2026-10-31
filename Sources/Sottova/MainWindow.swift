@@ -9,7 +9,6 @@ struct MainWindow: View {
     @State private var mouseButtons: Any?
     @State private var escapeKey: Any?
     @State private var swipes: Any?
-    @State private var showsQueue = false
     @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
@@ -30,9 +29,9 @@ struct MainWindow: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // the page makes room for the queue, so no column hides under it; padding, not safe-area padding, or
                     // sideways shelves would still draw under the panel and show through its gutters
-                    .padding(.trailing, showsQueue ? 356 : 0)
+                    .padding(.trailing, router.showsQueue ? 356 : 0)
                     .overlay(alignment: .trailing) {
-                        if showsQueue {
+                        if router.showsQueue {
                             QueuePanel(close: toggleQueue)
                                 .padding([.trailing, .bottom], 16)
                                 .padding(.top, 8)
@@ -42,7 +41,7 @@ struct MainWindow: View {
                     }
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
-                PlayerBar(showsQueue: showsQueue, toggleQueue: toggleQueue)
+                PlayerBar(showsQueue: router.showsQueue, toggleQueue: toggleQueue)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
             }
@@ -124,8 +123,7 @@ struct MainWindow: View {
     }
 
     private func toggleQueue() {
-        // in on a spring with no overshoot, a 340 pt edge mustn't wobble; out on the quick curve
-        withAnimation(showsQueue ? Theme.quick : .spring(duration: 0.3, bounce: 0)) { showsQueue.toggle() }
+        router.toggleQueue()
     }
 
     /// Two fingers sideways on a trackpad go back and forward, as in Safari: only when the gesture starts sideways,
@@ -163,7 +161,7 @@ struct MainWindow: View {
     private func watchMouseButtons() {
         if escapeKey == nil {
             escapeKey = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                guard event.keyCode == 53, showsQueue, !(event.window?.firstResponder is NSText) else { return event }
+                guard event.keyCode == 53, router.showsQueue, !(event.window?.firstResponder is NSText) else { return event }
                 toggleQueue()
                 return nil
             }

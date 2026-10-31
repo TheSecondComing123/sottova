@@ -24,6 +24,8 @@ final class Router {
     var trimming: Song?
     /// The alarm being set or changed, shown as a sheet.
     var alarm: AlarmRequest?
+    /// The queue's slide-over, so the Controls menu can open it too.
+    var showsQueue = false
     /// A collection about to go to the Trash with alarms that would go with it, asked about first.
     var trashing: String?
 
@@ -59,6 +61,11 @@ final class Router {
     func search() {
         searchRequests += 1
     }
+
+    func toggleQueue() {
+        // in on a spring with no overshoot, a 340 pt edge mustn't wobble; out on the quick curve
+        withAnimation(showsQueue ? Theme.quick : .spring(duration: 0.3, bounce: 0)) { showsQueue.toggle() }
+    }
 }
 
 /// The menu bar's Controls and Go menus: everything here is also a click away in the window.
@@ -85,6 +92,25 @@ struct SottovaCommands: Commands {
             }
             .keyboardShortcut("l")
             .disabled(controller.status == .idle || controller.current == nil)
+            Button(router.showsQueue ? "Hide Queue" : "Show Queue") {
+                openWindow(id: "main")
+                router.toggleQueue()
+            }
+            .keyboardShortcut("u", modifiers: [.command, .option])
+            Divider()
+            // ⌘↑ and ⌘↓ move a text field's cursor, so they step aside while typing
+            Button("Volume Up") { controller.volume = min(controller.volume + 0.1, 1) }
+                .keyboardShortcut(.upArrow)
+                .disabled(router.typing)
+            Button("Volume Down") { controller.volume = max(controller.volume - 0.1, 0) }
+                .keyboardShortcut(.downArrow)
+                .disabled(router.typing)
+            Menu("Sleep") { SleepChoices(controller: controller) }
+                .disabled(controller.status == .idle)
+        }
+        CommandGroup(after: .newItem) {
+            Button("Add Folder…") { controller.chooseFolders() }
+                .keyboardShortcut("o")
         }
         CommandMenu("Go") {
             Button("Back") { router.goBack() }
