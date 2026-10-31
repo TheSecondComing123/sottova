@@ -102,6 +102,17 @@ struct HourTests {
         #expect(c.nextAlarm() == nil)
     }
 
+    @Test func anHourTakesOverFromSomethingLeftPaused() async throws {
+        let (c, album) = try await controller()
+        c.play(album.songs.reversed())
+        c.pause()
+        _ = open(c, album)
+        c.checkHours()
+        #expect(c.status == .resting)
+        #expect(c.origin?.shuffled == true)
+        #expect(c.upNext.count == 2)
+    }
+
     @Test func anHourLeavesWhatYouArePlayingAlone() async throws {
         let (c, album) = try await controller()
         c.play(album.songs.reversed())

@@ -453,12 +453,15 @@ public final class Controller {
                 }
             }
         }
-        if hourPlaying == nil, let current, status == .idle, let window = current.window(containing: now), hourBegun[current.id] != window.start {
+        // paused counts as not playing: often it's only how a relaunch or a restart left things
+        if hourPlaying == nil, let current, status == .idle || status == .paused,
+           let window = current.window(containing: now), hourBegun[current.id] != window.start {
             let songs = songs(for: current)
             hourBegun[current.id] = window.start
             if songs.isEmpty {
                 problem = "\(current.name) has nothing in it to play"
             } else {
+                if status == .paused { send(.sleepNow) }
                 hourPlaying = current.id
                 queue(current, songs)
                 failures = 0
