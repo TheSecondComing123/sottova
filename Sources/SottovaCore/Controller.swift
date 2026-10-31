@@ -430,9 +430,23 @@ public final class Controller {
     /// An alarm's collection in the parts it rotates through: a collection's own breaks, or cut by length.
     public func parts(for alarm: Alarm) -> [[Song]] {
         if let playlist = playlists.first(where: { $0.id == alarm.source }), !playlist.breaks.isEmpty {
-            return playlist.partPaths.map { $0.compactMap { catalog.songsByID[$0] } }.filter { !$0.isEmpty }
+            return ownParts(of: playlist).map(\.songs)
         }
         return Self.split(songs(for: alarm), into: alarm.parts)
+    }
+
+    private func ownParts(of playlist: Playlist) -> [(name: String?, songs: [Song])] {
+        zip(playlist.partStarts, playlist.partPaths)
+            .map { (playlist.partNames[$0], $1.compactMap { catalog.songsByID[$0] }) }
+            .filter { !$0.songs.isEmpty }
+    }
+
+    /// The part a row plays next: its name, or "part 2".
+    public func nextPartName(for alarm: Alarm) -> String {
+        let part = alarm.nextPart % max(parts(for: alarm).count, 1)
+        guard let playlist = playlists.first(where: { $0.id == alarm.source }), !playlist.breaks.isEmpty else { return "part \(part + 1)" }
+        let own = ownParts(of: playlist)
+        return part < own.count ? own[part].name ?? "part \(part + 1)" : "part \(part + 1)"
     }
 
     /// `songs` in `count` runs of about equal length, in order: each song goes to the part its middle falls in.
@@ -811,8 +825,17 @@ public final class Controller {
     public func setBreak(_ on: Bool, at index: Int, in id: String) {
         update(id) { playlist in
             guard index > 0, index < playlist.paths.count else { return }
-            if on { playlist.breaks.insert(index) } else { playlist.breaks.remove(index) }
+            if on { playlist.breaks.insert(index) } else {
+                playlist.breaks.remove(index)
+                playlist.partNames[index] = nil
+            }
         }
+    }
+
+    /// Calls the part starting at this song `name`; an empty name puts its number back.
+    public func namePart(_ name: String, at index: Int, in id: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        update(id) { $0.partNames[index] = name.isEmpty ? nil : name }
     }
 
     public func movePlaylistSongs(_ id: String, fromOffsets offsets: IndexSet, toOffset destination: Int) {

@@ -740,7 +740,9 @@ struct PlaylistPage: View {
                         ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
                             // where a part starts, a thin rule with its number; part 1 is named once there are others
                             if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
-                                PartRule(number: playlist.breaks.count { $0 <= index } + 1, removable: index > 0) {
+                                PartRule(number: playlist.breaks.count { $0 <= index } + 1, name: playlist.partNames[index], removable: index > 0) {
+                                    controller.namePart($0, at: index, in: pid)
+                                } join: {
                                     withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
                                 }
                             }
@@ -916,18 +918,40 @@ struct PlaylistPage: View {
 }
 
 /// The … button beside a collection's gaps.
-/// "Part 2" over the song that starts it, with a way to join it to the part before.
+/// A part's name or number over the song that starts it, with a way to rename it and to join it to the part before.
 private struct PartRule: View {
     let number: Int
+    let name: String?
     let removable: Bool
+    let rename: (String) -> Void
     let join: () -> Void
+    @Environment(Router.self) private var router
     @State private var hovering = false
+    @State private var editing = false
+    @State private var draft = ""
+    @FocusState private var typing: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("Part \(number)")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.muted)
+            if editing {
+                TextField("Part \(number)", text: $draft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                    .focused($typing)
+                    .fixedSize()
+                    .onSubmit(commit)
+                    .onExitCommand(perform: end)
+                    .onChange(of: typing) { _, focused in
+                        router.typing = focused
+                        if !focused { commit() }
+                    }
+            } else {
+                Text(name ?? "Part \(number)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+                    .help("double-click to rename")
+            }
             Rectangle().fill(Theme.border).frame(height: 1)
             if removable {
                 IconButton(icon: .x, weight: .bold, help: "join the part before", size: 20, action: join)
@@ -939,6 +963,30 @@ private struct PartRule: View {
         .frame(height: number == 1 ? 24 : 40, alignment: .bottom)
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        .onTapGesture(count: 2, perform: start)
+        .sottovaMenu {
+            [.item("Rename", action: start)] + (removable ? [.item("Join the part before", action: join)] : [])
+        }
+    }
+
+    private func start() {
+        draft = name ?? ""
+        editing = true
+        DispatchQueue.main.async {
+            typing = true
+            NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+        }
+    }
+
+    private func commit() {
+        guard editing else { return }
+        rename(draft)
+        end()
+    }
+
+    private func end() {
+        editing = false
+        typing = false
     }
 }
 

@@ -276,7 +276,7 @@ struct AlarmSheet: View {
         guard let alarm, rotates else { return nil }
         let cut = controller.parts(for: alarm)
         guard !cut.isEmpty else { return nil }
-        let next = "part \(alarm.nextPart % cut.count + 1) next"
+        let next = controller.nextPartName(for: alarm) + " next"
         if controller.playlists.first(where: { $0.id == alarm.source })?.breaks.isEmpty == false {
             return "its own \(cut.count) parts, \(next)"
         }

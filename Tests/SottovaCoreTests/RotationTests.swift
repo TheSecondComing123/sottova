@@ -34,6 +34,48 @@ struct RotationTests {
         #expect(p.partPaths == [["/m/1", "/m/x", "/m/2"], ["/m/5"]])
     }
 
+    @Test func aPartsNameSurvivesTheFileAndStaysWithItsSongs() {
+        let file = URL(filePath: "/m/lists/Compline.m3u8")
+        var p = Playlist(id: file.path, name: "Compline", paths: ["/m/1", "/m/2", "/m/3", "/m/4", "/m/5"])
+        p.breaks = [2, 4]
+        p.partNames = [0: "Dusk", 2: "Sorrow, stay: II"]
+        let text = p.render { _ in nil }
+        #expect(text.contains("#SOTTOVA-PART:Dusk\n"))
+        #expect(Playlist.parse(text, at: file) == p)
+        p.insert(["/m/x"], at: 1)
+        #expect(p.partNames == [0: "Dusk", 3: "Sorrow, stay: II"])
+        // the first part goes whole: the second moves up with its name, the unnamed third keeps none
+        p.remove(at: [0, 1, 2])
+        #expect(p.partNames == [0: "Sorrow, stay: II"])
+        #expect(p.breaks == [2])
+        p.remove(at: [0, 1])
+        #expect(p.partNames.isEmpty)
+    }
+
+    @Test func aRowSaysThePartItPlaysNextByName() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-parts-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        for i in 1...3 {
+            c.library.entries["/\(i)"] = Library.Entry(size: 0, modified: .now, meta: TrackMeta(title: "t", artist: "a", album: "R", duration: 60))
+        }
+        c.refreshTracks()
+        try await Task.sleep(for: .milliseconds(500))
+        let id = try #require(c.newPlaylist(songs: [1, 2, 3].map { song("/\($0)", 1) }))
+        c.setBreak(true, at: 1, in: id)
+        c.namePart(" Dusk ", at: 1, in: id)
+        #expect(Controller(storage: nil, playlistFolder: dir).playlists.first?.partNames == [1: "Dusk"])
+        var alarm = Alarm(source: id, name: "r", hour: 8, minute: 0)
+        #expect(c.nextPartName(for: alarm) == "part 1")
+        alarm.nextPart = 1
+        #expect(c.nextPartName(for: alarm) == "Dusk")
+        c.namePart("", at: 1, in: id)
+        #expect(c.nextPartName(for: alarm) == "part 2")
+        c.namePart("Dusk", at: 1, in: id)
+        c.setBreak(false, at: 1, in: id)
+        #expect(c.playlists.first?.partNames.isEmpty == true)
+    }
+
     @Test func aPartStartsOnlyInsideTheList() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-parts-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
