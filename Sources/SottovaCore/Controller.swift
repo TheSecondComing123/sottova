@@ -121,6 +121,7 @@ public final class Controller {
     public private(set) var playlists: [Playlist] = []
     @ObservationIgnored private let playlistStore: PlaylistStore?
     @ObservationIgnored private var playlistWatcher: FolderWatcher?
+    @ObservationIgnored private var playlistProblem: String?
 
     /// What plays next, in order; once it's empty the shuffler picks from everything. Read it only where it's shown:
     /// playing from Songs puts the whole library in it.
@@ -1003,7 +1004,10 @@ public final class Controller {
     }
 
     public func setGaps(_ gaps: Settings?, for id: String) {
-        update(id) { $0.gaps = gaps }
+        update(id) {
+            $0.gaps = gaps
+            $0.unreadGaps = nil
+        }
         if playingAlbum == id {
             useAlbumSettings(for: id)
         }
@@ -1129,12 +1133,24 @@ public final class Controller {
 
     private func loadPlaylists() {
         guard let store = playlistStore else { return }
-        let loaded = store.load()
+        let (loaded, unreadable) = store.load()
         if loaded != playlists {
             playlists = loaded
         }
+        sayPlaylistTrouble(unreadable: unreadable)
         loadPlaylistCovers()
         watchPlaylists()
+    }
+
+    /// Only when it changes: our own writes come back through the watcher and mustn't bring back what's been dismissed.
+    private func sayPlaylistTrouble(unreadable: [String]) {
+        var trouble = unreadable.map { "couldn't read \($0), so it isn't listed. the file is left as it is" }
+        trouble += playlists.filter { $0.unreadGaps != nil }.map { "couldn't read the gaps in \($0.name), so it plays with yours. the line stays in the file" }
+        let said = trouble.isEmpty ? nil : trouble.joined(separator: "; ")
+        guard said != playlistProblem else { return }
+        if problem == playlistProblem { problem = nil }
+        playlistProblem = said
+        if let said { problem = said }
     }
 
     /// Its own stream, so a playlist edit reloads only playlists, never rescans the music. Our own writes come back

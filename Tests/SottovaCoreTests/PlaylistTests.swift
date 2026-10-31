@@ -66,6 +66,52 @@ struct PlaylistTests {
         #expect(Set(reread.flatMap(\.paths)) == ["/s/1.flac", "/s/2.flac", "/s/3.flac"])
     }
 
+    @Test func aGapsLineThatCantBeReadSurvivesAnEditAndIsSaid() throws {
+        let dir = temp()
+        let file = dir.appending(path: "x.m3u8")
+        let line = "#SOTTOVA-GAPS:{\"schema\":9,\"from\":\"a newer build\"}"
+        try "#EXTM3U\n\(line)\n/s/1.flac\n".write(to: file, atomically: true, encoding: .utf8)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        #expect(c.problem?.contains("gaps") == true)
+        let id = try #require(c.playlists.first?.id)
+        c.add([song("/s/2.flac")], to: id)
+        #expect(c.playlists.first?.paths.count == 2)
+        #expect(try String(contentsOf: file, encoding: .utf8).contains(line))
+        // picking gaps by hand replaces it
+        c.setGaps(minecraft, for: id)
+        #expect(try !String(contentsOf: file, encoding: .utf8).contains(line))
+        #expect(Controller(storage: nil, playlistFolder: dir).playlists.first?.gaps == minecraft)
+    }
+
+    @Test func aFileThatIsntUTF8IsSaidAndLeftAlone() throws {
+        let dir = temp()
+        let file = dir.appending(path: "Caf.m3u")
+        let latin1 = Data("/s/caf\u{E9}.mp3\n".data(using: .isoLatin1)!)
+        try latin1.write(to: file)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        #expect(c.problem?.contains("Caf.m3u") == true)
+        #expect(c.playlists.isEmpty)
+        #expect(try Data(contentsOf: file) == latin1)
+    }
+
+    /// A line break in a tag or a name would come back as a song.
+    @Test func lineBreaksCantMakeBogusSongs() {
+        let file = URL(filePath: "/m/lists/x.m3u8")
+        var p = Playlist(id: file.path, name: "two\nlines", paths: ["/m/a.flac", "/m/b.flac"])
+        p.breaks = [1]
+        p.partNames = [1: "part\nbogus-part.flac"]
+        let text = p.render { _ in (1, "artist - title\nbogus-title.flac\u{2028}bogus-other.flac") }
+        #expect(Playlist.parse(text, at: file).paths == p.paths)
+    }
+
+    /// File names a plain line can't hold: a line break, a leading # that reads as a comment, outer spaces.
+    @Test(arguments: ["/m/lists/a\nb.flac", "/m/lists/#1 hit.flac", "/m/lists/ spaced .flac", "/m/other/a\r\nb.flac"])
+    func oddFileNamesComeBackTheSame(path: String) {
+        let file = URL(filePath: "/m/lists/x.m3u8")
+        let p = Playlist(id: file.path, name: "x", paths: [path])
+        #expect(Playlist.parse(p.render { _ in nil }, at: file).paths == [path])
+    }
+
     @Test func aPlaylistsSongsPlayWithItsGaps() throws {
         let c = Controller(storage: nil, playlistFolder: temp())
         let own = c.settings

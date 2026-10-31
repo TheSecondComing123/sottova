@@ -9,6 +9,8 @@ public struct Playlist: Identifiable, Equatable, Sendable {
     public var paths: [String]
     /// The gaps it plays with, like an album's; nil plays with the user's own.
     public var gaps: Settings?
+    /// A gaps line that can't be read, as written, so an edit doesn't erase it; gaps picked by hand replace it.
+    public var unreadGaps: String?
     /// The album it was made from, which Albums then leaves out.
     public var fromAlbum: String?
     /// Where a new part starts: the index of its first song. A row that plays one part each time takes these.
@@ -37,6 +39,7 @@ public struct Playlist: Identifiable, Equatable, Sendable {
             let line = raw.trimmingCharacters(in: .whitespaces.union(["\u{FEFF}"]))
             if line.hasPrefix(gapsTag) {
                 playlist.gaps = try? JSONDecoder().decode(Settings.self, from: Data(line.dropFirst(gapsTag.count).utf8))
+                if playlist.gaps == nil { playlist.unreadGaps = line }
             } else if line.hasPrefix(fromAlbumTag) {
                 playlist.fromAlbum = String(line.dropFirst(fromAlbumTag.count)).removingPercentEncoding
             } else if line == partTag || line.hasPrefix(partTag + ":") {
@@ -58,9 +61,11 @@ public struct Playlist: Identifiable, Equatable, Sendable {
 
     /// The file's text. `info` gives a song's length and "artist - title" for the #EXTINF lines other players show.
     func render(info: (String) -> (Double, String)?) -> String {
-        var lines = ["#EXTM3U", "#PLAYLIST:\(name)"]
+        var lines = ["#EXTM3U", "#PLAYLIST:\(Self.oneLine(name))"]
         if let gaps, let json = try? JSONEncoder().encode(gaps), let text = String(data: json, encoding: .utf8) {
             lines.append(Self.gapsTag + text)
+        } else if let unreadGaps {
+            lines.append(unreadGaps)
         }
         if let fromAlbum {
             // album ids hold a unit separator and a path; percent-encoded they stay on one plain line
@@ -69,16 +74,24 @@ public struct Playlist: Identifiable, Equatable, Sendable {
         let folder = URL(filePath: id).deletingLastPathComponent().standardizedFileURL.pathComponents
         for (index, path) in paths.enumerated() {
             if let partName = partNames[index] {
-                lines.append(Self.partTag + ":" + partName)
+                lines.append(Self.partTag + ":" + Self.oneLine(partName))
             } else if breaks.contains(index) {
                 lines.append(Self.partTag)
             }
             if let (seconds, title) = info(path) {
-                lines.append("#EXTINF:\(Int(seconds.rounded())),\(title)")
+                lines.append("#EXTINF:\(Int(seconds.rounded())),\(Self.oneLine(title))")
             }
-            lines.append(Self.relative(path, from: folder))
+            let line = Self.relative(path, from: folder)
+            // parse wouldn't give these back as the same path; a URL escapes them
+            let plain = !line.contains(where: \.isNewline) && !line.hasPrefix("#") && line == line.trimmingCharacters(in: .whitespaces.union(["\u{FEFF}"]))
+            lines.append(plain ? line : URL(filePath: path).absoluteString)
         }
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// A line break in a tag would come back as a song.
+    private static func oneLine(_ text: String) -> String {
+        text.split(whereSeparator: \.isNewline).joined(separator: " ")
     }
 
     /// Songs added at `index` join the part that's there; the parts after move along with them.
@@ -128,11 +141,18 @@ public struct Playlist: Identifiable, Equatable, Sendable {
 struct PlaylistStore {
     let folder: URL
 
-    func load() -> [Playlist] {
+    /// The playlists, and the names of files that couldn't be read, not being UTF-8 or not opening.
+    func load() -> (playlists: [Playlist], unreadable: [String]) {
         let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        return files.filter { $0.pathExtension.lowercased() == "m3u8" || $0.pathExtension.lowercased() == "m3u" }
-            .compactMap { url in (try? String(contentsOf: url, encoding: .utf8)).map { Playlist.parse($0, at: url) } }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        var playlists: [Playlist] = [], unreadable: [String] = []
+        for url in files where url.pathExtension.lowercased() == "m3u8" || url.pathExtension.lowercased() == "m3u" {
+            if let text = try? String(contentsOf: url, encoding: .utf8) {
+                playlists.append(Playlist.parse(text, at: url))
+            } else {
+                unreadable.append(url.lastPathComponent)
+            }
+        }
+        return (playlists.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }, unreadable.sorted())
     }
 
     func url(for name: String) -> URL {
