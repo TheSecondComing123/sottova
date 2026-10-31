@@ -275,7 +275,7 @@ public final class Controller {
     /// Plays these songs in order from `index`, with the usual fades and gaps, then goes back to shuffling everything.
     /// What the queue was started from (an album, playlist, page) and whether shuffled, so that page's play button
     /// can show it's the one playing. Cleared when the queue runs out.
-    public struct Origin: Equatable, Sendable {
+    public struct Origin: Codable, Equatable, Sendable {
         public let key: String
         public let shuffled: Bool
 
@@ -287,7 +287,8 @@ public final class Controller {
         /// A playlist by its id; anything else by which songs it holds, whatever their order, so a song clicked in
         /// a list and that page's play button agree.
         public static func key(of songs: [Song], source: String?) -> String {
-            source ?? String(Set(songs.map(\.id)).hashValue)
+            // saved across launches, where a hashValue wouldn't match
+            source ?? Set(songs.map(\.id)).sorted().joined(separator: "\n")
         }
     }
 
@@ -618,9 +619,14 @@ public final class Controller {
             order.append(order.remove(at: i))
         }
         upNext = order.map { QueueEntry(path: $0.id, source: hour.source) }
-        let playlist = playlists.contains { $0.id == hour.source } ? hour.source : nil
-        origin = Origin(key: Origin.key(of: songs, source: playlist), shuffled: hour.shuffled)
+        origin = origin(of: hour)
         if let volume = hour.volume { self.volume = volume }
+    }
+
+    /// Its whole collection, whichever part it's on, so the collection's page knows it's playing.
+    private func origin(of hour: Alarm) -> Origin {
+        let playlist = playlists.contains { $0.id == hour.source } ? hour.source : nil
+        return Origin(key: Origin.key(of: songs(for: hour), source: playlist), shuffled: hour.shuffled)
     }
 
     /// An hour that's played through its collection goes round again.
@@ -762,6 +768,8 @@ public final class Controller {
         var upNext: [Entry]
         /// The hour this was playing for, if any.
         var hour: UUID?
+        /// What it was started from, so that page's play button still knows.
+        var origin: Origin?
     }
 
     /// Brings the clock up to now and saves, for when the app quits.
@@ -776,8 +784,8 @@ public final class Controller {
         let path = file?.url.path
         let state: ResumeState?
         switch machine.phase {
-        case .track(let track): state = path.map { ResumeState(path: $0, elapsed: track.elapsed, restLeft: nil, source: playingAlbum, upNext: []) }
-        case .resting: state = path.map { ResumeState(path: $0, elapsed: nil, restLeft: machine.restRemaining, source: playingAlbum, upNext: []) }
+        case .track(let track): state = path.map { ResumeState(path: $0, elapsed: track.elapsed, restLeft: nil, source: playingAlbum, upNext: [], origin: origin) }
+        case .resting: state = path.map { ResumeState(path: $0, elapsed: nil, restLeft: machine.restRemaining, source: playingAlbum, upNext: [], origin: origin) }
         case .idle: state = nil
         // a moment between pieces; the next status change saves
         case .loading: return
@@ -807,6 +815,7 @@ public final class Controller {
             return
         }
         upNext = state.upNext.map { QueueEntry(path: $0.path, source: $0.source) }
+        origin = state.origin
         // still the hour's while its window is open; past it, the next check ends it like any closing window
         if let id = state.hour, let hour = alarms.first(where: { $0.id == id }), let window = hour.window(containing: .now) {
             hourPlaying = id
@@ -814,6 +823,7 @@ public final class Controller {
             // the part it was on is the one before the next
             let parts = parts(for: hour)
             hourSongs = hour.rotates && !parts.isEmpty ? parts[(hour.nextPart + parts.count - 1) % parts.count] : songs(for: hour)
+            origin = origin(of: hour)
         }
         useAlbumSettings(for: state.source)
         self.file = file

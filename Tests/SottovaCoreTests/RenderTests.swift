@@ -182,6 +182,20 @@ struct RenderTests {
         #expect(abs((second.track?.elapsed ?? 0) - 2.6) < 0.02)
     }
 
+    @Test func aRelaunchRemembersWhatThePlayButtonBelongsTo() throws {
+        let storage = FileManager.default.temporaryDirectory.appending(path: "sottova-resume-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)
+        let url = try constantFile(channels: 2, seconds: 3)
+        let origin = Controller.Origin(key: "/lists/Overworld.m3u8", shuffled: true)
+        let resume = storage.appending(path: "resume.json")
+        try JSONEncoder().encode(Controller.ResumeState(path: url.path, elapsed: 1, upNext: [], origin: origin)).write(to: resume)
+        let c = Controller(storage: storage)
+        c.restoreResume()
+        #expect(c.origin == origin)
+        c.saveResume()
+        #expect(try JSONDecoder().decode(Controller.ResumeState.self, from: Data(contentsOf: resume)).origin == origin)
+    }
+
     /// The real path: a timer on the wall clock, then the album starts. Waits for the next minute, so up to 60 s.
     @Test func anAlarmStartsItsAlbumOnTheMinute() async throws {
         let engine = AVAudioEngine()
