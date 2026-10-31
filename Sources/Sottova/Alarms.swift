@@ -463,7 +463,7 @@ struct AlarmsPage: View {
     var body: some View {
         let now = Date.now
         let alarms = controller.alarms.sorted { $0.hour * 60 + $0.minute < $1.hour * 60 + $1.minute }
-        let here = alarms.first { $0.on && $0.whileHere && $0.window(containing: now) != nil }
+        let here = controller.openHour(at: now)
         PageScroll {
             PageHeader(title: "Your day", detail: here.map { "now: \($0.name), while you're at the mac" }
                        ?? controller.nextAlarm().map { "next: \(AlarmLine.headline($0.alarm, at: $0.at))" }

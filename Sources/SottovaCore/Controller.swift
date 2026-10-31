@@ -647,15 +647,24 @@ public final class Controller {
     /// Why the next piece of an hour is waiting.
     public private(set) var hold: Hold?
 
+    /// The hour that has the time: where rows overlap, the one that started latest.
+    public func openHour(at now: Date = .now) -> Alarm? {
+        alarms.filter { $0.on && $0.whileHere }
+            .compactMap { alarm in alarm.window(containing: now).map { (alarm, $0.start) } }
+            .max { $0.1 < $1.1 }?.0
+    }
+
     /// Starts an hour from silence when its window opens and nothing else is playing, moves to the next hour without
     /// cutting the piece, ends with the piece playing as the window closes, and holds the next piece while you're
     /// away, on a call or listening to something else.
     func checkHours(now: Date = .now) {
         lastHourCheck = now
-        let current = alarms.first { $0.on && $0.whileHere && $0.window(containing: now) != nil }
-        if let id = hourPlaying, id != current?.id {
+        let current = openHour(at: now)
+        let open = current?.window(containing: now)
+        // the same row's next window counts as a new hour: nothing has checked since yesterday's closed
+        if let id = hourPlaying, id != current?.id || hourBegun[id] != open?.start {
             hourPlaying = nil
-            if let current, status != .idle {
+            if let current, status == .playing || status == .resting {
                 follow(current, now: now)
             } else {
                 upNext.removeAll()
@@ -670,8 +679,7 @@ public final class Controller {
             }
         }
         // paused counts as not playing: often it's only how a relaunch or a restart left things
-        if hourPlaying == nil, let current, status == .idle || status == .paused,
-           let window = current.window(containing: now), hourBegun[current.id] != window.start {
+        if hourPlaying == nil, let current, let window = open, status == .idle || status == .paused, hourBegun[current.id] != window.start {
             let songs = takeSongs(current)
             hourSongs = songs
             hourBegun[current.id] = window.start

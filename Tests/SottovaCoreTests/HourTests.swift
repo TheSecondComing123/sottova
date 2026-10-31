@@ -284,6 +284,51 @@ struct HourTests {
         #expect(alarms.map(\.heedsCalendar) == [true, false])
     }
 
+    @Test func overlappingRowsTheLatestStartWins() async throws {
+        let (c, album) = try await controller()
+        let earlier = Calendar.current.dateComponents([.hour, .minute], from: .now - 120)
+        var first = hour(from: earlier.hour!, earlier.minute!, minutes: 60, source: album.id)
+        first.shuffled = false
+        c.addAlarm(first)
+        _ = open(c, album)
+        #expect(c.openHour()?.id != first.id)
+        c.checkHours()
+        #expect(c.origin?.shuffled == true)
+    }
+
+    /// The same clock time tomorrow, whatever the clocks do tonight.
+    private var tomorrow: Date {
+        Calendar.current.date(byAdding: .day, value: 1, to: .now)!
+    }
+
+    @Test func aPiecePausedYesterdayDoesntCarryOnIntoTodaysWindow() async throws {
+        let (c, album) = try await controller()
+        _ = open(c, album)
+        c.checkHours()
+        c.advance(46)
+        c.pause()
+        // a lid closed mid-hour and opened at the same time tomorrow, with no check in between
+        c.checkHours(now: tomorrow)
+        #expect(c.status == .resting)
+        #expect(c.upNext.count == 2)
+        #expect(c.sleepTimer == nil)
+    }
+
+    @Test func aPieceStillPlayingGoesOnIntoTheNextWindowAsThatWindowsHour() async throws {
+        let (c, album) = try await controller()
+        _ = open(c, album)
+        c.checkHours()
+        c.advance(46)
+        #expect(c.status == .playing)
+        let playing = c.current
+        #expect(c.upNext.count == 1)
+        c.checkHours(now: tomorrow)
+        #expect(c.status == .playing)
+        #expect(c.current == playing)
+        #expect(c.sleepTimer == nil)
+        #expect(c.upNext.count == 2)
+    }
+
     @Test func anHourGoesRoundItsCollectionAgain() async throws {
         let (c, album) = try await controller()
         _ = open(c, album)
