@@ -198,6 +198,61 @@ struct AlarmRunTests {
         #expect(c.problem?.contains("alarms") == true)
     }
 
+    private func oneSongFolder() throws -> URL {
+        let folder = try temp()
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4800)!
+        buffer.frameLength = 4800
+        try AVAudioFile(forWriting: folder.appending(path: "a.caf"), settings: format.settings).write(from: buffer)
+        return folder
+    }
+
+    @Test func aCollectionRenamedInFinderIsSaidBeforeItsRowIsDue() async throws {
+        let list = try temp()
+        let c = Controller(storage: try temp(), playlistFolder: list)
+        c.loadAlarms()
+        c.addFolders([try oneSongFolder()])
+        for _ in 0..<500 where c.catalog.songs.isEmpty || c.pendingAnalysis > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        let id = try #require(c.newPlaylist(named: "Mornings", songs: c.catalog.songs))
+        c.addAlarm(Alarm(source: id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7)))
+        #expect(c.problem == nil)
+
+        try FileManager.default.moveItem(at: list.appending(path: "Mornings.m3u8"), to: list.appending(path: "Renamed.m3u8"))
+        c.loadPlaylists()
+        for _ in 0..<500 where c.problem == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.problem?.contains("Lauds") == true)
+
+        // and it goes once there's no such row
+        c.removeAlarm(c.alarms[0].id)
+        #expect(c.problem == nil)
+    }
+
+    @Test func anAlbumFolderRenamedInFinderIsSaidBeforeItsRowIsDue() async throws {
+        let folder = try oneSongFolder()
+        let c = Controller(storage: try temp())
+        c.loadAlarms()
+        c.addFolders([folder])
+        for _ in 0..<500 where c.catalog.albums.isEmpty || c.pendingAnalysis > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        let album = try #require(c.catalog.albums.first)
+        c.addAlarm(Alarm(source: album.id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7)))
+        #expect(c.problem == nil)
+
+        let moved = folder.deletingLastPathComponent().appending(path: folder.lastPathComponent + "-renamed")
+        try FileManager.default.moveItem(at: folder, to: moved)
+        c.rescan()
+        for _ in 0..<500 where c.problem == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.problem?.contains("Lauds") == true)
+    }
+
+    /// Before the first scan the catalog isn't the library yet, so nothing can be called missing.
+    @Test func aRowIsntCalledEmptyBeforeTheFirstScan() async throws {
+        let storage = try temp()
+        try JSONEncoder().encode([Alarm(source: "not yet", name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))]).write(to: storage.appending(path: "alarms.json"))
+        let c = Controller(storage: storage)
+        c.loadAlarms()
+        #expect(c.problem == nil)
+    }
+
     @Test func aMissingAlarmsFileIsNothingToMention() throws {
         let c = Controller(storage: try temp())
         c.run()

@@ -116,6 +116,9 @@ public final class Controller {
     /// What the last scan couldn't read, and what was said about it, which goes once it can.
     @ObservationIgnored private var unreachableFolders: [String] = []
     @ObservationIgnored private var unreachableProblem: String?
+    @ObservationIgnored private var emptyRowsProblem: String?
+    @ObservationIgnored private var scanned = false
+    @ObservationIgnored private var catalogBuilt = true
     @ObservationIgnored private var nowPlaying: NowPlaying?
     /// Songs the listener picked, played in order before shuffle takes over again.
     public private(set) var playlists: [Playlist] = []
@@ -424,6 +427,20 @@ public final class Controller {
             }
         }
         armAlarm()
+        sayEmptyRows()
+    }
+
+    /// A row whose collection went away outside the app, as a rename in Finder does, says so now and not when it's
+    /// due. Only once the catalog is the library's: until a scan and its analysis finish, an album can be missing or
+    /// under another id for a moment.
+    private func sayEmptyRows() {
+        guard alarmsLoaded, scanned, catalogBuilt, pendingAnalysis == 0 else { return }
+        let names = alarms.filter { $0.on && songs(for: $0).isEmpty }.map(\.name)
+        let said = names.isEmpty ? nil : "\(names.joined(separator: ", ")) \(names.count == 1 ? "has" : "have") nothing to play: the collection is gone, out of reach or renamed outside Sottova"
+        guard said != emptyRowsProblem else { return }
+        if problem == emptyRowsProblem { problem = nil }
+        emptyRowsProblem = said
+        if let said { problem = said }
     }
 
     func loadAlarms() {
@@ -1131,13 +1148,14 @@ public final class Controller {
         }
     }
 
-    private func loadPlaylists() {
+    func loadPlaylists() {
         guard let store = playlistStore else { return }
         let (loaded, unreadable) = store.load()
         if loaded != playlists {
             playlists = loaded
         }
         sayPlaylistTrouble(unreadable: unreadable)
+        sayEmptyRows()
         loadPlaylistCovers()
         watchPlaylists()
     }
@@ -1265,6 +1283,7 @@ public final class Controller {
         Task {
             let found = await Task.detached(priority: .utility) { Library.scan(urls) }.value
             guard generation == scanGeneration else { return }
+            scanned = true
             library.merge(found)
             refreshTracks()
             saveLibrary()
@@ -1433,8 +1452,12 @@ public final class Controller {
     /// Grouping 20k songs takes ~80 ms, so it runs off the main actor, and only when the entries actually changed.
     private func rebuildCatalog() {
         let entries = library.entries
-        guard entries != catalogEntries else { return }
+        guard entries != catalogEntries else {
+            sayEmptyRows()
+            return
+        }
         catalogEntries = entries
+        catalogBuilt = false
         lastCatalogBuild = .now
         catalogGeneration += 1
         let generation = catalogGeneration
@@ -1442,6 +1465,8 @@ public final class Controller {
             let built = await Task.detached(priority: .userInitiated) { Catalog(entries: entries) }.value
             guard generation == catalogGeneration else { return }
             catalog = built
+            catalogBuilt = true
+            sayEmptyRows()
             catchUpAlarms()
             if let path = file?.url.path {
                 current = catalog.songsByID[path]
