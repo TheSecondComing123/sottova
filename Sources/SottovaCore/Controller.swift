@@ -1385,7 +1385,7 @@ public final class Controller {
             do {
                 try FileManager.default.moveItem(at: url, to: aside)
             } catch {
-                return (nil, "couldn't read profile.json or move it aside, so settings won't be saved this time: \(error.localizedDescription)", false)
+                return (nil, "couldn't read your settings or set the old ones aside, so changes to them won't be saved: \(error.localizedDescription)", false)
             }
             return (nil, "couldn't read your settings, so these are the defaults. the old file is \(aside.lastPathComponent)", true)
         }
@@ -1413,7 +1413,7 @@ public final class Controller {
             let aside = url.appendingPathExtension("broken")
             try? FileManager.default.removeItem(at: aside)
             try? FileManager.default.moveItem(at: url, to: aside)
-            problem = "couldn't read the library, moved it to library.json.broken and started fresh: \(error.localizedDescription)"
+            problem = "couldn't read the library, so it's being rebuilt from your folders (the old one is kept as library.json.broken): \(error.localizedDescription)"
         }
         refreshTracks()
     }
@@ -1454,7 +1454,7 @@ public final class Controller {
         do {
             try JSONSerialization.data(withJSONObject: info, options: [.sortedKeys]).write(to: url, options: .atomic)
         } catch {
-            problem = "couldn't write status.json: \(error.localizedDescription)"
+            problem = "couldn't save what's playing for the alarm backup and other apps to read: \(error.localizedDescription)"
         }
         // userInfo only arrives because the app isn't sandboxed
         DistributedNotificationCenter.default().postNotificationName(.init("com.alanbagel.sottova.status"), object: nil, userInfo: info, deliverImmediately: true)
