@@ -52,6 +52,34 @@ struct RotationTests {
         #expect(p.partNames.isEmpty)
     }
 
+    @Test func movingASongLeavesTheOthersInTheirParts() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-parts-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let id = try #require(c.newPlaylist(songs: [1, 2, 3, 4, 5].map { song("/\($0)", 1) }))
+        c.setBreak(true, at: 2, in: id)
+        c.setBreak(true, at: 4, in: id)
+        c.namePart("Dusk", at: 2, in: id)
+        c.namePart("Night", at: 4, in: id)
+        var parts: [[String]] { c.playlists.first?.partPaths ?? [] }
+        var names: [Int: String] { c.playlists.first?.partNames ?? [:] }
+        // the first song of a part goes to the last part, and the part it left keeps its name
+        c.movePlaylistSongs(id, fromOffsets: [2], toOffset: 5)
+        #expect(parts == [["/1", "/2"], ["/4"], ["/5", "/3"]])
+        #expect(names == [2: "Dusk", 3: "Night"])
+        // and back up, landing where it was: first in Dusk again
+        c.movePlaylistSongs(id, fromOffsets: [4], toOffset: 2)
+        #expect(parts == [["/1", "/2"], ["/3", "/4"], ["/5"]])
+        #expect(names == [2: "Dusk", 4: "Night"])
+        // dropped where it already is, nothing changes
+        c.movePlaylistSongs(id, fromOffsets: [1], toOffset: 2)
+        #expect(parts == [["/1", "/2"], ["/3", "/4"], ["/5"]])
+        // a part left empty goes, and it's all still there in the file
+        c.movePlaylistSongs(id, fromOffsets: [4], toOffset: 0)
+        #expect(parts == [["/5", "/1", "/2"], ["/3", "/4"]])
+        #expect(Controller(storage: nil, playlistFolder: dir).playlists.first?.partPaths == parts)
+    }
+
     @Test func aRowSaysThePartItPlaysNextByName() async throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-parts-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

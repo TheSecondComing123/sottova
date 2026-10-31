@@ -48,6 +48,31 @@ struct UndoTests {
         #expect(c.playlists.first?.paths == ["/1", "/3"])
     }
 
+    @Test func undoPutsPartsBackAsTheyWere() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let id = try #require(c.newPlaylist(songs: ["/1", "/2", "/3", "/4"].map(song)))
+        c.setBreak(true, at: 2, in: id)
+        c.namePart("Dusk", at: 2, in: id)
+        var parts: [[String]] { c.playlists.first?.partPaths ?? [] }
+        // the last song of a part: it goes back to that part, not the next
+        var undo = undoing(c) { c.removeFromPlaylist(id, at: [1]) }
+        undo.undo()
+        #expect(parts == [["/1", "/2"], ["/3", "/4"]])
+        // a whole part, with its name
+        undo = undoing(c) { c.removeFromPlaylist(id, at: [2, 3]) }
+        #expect(parts == [["/1", "/2"]])
+        undo.undo()
+        #expect(parts == [["/1", "/2"], ["/3", "/4"]])
+        #expect(c.playlists.first?.partNames == [2: "Dusk"])
+        // something added since isn't lost
+        undo = undoing(c) { c.removeFromPlaylist(id, at: [0]) }
+        c.add([song("/5")], to: id)
+        undo.undo()
+        #expect(c.playlists.first?.paths == ["/1", "/2", "/3", "/4", "/5"])
+    }
+
     @Test func aClearedQueueComesBack() {
         let c = Controller(storage: nil)
         c.playNext(["/1", "/2"].map(song))

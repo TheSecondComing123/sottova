@@ -1072,12 +1072,14 @@ public final class Controller {
     }
 
     public func removeFromPlaylist(_ id: String, at offsets: IndexSet) {
-        guard let paths = playlists.first(where: { $0.id == id })?.paths else { return }
-        let removed = offsets.filter(paths.indices.contains).map { ($0, paths[$0]) }
+        guard let before = playlists.first(where: { $0.id == id }) else { return }
+        let removed = offsets.filter(before.paths.indices.contains).map { ($0, before.paths[$0]) }
         update(id) { $0.remove(at: offsets) }
         undo?.registerUndo(withTarget: self) { controller in
             controller.update(id) { playlist in
                 for (i, path) in removed { playlist.insert([path], at: i) }
+                // nothing else has changed since, so the parts can be just as they were
+                if playlist.paths == before.paths { (playlist.breaks, playlist.partNames) = (before.breaks, before.partNames) }
             }
             controller.undo?.registerUndo(withTarget: controller) { $0.removeFromPlaylist(id, at: IndexSet(removed.map(\.0))) }
         }
@@ -1102,12 +1104,7 @@ public final class Controller {
     }
 
     public func movePlaylistSongs(_ id: String, fromOffsets offsets: IndexSet, toOffset destination: Int) {
-        update(id) { playlist in
-            let moving = offsets.map { playlist.paths[$0] }
-            var rest = playlist.paths.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
-            rest.insert(contentsOf: moving, at: destination - offsets.count { $0 < destination })
-            playlist.paths = rest
-        }
+        update(id) { $0.move(offsets, to: destination) }
     }
 
     public func setGaps(_ gaps: Settings?, for id: String) {

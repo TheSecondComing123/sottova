@@ -112,6 +112,16 @@ public struct Playlist: Identifiable, Equatable, Sendable {
         breaks = Set(breaks.map { b in b - offsets.count { $0 < b } }.filter { $0 > 0 && $0 < paths.count })
     }
 
+    /// Out and back in: the other songs keep their parts, and the moved ones join the part they land in. Dropped
+    /// where they already were, nothing changes.
+    mutating func move(_ offsets: IndexSet, to destination: Int) {
+        let before = self
+        let moving = offsets.map { paths[$0] }
+        remove(at: offsets)
+        insert(moving, at: destination - offsets.count { $0 < destination })
+        if paths == before.paths { self = before }
+    }
+
     /// The songs part by part, in order; one part when there are no breaks.
     public var partPaths: [[String]] {
         var parts: [[String]] = [[]]
