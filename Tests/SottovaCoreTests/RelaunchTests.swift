@@ -4,6 +4,7 @@ import Testing
 
 /// What's still true after the app quits and opens again, against files in a temp folder. Rows open a minute ago on
 /// the live clock, as in HourTests.
+@Suite(.disabled(if: LiveClock.repeatsAnHour(), "rows on the live clock can't be set up while the clocks repeat an hour"))
 @MainActor
 struct RelaunchTests {
     private func temp() throws -> URL {
@@ -57,11 +58,6 @@ struct RelaunchTests {
         c.library = first.library
         c.refreshTracks()
         for _ in 0..<500 where c.catalog.albums.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
-    }
-
-    /// Fired by hand, a row set for any time soon would also count as due by itself.
-    private var farHour: Int {
-        Calendar.current.component(.hour, from: .now + 6 * 3600)
     }
 
     private func row(_ album: Album, ago: TimeInterval = 60, minutes: Int = 60) -> Alarm {
@@ -189,7 +185,7 @@ struct RelaunchTests {
     @Test func aSleepTimerAndARiseOutliveARelaunch() async throws {
         let storage = try temp()
         let (first, album) = try await controller(storage: storage)
-        var compline = Alarm(source: album.id, name: "Compline", hour: farHour, minute: 0, weekdays: Set(1...7))
+        var compline = Alarm(source: album.id, name: "Compline", hour: LiveClock.farHour, minute: 0, weekdays: Set(1...7))
         compline.minutes = 60
         first.addAlarm(compline)
         first.fire(compline.id, due: .now)
@@ -225,7 +221,7 @@ struct RelaunchTests {
     // MARK: Volume
 
     private func alarm(_ album: Album, volume: Double) -> Alarm {
-        var row = Alarm(source: album.id, name: "Lauds", hour: farHour, minute: 0, weekdays: Set(1...7))
+        var row = Alarm(source: album.id, name: "Lauds", hour: LiveClock.farHour, minute: 0, weekdays: Set(1...7))
         row.volume = volume
         return row
     }
@@ -258,7 +254,7 @@ struct RelaunchTests {
     @Test func aRowThatLeavesTheVolumeLeavesIt() async throws {
         let (c, album) = try await controller(storage: try temp())
         c.volume = 0.6
-        let row = Alarm(source: album.id, name: "Lauds", hour: farHour, minute: 0, weekdays: Set(1...7))
+        let row = Alarm(source: album.id, name: "Lauds", hour: LiveClock.farHour, minute: 0, weekdays: Set(1...7))
         c.addAlarm(row)
         c.fire(row.id, due: .now)
         c.sleep(minutes: 1)

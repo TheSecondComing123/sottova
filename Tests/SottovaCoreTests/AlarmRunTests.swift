@@ -3,6 +3,7 @@ import Testing
 @testable import SottovaCore
 
 /// What keeps an alarm from missing, or from doing the wrong thing with nobody there to stop it.
+@Suite(.disabled(if: LiveClock.repeatsAnHour(), "rows on the live clock can't be set up while the clocks repeat an hour"))
 @MainActor
 struct AlarmRunTests {
     private func temp() throws -> URL {
@@ -41,7 +42,7 @@ struct AlarmRunTests {
     }
 
     private func alarm(_ album: Album) -> Alarm {
-        Alarm(source: album.id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        Alarm(source: album.id, name: "Lauds", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
     }
 
     @Test func anAlarmStopsWhenItsMusicEndsInsteadOfShufflingEverything() async throws {
@@ -401,7 +402,7 @@ struct AlarmRunTests {
             try engine.start()
         }
         NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
-        try await Task.sleep(for: .milliseconds(100))
+        for _ in 0..<50 where c.status != .paused { try await Task.sleep(for: .milliseconds(10)) }
         #expect(c.status == .paused)
         for _ in 0..<400 where c.status != .playing { try await Task.sleep(for: .milliseconds(10)) }
         #expect(c.status == .playing)

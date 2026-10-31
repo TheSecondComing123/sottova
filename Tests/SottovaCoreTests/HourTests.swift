@@ -4,6 +4,7 @@ import Testing
 @testable import SottovaCore
 
 /// Alarms that play while you're at the Mac: when their window is open, and what the player does in it.
+@Suite(.disabled(if: LiveClock.repeatsAnHour(), "rows on the live clock can't be set up while the clocks repeat an hour"))
 @MainActor
 struct HourTests {
     private var calendar: Calendar {
@@ -280,7 +281,7 @@ struct HourTests {
     @Test func anAlarmThatMindsTheCalendarSkipsABusyDay() async throws {
         let (c, album) = try await controller()
         c.calendarBusy = { true }
-        var alarm = Alarm(source: album.id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        var alarm = Alarm(source: album.id, name: "Lauds", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
         c.addAlarm(alarm)
         c.fire(alarm.id, due: .now)
         #expect(c.status != .idle)
@@ -467,7 +468,7 @@ struct HourTests {
 
     @Test func anAlarmThatCantStartYetKeepsItsPart() async throws {
         let (c, album) = try await controller(songs: 4)
-        var row = Alarm(source: album.id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        var row = Alarm(source: album.id, name: "Lauds", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
         row.rotates = true
         row.parts = 2
         c.addAlarm(row)
@@ -499,7 +500,7 @@ struct HourTests {
                                                     meta: TrackMeta(title: "bad", artist: "c", album: "Bad", duration: 3))
         c.refreshTracks()
         for _ in 0..<500 where c.catalog.albums.count < 3 { try await Task.sleep(for: .milliseconds(10)) }
-        let row = Alarm(source: try #require(c.catalog.albums.first { $0.title == "Bad" }).id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        let row = Alarm(source: try #require(c.catalog.albums.first { $0.title == "Bad" }).id, name: "Lauds", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
         c.addAlarm(row)
         c.fire(row.id, due: .now)
         #expect(c.status == .idle)

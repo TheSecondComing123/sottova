@@ -63,7 +63,7 @@ struct AlarmTests {
 
     @Test func anAlarmMoreThanTenMinutesLateStaysQuiet() {
         let c = Controller(storage: nil)
-        let alarm = Alarm(source: "a", name: "A", hour: 7, minute: 2, weekdays: Set(1...7))
+        let alarm = Alarm(source: "a", name: "A", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
         c.addAlarm(alarm)
         let due = Date.now.addingTimeInterval(-11 * 60)
         c.fire(alarm.id, due: due)
@@ -76,6 +76,104 @@ struct AlarmTests {
         // Thu 10/29 08:00 to Thu 11/5 08:00: Fri, Mon, Tue, Wed, Thu
         let times = alarm.times(after: date(2026, 10, 29, 8, 0), until: date(2026, 11, 5, 8, 0), calendar: calendar)
         #expect(times == [date(2026, 10, 30, 7, 2), date(2026, 11, 2, 7, 2), date(2026, 11, 3, 7, 2), date(2026, 11, 4, 7, 2), date(2026, 11, 5, 7, 2)])
+    }
+}
+
+/// Clocks in New York go back on 2026-11-01 (1:59 EDT, then 1:00 EST) and forward on 2027-03-14 (1:59 EST, then 3:00 EDT).
+struct DaylightSavingTests {
+    private var calendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/New_York")!
+        return c
+    }
+
+    private func utc(_ text: String) -> Date {
+        ISO8601DateFormatter().date(from: text)!
+    }
+
+    // 2026-11-01 and 2027-03-14 are Sundays
+    private let lauds = Alarm(source: "a", name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+
+    private func row(_ hour: Int, _ minute: Int, minutes: Int? = nil, weekdays: Set<Int> = Set(1...7)) -> Alarm {
+        var alarm = Alarm(source: "a", name: "A", hour: hour, minute: minute, weekdays: weekdays)
+        alarm.minutes = minutes
+        alarm.whileHere = minutes != nil
+        return alarm
+    }
+
+    @Test func aWakeTimeKeepsItsClockTimeOverBothChanges() {
+        #expect(lauds.next(after: utc("2026-10-31T22:00:00Z"), calendar: calendar) == utc("2026-11-01T12:02:00Z"))
+        #expect(lauds.next(after: utc("2026-11-01T12:02:00Z"), calendar: calendar) == utc("2026-11-02T12:02:00Z"))
+        #expect(lauds.next(after: utc("2027-03-13T22:00:00Z"), calendar: calendar) == utc("2027-03-14T11:02:00Z"))
+        #expect(lauds.next(after: utc("2027-03-14T11:02:00Z"), calendar: calendar) == utc("2027-03-15T11:02:00Z"))
+    }
+
+    @Test func timesListsEachDayOnceOverBothChanges() {
+        #expect(lauds.times(after: utc("2026-10-31T00:00:00Z"), until: utc("2026-11-03T00:00:00Z"), calendar: calendar)
+            == [utc("2026-10-31T11:02:00Z"), utc("2026-11-01T12:02:00Z"), utc("2026-11-02T12:02:00Z")])
+        #expect(lauds.times(after: utc("2027-03-13T00:00:00Z"), until: utc("2027-03-16T00:00:00Z"), calendar: calendar)
+            == [utc("2027-03-13T12:02:00Z"), utc("2027-03-14T11:02:00Z"), utc("2027-03-15T11:02:00Z")])
+    }
+
+    @Test func aTimeThatHappensTwiceGoesOffTheFirstTimeOnly() {
+        let late = row(1, 30)
+        let times = late.times(after: utc("2026-11-01T00:00:00Z"), until: utc("2026-11-02T00:00:00Z"), calendar: calendar)
+        #expect(times == [utc("2026-11-01T05:30:00Z")])
+        // between the two 1:30s, and past the second
+        #expect(late.next(after: utc("2026-11-01T05:45:00Z"), calendar: calendar) == utc("2026-11-02T06:30:00Z"))
+        #expect(late.next(after: utc("2026-11-01T06:45:00Z"), calendar: calendar) == utc("2026-11-02T06:30:00Z"))
+    }
+
+    @Test func aTimeThatDoesntHappenGoesOffAtThreeAndOnce() {
+        let late = row(2, 30)
+        let times = late.times(after: utc("2027-03-14T00:00:00Z"), until: utc("2027-03-15T12:00:00Z"), calendar: calendar)
+        #expect(times == [utc("2027-03-14T07:00:00Z"), utc("2027-03-15T06:30:00Z")])
+    }
+
+    @Test func aWindowAcrossTwoIsItsMinutesLongInRealTime() {
+        // 23:00 for four hours: back an hour on the way through, so it ends at 2:00 on the clock
+        let back = row(23, 0, minutes: 240)
+        let start = utc("2026-11-01T03:00:00Z")
+        #expect(back.window(containing: utc("2026-11-01T05:30:00Z"), calendar: calendar)?.start == start)
+        #expect(back.window(containing: utc("2026-11-01T06:30:00Z"), calendar: calendar)?.start == start)
+        #expect(back.window(containing: utc("2026-11-01T06:59:00Z"), calendar: calendar)?.start == start)
+        #expect(back.window(containing: utc("2026-11-01T07:00:00Z"), calendar: calendar) == nil)
+        // forward an hour, so it ends at 4:00 on the clock
+        let forward = row(23, 0, minutes: 240)
+        let night = utc("2027-03-14T04:00:00Z")
+        #expect(forward.window(containing: utc("2027-03-14T07:30:00Z"), calendar: calendar)?.start == night)
+        #expect(forward.window(containing: utc("2027-03-14T08:00:00Z"), calendar: calendar) == nil)
+    }
+
+    @Test func aWindowStartingInTheHourThatHappensTwiceStartsTheFirstTime() {
+        let late = row(1, 30, minutes: 60)
+        let start = utc("2026-11-01T05:30:00Z")
+        #expect(late.window(containing: utc("2026-11-01T05:29:00Z"), calendar: calendar) == nil)
+        #expect(late.window(containing: utc("2026-11-01T05:45:00Z"), calendar: calendar)?.start == start)
+        #expect(late.window(containing: utc("2026-11-01T06:29:00Z"), calendar: calendar)?.start == start)
+        #expect(late.window(containing: utc("2026-11-01T06:30:00Z"), calendar: calendar) == nil)
+    }
+
+    @Test func theTestsThatStandAsideDoSoOnlyWhileTheHourRepeats() {
+        let newYork = calendar.timeZone
+        #expect(!LiveClock.repeatsAnHour(at: utc("2026-11-01T05:30:00Z"), in: newYork))
+        #expect(LiveClock.repeatsAnHour(at: utc("2026-11-01T05:58:00Z"), in: newYork))
+        #expect(LiveClock.repeatsAnHour(at: utc("2026-11-01T06:30:00Z"), in: newYork))
+        #expect(!LiveClock.repeatsAnHour(at: utc("2026-11-01T07:01:00Z"), in: newYork))
+        #expect(!LiveClock.repeatsAnHour(at: utc("2027-03-14T07:30:00Z"), in: newYork))
+    }
+
+    @Test func aWindowStartingInTheHourThatDoesntHappenStartsAtThree() {
+        let late = row(2, 30, minutes: 60)
+        #expect(late.window(containing: utc("2027-03-14T07:15:00Z"), calendar: calendar)?.start == utc("2027-03-14T07:00:00Z"))
+        #expect(late.window(containing: utc("2027-03-14T08:00:00Z"), calendar: calendar) == nil)
+    }
+
+    @Test func theDayOfAWindowAcrossMidnightIsTheDayItStarted() {
+        // Saturdays only: Saturday night into the Sunday the clocks change, and not the next night
+        let saturday = row(23, 0, minutes: 240, weekdays: [7])
+        #expect(saturday.window(containing: utc("2026-11-01T05:30:00Z"), calendar: calendar) != nil)
+        #expect(saturday.window(containing: utc("2026-11-02T05:30:00Z"), calendar: calendar) == nil)
     }
 }
 

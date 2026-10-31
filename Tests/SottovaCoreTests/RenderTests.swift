@@ -201,7 +201,7 @@ struct RenderTests {
     }
 
     /// The real path: a timer on the wall clock, then the album starts. Waits for the next minute, so up to 60 s.
-    @Test func anAlarmStartsItsAlbumOnTheMinute() async throws {
+    @Test(.disabled(if: LiveClock.repeatsAnHour(), "a row a minute off can't be set up while the clocks repeat an hour")) func anAlarmStartsItsAlbumOnTheMinute() async throws {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
         let storage = FileManager.default.temporaryDirectory.appending(path: "sottova-alarm-\(UUID().uuidString)")
