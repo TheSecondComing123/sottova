@@ -20,6 +20,7 @@ struct RenderTests {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
         let controller = Controller(engine: engine, storage: nil)
+        controller.volume = 1
         var settings = Settings()
         settings.fadeIn = 1
         settings.fadeOut = 1
@@ -65,6 +66,7 @@ struct RenderTests {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
         let controller = Controller(engine: engine, storage: nil)
+        controller.volume = 1
         var settings = Settings.presets.first { $0.name == "Continuous" }!
         settings.fadeIn = 1
         settings.crossfadeSec = 1
@@ -105,6 +107,7 @@ struct RenderTests {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
         let controller = Controller(engine: engine, storage: nil)
+        controller.volume = 1
         var settings = Settings()
         settings.fadeIn = 0.5
         settings.fadeOut = 0.5
@@ -148,6 +151,7 @@ struct RenderTests {
             let engine = AVAudioEngine()
             try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
             let c = Controller(engine: engine, storage: storage)
+            c.volume = 1
             var settings = Settings()
             settings.fadeIn = 0.5
             settings.fadeOut = 0.2
@@ -235,6 +239,7 @@ struct RenderTests {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2)!, maximumFrameCount: 480)
         let controller = Controller(engine: engine, storage: nil)
+        controller.volume = 1
         var settings = Settings()
         settings.fadeIn = 0.2
         settings.fadeOut = 0.2
