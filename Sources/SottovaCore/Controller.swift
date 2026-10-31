@@ -85,6 +85,8 @@ public final class Controller {
     @ObservationIgnored private var failures = 0
     /// False when an unreadable profile.json couldn't be moved aside: saving would overwrite it.
     @ObservationIgnored private var profileWritable = true
+    /// Off when a library.json that can't be read can't be moved either, so saving doesn't overwrite it.
+    @ObservationIgnored private var libraryWritable = true
     @ObservationIgnored private var needsReschedule = false
     @ObservationIgnored private var pausedForSleep: Date?
     /// A longer sleep doesn't pick up where it was: often that's a scheduled wake, with nobody there.
@@ -1677,18 +1679,22 @@ public final class Controller {
         do {
             library = try Library.load(from: url)
         } catch {
-            // keep the unreadable file for inspection instead of overwriting it on the next save
-            let aside = url.appendingPathExtension("broken")
-            try? FileManager.default.removeItem(at: aside)
-            try? FileManager.default.moveItem(at: url, to: aside)
-            problem = "couldn't read the library, so it's being rebuilt from your folders (the old one is kept as library.json.broken): \(error.localizedDescription)"
+            // the folder list is in the file too, so there's nothing to rebuild from until they're added again
+            let aside = url.deletingLastPathComponent().appending(path: "library.json.broken-\(Int(Date.now.timeIntervalSince1970))")
+            do {
+                try FileManager.default.moveItem(at: url, to: aside)
+                problem = "couldn't read the library, and your list of folders went with it, so add your folders again. the old file is \(aside.lastPathComponent)"
+            } catch {
+                libraryWritable = false
+                problem = "couldn't read the library or set the file aside, so your list of folders is gone for now and changes won't be saved: \(error.localizedDescription)"
+            }
         }
         refreshTracks()
     }
 
     /// Encoding a 20k-entry library takes ~100 ms, so it happens off the main actor, one save after another.
     private func saveLibrary() {
-        guard let url = storage?.appending(path: "library.json") else { return }
+        guard libraryWritable, let url = storage?.appending(path: "library.json") else { return }
         let snapshot = library
         saving = Task { [previous = saving] in
             await previous?.value

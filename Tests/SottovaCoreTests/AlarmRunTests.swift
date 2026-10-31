@@ -143,6 +143,21 @@ struct AlarmRunTests {
         #expect(c.library.entries[path]?.unreachable == true)
     }
 
+    /// Damaged before, and again: the earlier copy isn't deleted to make room.
+    @Test func aDamagedLibraryIsKeptAndSaysTheFoldersWentWithIt() throws {
+        let storage = try temp()
+        let url = storage.appending(path: "library.json")
+        try Data("first {".utf8).write(to: storage.appending(path: "library.json.broken"))
+        try Data("second {".utf8).write(to: url)
+        let c = Controller(storage: storage)
+        #expect(c.problem?.contains("folders") == true)
+        #expect(c.problem?.contains("rebuilt") == false)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        let kept = try FileManager.default.contentsOfDirectory(atPath: storage.path).filter { $0.hasPrefix("library.json.broken") }
+        let texts = try kept.map { try String(contentsOf: storage.appending(path: $0), encoding: .utf8) }
+        #expect(Set(texts) == ["first {", "second {"])
+    }
+
     @Test func aMissingAlarmsFileIsNothingToMention() throws {
         let c = Controller(storage: try temp())
         c.run()
