@@ -596,7 +596,8 @@ public final class Controller {
             if let minutes = alarm.minutes { sleep(minutes: Double(minutes)) }
             saveResume()
         } else {
-            problem = "the \(alarm.name) alarm went off, but there's nothing in it to play"
+            let away = library.entries.values.count { $0.unreachable == true }
+            problem = "the \(alarm.name) alarm went off, but there's nothing in it to play" + (away > 0 ? ". \(away) song\(away == 1 ? " is" : "s are") out of reach right now, which may be why" : "")
         }
         // one player: any other due now doesn't play, and says so
         for (other, at) in dueAlarms(now: now) {
@@ -1543,6 +1544,8 @@ public final class Controller {
     }
 
     public func systemDidWake(now: Date = .now) {
+        // a drive or a share is often back by now, and coming back doesn't always tell the watcher
+        if library.entries.values.contains(where: { $0.unreachable == true }) { rescan() }
         guard let since = pausedForSleep else { return }
         pausedForSleep = nil
         if now.timeIntervalSince(since) < Self.resumeWithin { command(.resume) }

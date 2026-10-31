@@ -839,4 +839,43 @@ struct AlarmRunTests {
         for _ in 0..<100 where c.library.entries[path]?.unplayable != true { try await Task.sleep(for: .milliseconds(10)) }
         #expect(c.library.entries[path]?.unplayable == false)
     }
+
+    @Test func aWakeLooksAgainWhenSomethingIsOutOfReach() async throws {
+        let setup = Controller(storage: try temp())
+        setup.addFolders([try oneSongFolder()])
+        for _ in 0..<500 where setup.tracks.isEmpty || setup.pendingAnalysis > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        let path = try #require(setup.tracks.first?.path)
+        var library = setup.library
+        library.entries[path]?.unreachable = true
+        let storage = try temp()
+        try library.save(to: storage.appending(path: "library.json"))
+        // not scanned, so there's no watcher that could be what finds it
+        let c = Controller(storage: storage)
+        #expect(c.tracks.isEmpty)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(c.tracks.isEmpty)
+        c.systemDidWake()
+        for _ in 0..<500 where c.tracks.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.tracks.count == 1)
+    }
+
+    @Test func anAlarmWithNothingToPlaySaysWhenSongsAreOutOfReach() async throws {
+        let folder = try oneSongFolder()
+        let c = Controller(storage: try temp())
+        c.addFolders([folder])
+        for _ in 0..<500 where c.catalog.albums.isEmpty || c.pendingAnalysis > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        let row = Alarm(source: try #require(c.catalog.albums.first).id, name: "Lauds", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
+        c.addAlarm(row)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: folder.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
+        c.rescan()
+        for _ in 0..<500 where !c.catalog.albums.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<500 where c.problem?.contains("nothing in it") != true {
+            c.fire(row.id, due: .now)
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(c.problem?.contains("nothing in it") == true)
+        #expect(c.problem?.contains("1 song") == true)
+        #expect(c.problem?.contains("out of reach") == true)
+    }
 }
