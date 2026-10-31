@@ -12,7 +12,8 @@ public final class Controller {
     public private(set) var tracks: [URL] = []
     public private(set) var skippedFiles: [URL] = []
     public private(set) var pendingAnalysis = 0
-    public private(set) var problem: String?
+    /// The last thing that went wrong, until something works again or it's dismissed.
+    public var problem: String?
     public private(set) var catalog = Catalog()
     public private(set) var current: Song?
     public private(set) var recent: [Song] = []

@@ -271,6 +271,24 @@ private struct Sidebar: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .bottom)
 
+            // where it can be seen while working, not only in the menu-bar panel; a click puts it away
+            if let problem = controller.problem {
+                Button { controller.problem = nil } label: {
+                    Text(problem)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle(scale: 0.99))
+                .help("dismiss")
+                .padding(.horizontal, 24)
+                .padding(.bottom, 8)
+                .transition(.opacity)
+            }
+
             // only when there's news: the song count alone is already on the Songs page
             if controller.folders.isEmpty || controller.pendingAnalysis > 0 || !controller.skippedFiles.isEmpty {
                 Text(controller.libraryLine)
