@@ -59,12 +59,22 @@ public enum Presence {
         _ = try? await events.requestFullAccessToEvents()
     }
 
-    /// Something on a calendar that counts, right now; an event marked free doesn't.
+    /// An event you declined isn't happening for you. All-day ones are mostly reminders and days off that say nothing
+    /// about right now, so they need to be marked busy or out of office; a timed one counts unless marked free.
+    static func countsAsBusy(_ availability: EKEventAvailability, allDay: Bool, declined: Bool) -> Bool {
+        if declined { return false }
+        return allDay ? availability == .busy || availability == .unavailable : availability != .free
+    }
+
+    /// Something on a calendar that counts, right now.
     @MainActor static func busy(at now: Date = .now) -> Bool {
         let counted = calendars.filter(counts)
         guard !counted.isEmpty else { return false }
         return events.events(matching: events.predicateForEvents(withStart: now, end: now + 1, calendars: counted))
-            .contains { $0.availability != .free }
+            .contains { event in
+                countsAsBusy(event.availability, allDay: event.isAllDay,
+                             declined: event.attendees?.first { $0.isCurrentUser }?.participantStatus == .declined)
+            }
     }
 
     /// Whether any other app is playing sound or using the mic: Core Audio's per-process flags, which, unlike the

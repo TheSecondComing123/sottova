@@ -1,4 +1,5 @@
 import AVFoundation
+import EventKit
 import Testing
 @testable import SottovaCore
 
@@ -49,6 +50,21 @@ struct HourTests {
         #expect(Presence.countsByDefault(birthday: false, title: "alan's calendar"))
         #expect(!Presence.countsByDefault(birthday: true, title: "Birthdays"))
         #expect(!Presence.countsByDefault(birthday: false, title: "Holidays in United States"))
+    }
+
+    @Test func aDeclinedEventIsntBusyAndAnAllDayOneOnlyIfMarkedBusy() {
+        #expect(Presence.countsAsBusy(.busy, allDay: false, declined: false))
+        #expect(Presence.countsAsBusy(.tentative, allDay: false, declined: false))
+        // a calendar that doesn't say, as before
+        #expect(Presence.countsAsBusy(.notSupported, allDay: false, declined: false))
+        #expect(!Presence.countsAsBusy(.free, allDay: false, declined: false))
+        #expect(!Presence.countsAsBusy(.busy, allDay: false, declined: true))
+        #expect(!Presence.countsAsBusy(.busy, allDay: true, declined: true))
+        #expect(Presence.countsAsBusy(.busy, allDay: true, declined: false))
+        #expect(Presence.countsAsBusy(.unavailable, allDay: true, declined: false))
+        #expect(!Presence.countsAsBusy(.free, allDay: true, declined: false))
+        #expect(!Presence.countsAsBusy(.tentative, allDay: true, declined: false))
+        #expect(!Presence.countsAsBusy(.notSupported, allDay: true, declined: false))
     }
 
     @Test func aHeldSilenceDoesntCountDownButAPieceGoesOn() {
