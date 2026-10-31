@@ -23,6 +23,9 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     public var minutes: Int?
     /// Plays a piece now and then from its time for `minutes`, while you're at the Mac, instead of starting by itself.
     public var whileHere = false
+    /// While your calendar has something on, one that plays while you're here waits and one that starts by itself
+    /// skips the day.
+    public var heedsCalendar = false
 
     public init(source: String, name: String, hour: Int, minute: Int, weekdays: Set<Int> = [], day: Date? = nil, shuffled: Bool = false) {
         self.source = source
@@ -35,7 +38,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere
+        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar
     }
 
     // alarms.json from before alarms could be turned off has no `on`
@@ -53,6 +56,8 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         volume = try c.decodeIfPresent(Double.self, forKey: .volume)
         minutes = try c.decodeIfPresent(Int.self, forKey: .minutes)
         whileHere = try c.decodeIfPresent(Bool.self, forKey: .whileHere) ?? false
+        // saved before it was a choice: those that play while you're here already waited for the calendar
+        heedsCalendar = try c.decodeIfPresent(Bool.self, forKey: .heedsCalendar) ?? whileHere
     }
 
     /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.

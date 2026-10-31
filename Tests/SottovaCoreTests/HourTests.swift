@@ -45,6 +45,12 @@ struct HourTests {
         #expect(once.window(containing: date(2026, 11, 1, 10, 0), calendar: calendar) == nil)
     }
 
+    @Test func birthdaysAndHolidaysDontMakeAnHourWait() {
+        #expect(Presence.countsByDefault(birthday: false, title: "alan's calendar"))
+        #expect(!Presence.countsByDefault(birthday: true, title: "Birthdays"))
+        #expect(!Presence.countsByDefault(birthday: false, title: "Holidays in United States"))
+    }
+
     @Test func aHeldSilenceDoesntCountDownButAPieceGoesOn() {
         var m = Machine(settings: Settings(), seed: 1)
         _ = m.handle(.wait(20))
@@ -77,7 +83,7 @@ struct HourTests {
         c.refreshTracks()
         try await Task.sleep(for: .milliseconds(500))
         let album = try #require(c.catalog.albums.first)
-        c.presence = { nil }
+        c.presence = { _ in nil }
         return (c, album)
     }
 
@@ -126,7 +132,7 @@ struct HourTests {
     @Test func awayTheNextPieceWaitsAndTheMacMaySleep() async throws {
         let (c, album) = try await controller()
         _ = open(c, album)
-        c.presence = { .away }
+        c.presence = { _ in .away }
         c.checkHours()
         let left = try #require(c.machine.restRemaining)
         c.advance(120)
@@ -134,7 +140,7 @@ struct HourTests {
         #expect(c.machine.restRemaining == left)
         #expect(c.hold == .away)
         #expect(c.nextTrackAt == nil)
-        c.presence = { nil }
+        c.presence = { _ in nil }
         c.checkHours()
         #expect(c.hold == nil)
         c.advance(left + 0.1)
@@ -162,7 +168,7 @@ struct HourTests {
     @Test func playingSomethingYourselfTakesOverFromTheHour() async throws {
         let (c, album) = try await controller()
         _ = open(c, album)
-        c.presence = { .call }
+        c.presence = { _ in .call }
         c.checkHours()
         #expect(c.hold == .call)
         c.play(album.songs)
@@ -221,6 +227,43 @@ struct HourTests {
         c.checkHours()
         #expect(c.upNext.map(\.path) == album.songs.map(\.id))
         #expect(c.origin?.shuffled == false)
+    }
+
+    @Test func onlyARowThatMindsTheCalendarWaitsForIt() async throws {
+        let (c, album) = try await controller()
+        var alarm = open(c, album)
+        alarm.heedsCalendar = false
+        c.updateAlarm(alarm)
+        c.presence = { $0 ? .busy : nil }
+        c.checkHours()
+        #expect(c.hold == nil)
+        alarm.heedsCalendar = true
+        c.updateAlarm(alarm)
+        c.checkHours()
+        #expect(c.hold == .busy)
+    }
+
+    @Test func anAlarmThatMindsTheCalendarSkipsABusyDay() async throws {
+        let (c, album) = try await controller()
+        c.calendarBusy = { true }
+        var alarm = Alarm(source: album.id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        c.addAlarm(alarm)
+        c.fire(alarm.id, due: .now)
+        #expect(c.status != .idle)
+        c.sleep(minutes: 1)
+        c.systemWillSleep()
+        alarm.heedsCalendar = true
+        c.updateAlarm(alarm)
+        c.fire(alarm.id, due: .now)
+        #expect(c.status == .idle)
+        #expect(c.problem?.contains("calendar") == true)
+    }
+
+    @Test func rowsSavedBeforeTheChoiceKeepWhatTheyDid() throws {
+        let old = #"[{"id":"6E1C6A94-13D5-455F-A1BC-8C0E32F97A77","source":"x","name":"a","hour":7,"minute":2,"weekdays":[2],"shuffled":false,"whileHere":true},"#
+            + #"{"id":"5DA8B58F-F7AE-4F0C-8FE7-16C12F92132C","source":"y","name":"b","hour":20,"minute":0,"weekdays":[2],"shuffled":false}]"#
+        let alarms = try JSONDecoder().decode([Alarm].self, from: Data(old.utf8))
+        #expect(alarms.map(\.heedsCalendar) == [true, false])
     }
 
     @Test func anHourGoesRoundItsCollectionAgain() async throws {

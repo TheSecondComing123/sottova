@@ -30,6 +30,7 @@ struct AlarmSheet: View {
     @State private var repeats: Repeat
     @State private var shuffled: Bool
     @State private var volume: Double?
+    @State private var heedsCalendar: Bool
     private let preview = AlarmPreview.shared
 
     enum Kind: String, CaseIterable {
@@ -61,6 +62,7 @@ struct AlarmSheet: View {
             _until = State(initialValue: Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: .now)!)
             _repeats = State(initialValue: .once)
             _shuffled = State(initialValue: false)
+            _heedsCalendar = State(initialValue: false)
             _stops = State(initialValue: false)
             // quiet by default: whatever the speaker is turned up to, this is what wakes you
             _volume = State(initialValue: 0.15)
@@ -73,14 +75,15 @@ struct AlarmSheet: View {
             _stops = State(initialValue: alarm.minutes != nil)
             _repeats = State(initialValue: Repeat.allCases.first { $0.days == alarm.weekdays } ?? .weekdays)
             _shuffled = State(initialValue: alarm.shuffled)
+            _heedsCalendar = State(initialValue: alarm.heedsCalendar)
             _volume = State(initialValue: alarm.volume)
         }
     }
 
     /// What a new one starts from: 7 AM, once, quiet; or the afternoon at the desk, every day, shuffled, at whatever
     /// the speaker is at.
-    private static func defaults(_ kind: Kind) -> (start: Int, end: Int, repeats: Repeat, shuffled: Bool, volume: Double?) {
-        kind == .whileHere ? (15, 19, .daily, true, nil) : (7, 8, .once, false, 0.15)
+    private static func defaults(_ kind: Kind) -> (start: Int, end: Int, repeats: Repeat, shuffled: Bool, volume: Double?, calendar: Bool) {
+        kind == .whileHere ? (15, 19, .daily, true, nil, true) : (7, 8, .once, false, 0.15, false)
     }
 
     /// Whether this Mac's clock shows AM and PM.
@@ -117,6 +120,7 @@ struct AlarmSheet: View {
         let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
         var alarm = Alarm(source: source, name: name, hour: parts.hour ?? 7, minute: parts.minute ?? 0, weekdays: repeats.days, shuffled: shuffled)
         alarm.volume = volume
+        alarm.heedsCalendar = heedsCalendar
         alarm.whileHere = kind == .whileHere
         alarm.minutes = alarm.whileHere || stops ? span : nil
         if case .edit(let old) = request {
@@ -173,8 +177,8 @@ struct AlarmSheet: View {
                 }))
                 Strip(selection: $repeats)
                 if let alarm {
-                    Text(alarm.whileHere ? "plays now and then, \(AlarmLine.time(alarm)) to \(AlarmLine.end(of: alarm, minutes: span)) \(AlarmLine.days(alarm)). waits while you're away, on a call or playing something else"
-                        : AlarmLine.describe(alarm) + (SystemWake.shared.trusted || SystemWake.shared.missing(for: [alarm]).isEmpty ? "" : ". saving asks for your password once, so the mac can wake for alarms from then on"))
+                    Text(alarm.whileHere ? "plays now and then, \(AlarmLine.time(alarm)) to \(AlarmLine.end(of: alarm, minutes: span)) \(AlarmLine.days(alarm)). waits while you're away, on a call\(heedsCalendar ? ", playing something else or busy on your calendar" : " or playing something else")"
+                        : AlarmLine.describe(alarm) + (heedsCalendar ? ", not on days your calendar has something on then" : "") + (SystemWake.shared.trusted || SystemWake.shared.missing(for: [alarm]).isEmpty ? "" : ". saving asks for your password once, so the mac can wake for alarms from then on"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.faint)
                         .fixedSize(horizontal: false, vertical: true)
@@ -195,7 +199,12 @@ struct AlarmSheet: View {
                     guard let alarm else { return }
                     if editing { controller.updateAlarm(alarm) } else { controller.addAlarm(alarm) }
                     dismiss()
-                    if !alarm.whileHere { SystemWake.shared.schedule(for: controller.alarms) }
+                    if alarm.heedsCalendar {
+                        Task { await Presence.askForCalendars() }
+                    }
+                    if !alarm.whileHere {
+                        SystemWake.shared.schedule(for: controller.alarms)
+                    }
                 }
                 .buttonStyle(InvertedButton())
                 .keyboardShortcut(.defaultAction)
@@ -217,6 +226,7 @@ struct AlarmSheet: View {
             if repeats == was.repeats { repeats = next.repeats }
             if shuffled == was.shuffled { shuffled = next.shuffled }
             if volume == was.volume { volume = next.volume }
+            if heedsCalendar == was.calendar { heedsCalendar = next.calendar }
         }
         .onDisappear { preview.stop() }
     }
@@ -252,10 +262,11 @@ struct AlarmSheet: View {
         .foregroundStyle(Theme.muted)
     }
 
-    /// The order, and the volume it plays at.
+    /// The order, the calendar, and the volume it plays at.
     @ViewBuilder private var settings: some View {
         VStack(spacing: 8) {
             Toggle("Shuffled", isOn: $shuffled)
+            Toggle("Not while my calendar is busy", isOn: $heedsCalendar)
             Toggle("Set the volume", isOn: Binding(get: { volume != nil }, set: { volume = $0 ? 0.15 : nil }))
             if let level = volume {
                 HStack(spacing: 12) {

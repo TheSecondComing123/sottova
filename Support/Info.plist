@@ -27,6 +27,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Music that plays while you're at the Mac waits while your calendar has something on. Sottova only looks at what's on right now, and nothing leaves your Mac.</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
 </dict>

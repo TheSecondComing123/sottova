@@ -1,3 +1,4 @@
+import EventKit
 import ServiceManagement
 import SwiftUI
 import SottovaCore
@@ -768,6 +769,7 @@ private struct GeneralPage: View {
             SwitchRow(title: "Accept sottova:// links",
                       detail: "play, pause, toggle, skip and preset/minecraft, from Raycast, Shortcuts or a script. status.json in Application Support/Sottova follows every change.",
                       isOn: $controller.acceptsURLs)
+            CalendarChoices()
         }
         .onAppear { opensAtLogin = SMAppService.mainApp.status == .enabled }
     }
@@ -785,6 +787,59 @@ private struct GeneralPage: View {
         }
         // the user can also change this in System Settings, so read back what actually happened
         opensAtLogin = SMAppService.mainApp.status == .enabled
+    }
+}
+
+/// Which calendars count for a row on Your day set to mind them.
+private struct CalendarChoices: View {
+    @State private var status = EKEventStore.authorizationStatus(for: .event)
+    @State private var calendars: [EKCalendar] = []
+    @State private var counted: [String: Bool] = [:]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Heading(title: "Calendar")
+            Text("a row on your day set to \"not while my calendar is busy\" waits, or skips the day, while one of these has something on")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 4)
+            switch status {
+            case .fullAccess:
+                ForEach(calendars, id: \.calendarIdentifier) { calendar in
+                    SwitchRow(title: calendar.title, detail: calendar.source.title, isOn: Binding(
+                        get: { counted[calendar.calendarIdentifier] ?? Presence.counts(calendar) },
+                        set: { on in
+                            Presence.setCounts(on, for: calendar)
+                            counted[calendar.calendarIdentifier] = on
+                        }))
+                }
+            case .notDetermined:
+                Button("Allow access to calendars") {
+                    Task {
+                        await Presence.askForCalendars()
+                        refresh()
+                    }
+                }
+                .buttonStyle(InvertedButton())
+            default:
+                HStack(spacing: 8) {
+                    Text("sottova can't see your calendars")
+                    LinkText(text: "allow it in System Settings") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
+                    }
+                    .foregroundStyle(Theme.text)
+                }
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.muted)
+            }
+        }
+        .onAppear(perform: refresh)
+    }
+
+    private func refresh() {
+        status = EKEventStore.authorizationStatus(for: .event)
+        calendars = Presence.calendars
     }
 }
 

@@ -149,6 +149,10 @@ public final class Controller {
         // alarms first: a piece restored mid-hour goes on being the hour's
         loadAlarms()
         restoreResume()
+        // a row that minds your calendar can only once it may read it
+        if alarms.contains(where: { $0.on && $0.heedsCalendar }) {
+            Task { await Presence.askForCalendars() }
+        }
         loadTrims()
         publish()
         rescan()
@@ -398,6 +402,8 @@ public final class Controller {
         let songs = songs(for: alarm)
         if now.timeIntervalSince(due) > Self.alarmLateness {
             problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
+        } else if alarm.heedsCalendar, calendarBusy() {
+            problem = "\(alarm.name) didn't play at \(due.formatted(date: .omitted, time: .shortened)): your calendar had something on"
         } else if !songs.isEmpty {
             if let volume = alarm.volume { self.volume = volume }
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
@@ -432,7 +438,9 @@ public final class Controller {
     /// The stop after this piece is the hour's, not yours, so whatever you play next isn't cut short by it.
     @ObservationIgnored private var hourEnding = false
     /// Reads the Mac for a reason to wait; tests put their own in.
-    @ObservationIgnored var presence: @MainActor () -> Hold? = { Presence.hold() }
+    @ObservationIgnored var presence: @MainActor (_ calendar: Bool) -> Hold? = { Presence.hold(calendar: $0) }
+    /// Whether the calendar has something on now; tests put their own in.
+    @ObservationIgnored var calendarBusy: @MainActor () -> Bool = { Presence.busy() }
     /// Why the next piece of an hour is waiting.
     public private(set) var hold: Hold?
 
@@ -480,7 +488,8 @@ public final class Controller {
             alarms.removeAll { alarm in over.contains { $0.id == alarm.id } }
             alarmsChanged()
         }
-        setHold(hourPlaying == nil || status == .idle ? nil : presence())
+        let hour = alarms.first { $0.id == hourPlaying }
+        setHold(hour == nil || status == .idle ? nil : presence(hour?.heedsCalendar ?? false))
     }
 
     /// The next hour takes over from the one playing: its collection is next, and a silence already under way can only

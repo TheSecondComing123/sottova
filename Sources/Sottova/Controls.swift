@@ -61,6 +61,7 @@ extension Controller {
             case .away: return "waiting till you're back"
             case .call: return "waiting till your call ends"
             case .media: return "waiting while something else plays"
+            case .busy: return "waiting while your calendar has something on"
             case nil: break
             }
             let left = nextTrackAt?.timeIntervalSince(now) ?? 0
