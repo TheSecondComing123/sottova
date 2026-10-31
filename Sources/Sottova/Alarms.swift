@@ -331,15 +331,17 @@ private struct Strip<Option: CaseIterable & Hashable & RawRepresentable>: View w
                 let chosen = option == selection
                 Button { selection = option } label: {
                     Text(option.rawValue)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13, weight: chosen ? .semibold : .medium))
                         .foregroundStyle(chosen ? Theme.text : Theme.muted)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
                         .frame(height: 30)
                         .background {
+                            // the fill alone is barely lighter than the strip in monochrome; the edge says which
                             if chosen {
                                 RoundedRectangle(cornerRadius: 6)
                                     .fill(Theme.hover)
+                                    .strokeBorder(Theme.faint, lineWidth: 1)
                                     .matchedGeometryEffect(id: "fill", in: fill)
                             }
                         }
@@ -475,7 +477,8 @@ private struct AlarmRow: View {
                     }
                     Spacer(minLength: 16)
                 }
-                .opacity(alarm.on ? 1 : 0.4)
+                // turned off, not unavailable: lighter than the 0.4 that means a control can't be used
+                .opacity(alarm.on ? 1 : 0.6)
                 .padding(.leading, 12)
                 .padding(.vertical, 8)
                 .contentShape(.rect)

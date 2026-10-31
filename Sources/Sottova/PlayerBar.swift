@@ -38,7 +38,8 @@ struct PlayerBar: View {
             HStack(spacing: 8) {
                 SleepButton()
                 Button(action: toggleQueue) {
-                    Ph.queue.icon(size: 16)
+                    // bold when open, so open reads differently from just being under the pointer
+                    Ph.queue.icon(showsQueue ? .bold : .duotone, size: 16)
                         .foregroundStyle(showsQueue ? Theme.text : Theme.muted)
                         .frame(width: 32, height: 32)
                         .background(showsQueue ? Theme.hover : .clear, in: .rect(cornerRadius: 8))

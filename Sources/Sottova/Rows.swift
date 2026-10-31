@@ -257,7 +257,7 @@ struct AlbumTile: View {
             }
             // Custom is edited on the album page; here it only shows that it's the one in use
             if gaps == "Custom" {
-                choices.append(.item("Custom", checked: true) {})
+                choices.append(.item("Custom", checked: true, enabled: false) {})
             }
             return [
                 .item("Play") { controller.play(album.songs) },

@@ -11,10 +11,12 @@ struct MenuEntry {
 
     var title = ""
     var checked = false
+    /// Off: shown dimmed and can't be chosen, so the menu keeps its shape.
+    var enabled = true
     let kind: Kind
 
-    static func item(_ title: String, checked: Bool = false, action: @escaping () -> Void) -> MenuEntry {
-        MenuEntry(title: title, checked: checked, kind: .action(action))
+    static func item(_ title: String, checked: Bool = false, enabled: Bool = true, action: @escaping () -> Void) -> MenuEntry {
+        MenuEntry(title: title, checked: checked, enabled: enabled, kind: .action(action))
     }
 
     static func submenu(_ title: String, _ entries: [MenuEntry]) -> MenuEntry {
@@ -24,7 +26,7 @@ struct MenuEntry {
     static var divider: MenuEntry { MenuEntry(kind: .divider) }
 
     var selectable: Bool {
-        if case .divider = kind { false } else { true }
+        if case .divider = kind { false } else { enabled }
     }
 }
 
@@ -280,14 +282,14 @@ private struct MenuList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(level.entries.enumerated()), id: \.offset) { index, entry in
-                if entry.selectable {
-                    MenuRow(entry: entry, index: index, level: level, depth: depth, presenter: presenter)
-                } else {
+                if case .divider = entry.kind {
                     Rectangle()
                         .fill(Theme.text.opacity(0.08))
                         .frame(height: 1)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
+                } else {
+                    MenuRow(entry: entry, index: index, level: level, depth: depth, presenter: presenter)
                 }
             }
         }
@@ -324,14 +326,14 @@ private struct MenuRow: View {
                     .opacity(lit ? 1 : 0.6)
             }
         }
-        .foregroundStyle(lit ? Theme.onPrimary : Theme.text)
+        .foregroundStyle(lit ? Theme.onPrimary : entry.enabled ? Theme.text : Theme.faint)
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(lit ? Theme.primary : .clear, in: .rect(cornerRadius: 8))
         .contentShape(.rect)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("menu")) } action: { level.frames[index] = $0 }
-        .onHover { $0 ? presenter.hover(index, depth: depth) : presenter.leave(index, depth: depth) }
-        .onTapGesture { presenter.choose(index, depth: depth) }
+        .onHover { guard entry.enabled else { return }; $0 ? presenter.hover(index, depth: depth) : presenter.leave(index, depth: depth) }
+        .onTapGesture { if entry.enabled { presenter.choose(index, depth: depth) } }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(entry.title)
         .accessibilityAddTraits(entry.checked ? [.isButton, .isSelected] : .isButton)

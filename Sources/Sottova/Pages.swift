@@ -916,6 +916,7 @@ struct MoreMenu<Content: View>: View {
         .buttonStyle(.plain)
         .fixedSize()
         .help("more")
+        .accessibilityLabel("more")
     }
 }
 
