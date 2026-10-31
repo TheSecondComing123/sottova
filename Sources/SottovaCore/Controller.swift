@@ -89,6 +89,10 @@ public final class Controller {
     @ObservationIgnored private var pausedForSleep = false
     /// An alarm started what's playing: when its music ends it stops, with nobody there to press stop.
     @ObservationIgnored private var fromAlarm = false
+    /// Off when alarms.json can't be read or moved, so saving doesn't overwrite it.
+    @ObservationIgnored private var alarmsWritable = true
+    /// A failure to play, which the next piece that plays puts right; other messages stay until they're read.
+    @ObservationIgnored private var playbackProblem: String?
     @ObservationIgnored private var assertion: IOPMAssertionID?
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var lastTick: ContinuousClock.Instant?
@@ -388,7 +392,7 @@ public final class Controller {
     }
 
     private func alarmsChanged() {
-        if let url = storage?.appending(path: "alarms.json") {
+        if alarmsWritable, let url = storage?.appending(path: "alarms.json") {
             do {
                 try JSONEncoder().encode(alarms).write(to: url, options: .atomic)
             } catch {
@@ -399,8 +403,21 @@ public final class Controller {
     }
 
     private func loadAlarms() {
-        guard let url = storage?.appending(path: "alarms.json"), let data = try? Data(contentsOf: url),
-              let saved = try? JSONDecoder().decode([Alarm].self, from: data) else { return }
+        guard let url = storage?.appending(path: "alarms.json"), FileManager.default.fileExists(atPath: url.path) else { return }
+        let saved: [Alarm]
+        do {
+            saved = try JSONDecoder().decode([Alarm].self, from: Data(contentsOf: url))
+        } catch {
+            let aside = url.deletingLastPathComponent().appending(path: "alarms.json.unreadable-\(Int(Date.now.timeIntervalSince1970))")
+            do {
+                try FileManager.default.moveItem(at: url, to: aside)
+                problem = "couldn't read your alarms, so none are set. the old file is \(aside.lastPathComponent)"
+            } catch {
+                alarmsWritable = false
+                problem = "couldn't read your alarms or set the file aside, so none are set and changes to them won't be saved: \(error.localizedDescription)"
+            }
+            return
+        }
         // a one-off whose time passed while the app was closed is dropped, not played late
         alarms = saved.filter { $0.next(after: .now) != nil || $0.whileHere && $0.window(containing: .now) != nil }
         if alarms != saved {
@@ -1410,6 +1427,7 @@ public final class Controller {
                 try engine.start()
             } catch {
                 problem = "couldn't restart audio output: \(error.localizedDescription)"
+                playbackProblem = problem
                 return
             }
             if needsReschedule {
@@ -1448,7 +1466,7 @@ public final class Controller {
             refreshRecent()
             startedAt = Date()
             failures = 0
-            problem = nil
+            if problem == playbackProblem { problem = nil }
             send(.trackStarted(duration: duration))
             publish()
             saveResume()
@@ -1457,6 +1475,7 @@ public final class Controller {
             // ponytail: gives up after as many failures in a row as there are tracks, not after trying each one
             guard failures < tracks.count else {
                 problem = "couldn't play anything in your folders: \(error.localizedDescription)"
+                playbackProblem = problem
                 send(.stop)
                 return
             }

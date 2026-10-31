@@ -69,4 +69,33 @@ struct AlarmRunTests {
         let resume = try JSONDecoder().decode(Controller.ResumeState.self, from: Data(contentsOf: storage.appending(path: "resume.json")))
         #expect(resume.fromAlarm == true)
     }
+
+    @Test func anUnreadableAlarmsFileIsSetAsideAndSaid() throws {
+        let storage = try temp()
+        let url = storage.appending(path: "alarms.json")
+        try Data("[{\"broken".utf8).write(to: url)
+        let c = Controller(storage: storage)
+        c.run()
+        #expect(c.problem?.contains("alarms") == true)
+        c.addAlarm(Alarm(source: "a", name: "A", hour: 7, minute: 2, weekdays: [2]))
+        let files = try FileManager.default.contentsOfDirectory(atPath: storage.path)
+        let aside = try #require(files.first { $0.hasPrefix("alarms.json.unreadable") })
+        #expect(try String(contentsOf: storage.appending(path: aside), encoding: .utf8) == "[{\"broken")
+    }
+
+    @Test func aMissingAlarmsFileIsNothingToMention() throws {
+        let c = Controller(storage: try temp())
+        c.run()
+        #expect(c.problem?.contains("alarms") != true)
+    }
+
+    @Test func aMessageOutlivesTheNextPiece() async throws {
+        let (c, album, _) = try await controller()
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.problem = "the Lauds alarm went off, but there's nothing in it to play"
+        c.fire(row.id, due: .now)
+        #expect(c.status == .playing)
+        #expect(c.problem != nil)
+    }
 }
