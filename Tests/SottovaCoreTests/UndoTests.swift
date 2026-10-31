@@ -58,3 +58,29 @@ struct UndoTests {
         #expect(c.upNext == queued)
     }
 }
+
+@MainActor
+struct QueueTests {
+    private func song(_ path: String) -> Song {
+        Song(id: path, title: "t", work: "t", detail: nil, artist: "p", album: "a", albumID: "a", albumArtist: "",
+             composer: nil, trackNumber: nil, discNumber: nil, year: nil, duration: 60, artwork: nil, searchKey: path)
+    }
+
+    @Test func songsDroppedIntoTheQueueLandWhereTheyFall() {
+        let c = Controller(storage: nil)
+        c.playNext(["/1", "/2", "/3"].map(song))
+        c.playNext([song("/x")], at: 2)
+        #expect(c.upNext.map(\.path) == ["/1", "/2", "/x", "/3"])
+        c.playNext([song("/y")], at: 99)
+        #expect(c.upNext.last?.path == "/y")
+    }
+
+    @Test func playNowTakesAQueuedSongAndLeavesTheRestInOrder() throws {
+        let c = Controller(storage: nil)
+        c.playNext(["/1", "/2", "/3"].map(song))
+        let third = try #require(c.upNext.last)
+        c.playQueued(third.id)
+        // it went first and was taken to play; the file isn't there, so nothing does
+        #expect(c.upNext.map(\.path) == ["/1", "/2"])
+    }
+}

@@ -40,10 +40,13 @@ struct QueuePanel: View {
                 .overlayScrollers()
                 .row()
                 if controller.upNext.isEmpty {
-                    Text("nothing queued yet. right-click a song and pick play next")
+                    Text("nothing queued yet. drop songs here, or right-click one and pick play next")
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.faint)
                         .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                        .dropDestination(for: URL.self) { urls, _ in queue(urls, at: 0) }
                         .row()
                 }
                 ForEach(controller.upNext) { entry in
@@ -51,6 +54,16 @@ struct QueuePanel: View {
                         .row()
                 }
                 .onMove { controller.moveQueued(fromOffsets: $0, toOffset: $1) }
+                // songs dragged in from a page land where the list's insertion line shows
+                .onInsert(of: [.fileURL]) { index, providers in
+                    Task {
+                        var urls: [URL] = []
+                        for provider in providers {
+                            if let url = await Self.url(from: provider) { urls.append(url) }
+                        }
+                        _ = queue(urls, at: index)
+                    }
+                }
                 Text(controller.upNext.isEmpty ? "shuffling everything" : "then shuffling everything")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.faint)
@@ -64,6 +77,19 @@ struct QueuePanel: View {
         .frame(width: 340)
         .background(Theme.raised, in: .rect(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
+    }
+
+    private func queue(_ urls: [URL], at index: Int) -> Bool {
+        let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
+        guard !songs.isEmpty else { return false }
+        withAnimation(Theme.quick) { controller.playNext(songs, at: index) }
+        return true
+    }
+
+    private static func url(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { done in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in done.resume(returning: url) }
+        }
     }
 
     private func label(_ text: String) -> some View {
@@ -104,6 +130,7 @@ struct QueuePanel: View {
 private struct QueueRow: View {
     let entry: QueueEntry
     @Environment(Controller.self) private var controller
+    @Environment(\.navigate) private var navigate
     @State private var hovering = false
 
     var body: some View {
@@ -127,6 +154,14 @@ private struct QueueRow: View {
         .frame(height: 48)
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        .sottovaMenu {
+            [.item("Play now") { controller.playQueued(entry.id) }]
+                + (song.map { song in [.item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) }] } ?? [])
+                + [
+                    .divider,
+                    .item("Remove from the queue") { withAnimation(Theme.quick) { controller.removeQueued(entry.id) } },
+                ]
+        }
     }
 }
 

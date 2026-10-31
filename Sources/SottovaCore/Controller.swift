@@ -276,10 +276,11 @@ public final class Controller {
     /// Counts Play next, so the queue button can show each one landed.
     public private(set) var queuedNext = 0
 
-    public func playNext(_ songs: [Song], source: String? = nil) {
+    /// Queues songs first, or at `index` when they're dropped into the queue.
+    public func playNext(_ songs: [Song], source: String? = nil, at index: Int = 0) {
         queuedNext += 1
         let source = source ?? Self.source(of: songs)
-        upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: 0)
+        upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: min(index, upNext.count))
     }
 
     // MARK: Alarms
@@ -922,6 +923,18 @@ public final class Controller {
 
     public func removeQueued(_ id: QueueEntry.ID) {
         upNext.removeAll { $0.id == id }
+    }
+
+    /// Plays a queued song now; what was queued after it still follows.
+    public func playQueued(_ id: QueueEntry.ID) {
+        guard let i = upNext.firstIndex(where: { $0.id == id }) else { return }
+        upNext.insert(upNext.remove(at: i), at: 0)
+        if status == .idle {
+            failures = 0
+            command(.start)
+        } else {
+            command(.skip)
+        }
     }
 
     public func clearQueue() {
