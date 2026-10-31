@@ -452,12 +452,19 @@ private struct AlarmRow: View {
             Button { router.alarm = .edit(alarm) } label: {
                 // the times down the left edge are the day; a light one is "from about then", a bold one "at exactly then"
                 HStack(spacing: 16) {
-                    Text(AlarmLine.time(alarm))
-                        .font(.system(size: 22, weight: alarm.whileHere ? .regular : .semibold))
-                        .tracking(-0.4)
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.text)
-                        .frame(width: 100, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(AlarmLine.time(alarm))
+                            .font(.system(size: 22, weight: alarm.whileHere ? .regular : .semibold))
+                            .tracking(-0.4)
+                            .foregroundStyle(Theme.text)
+                        if let minutes = alarm.minutes {
+                            Text("to \(AlarmLine.end(of: alarm, minutes: minutes))")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .monospacedDigit()
+                    .frame(width: 100, alignment: .leading)
                     Artwork(key: controller.alarmArtwork(of: alarm.source), size: 48, radius: 4, title: alarm.name)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(alarm.name)
@@ -592,11 +599,9 @@ struct AlarmLine: View {
             .formatted(date: .omitted, time: .shortened)
     }
 
-    /// Under a row's name: "on weekdays, shuffled", "every day until 7:00 PM, while you're at the mac".
+    /// Under a row's name: "on weekdays, shuffled", "every day, while you're at the mac". Its end sits under its time.
     static func subtitle(_ alarm: Alarm) -> String {
-        let until = alarm.minutes.map { "until \(end(of: alarm, minutes: $0))" }
-        if alarm.whileHere { return days(alarm) + (until.map { " \($0)" } ?? "") + ", while you're at the mac" }
-        return days(alarm) + (alarm.shuffled ? ", shuffled" : "") + (until.map { ", \($0)" } ?? "")
+        days(alarm) + (alarm.whileHere ? ", while you're at the mac" : alarm.shuffled ? ", shuffled" : "")
     }
 
     static func time(_ alarm: Alarm) -> String {
