@@ -679,6 +679,8 @@ struct PlaylistPage: View {
     @State private var editing = false
     @State private var name = ""
     @State private var target: Int?
+    /// The row a drag inside this list started from.
+    @State private var dragFrom: Int?
     @FocusState private var typing: Bool
 
     private var pid: String { renamedTo ?? id }
@@ -818,10 +820,9 @@ struct PlaylistPage: View {
                 // one row is this row, even when the song is in here twice
                 let rows = ids == [path] ? IndexSet([index]) : IndexSet(playlist.paths.indices.filter { ids.contains(playlist.paths[$0]) })
                 withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: rows) }
-            }) {
+            }, dragStarted: { dragFrom = index }) {
                 controller.play(songs, from: playable, source: pid)
             }
-            .draggable(URL(filePath: path))
         } else {
             HStack(spacing: 12) {
                 Text("\(index + 1)")
@@ -868,8 +869,11 @@ struct PlaylistPage: View {
         target = nil
         let paths = urls.map { $0.standardizedFileURL.path }
         withAnimation(Theme.quick) {
-            // ponytail: a song already here moves rather than being added twice; add a copy from the context menu
-            if paths.count == 1, let from = playlist.paths.firstIndex(of: paths[0]) {
+            // a song already here moves rather than being added twice; add a copy from the context menu. Dragged from
+            // this list, it's the row it was dragged from, which matters when the song is in here twice
+            let dragged = dragFrom.flatMap { playlist.paths.indices.contains($0) && paths == [playlist.paths[$0]] ? $0 : nil }
+            dragFrom = nil
+            if paths.count == 1, let from = dragged ?? playlist.paths.firstIndex(of: paths[0]) {
                 controller.movePlaylistSongs(pid, fromOffsets: [from], toOffset: index)
             } else {
                 let songs = paths.compactMap { controller.catalog.songsByID[$0] }

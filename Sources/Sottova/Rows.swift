@@ -14,6 +14,8 @@ struct SongRow: View {
     var remove: ((Set<String>) -> Void)?
     /// Under a work's heading the title would repeat it, so the performer leads.
     var performerFirst = false
+    /// Told when this row starts being dragged, so a playlist knows which of two copies of a song is moving.
+    var dragStarted: (() -> Void)?
     let play: () -> Void
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -80,7 +82,10 @@ struct SongRow: View {
         .simultaneousGesture(TapGesture().onEnded { router.select(song.id, in: order) })
         .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityAction(named: "Play", play)
-        .draggable(URL(filePath: song.id))
+        .onDrag {
+            dragStarted?()
+            return NSItemProvider(object: URL(filePath: song.id) as NSURL)
+        }
         .sottovaMenu {
             let songs = picked
             if songs.count > 1 {
