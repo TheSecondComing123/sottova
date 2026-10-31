@@ -12,7 +12,7 @@ struct AlarmRunTests {
     }
 
     /// `songs` one-second pieces in one album, offline.
-    private func controller(songs: Int = 2, storage: URL? = nil) async throws -> (Controller, Album, AVAudioEngine) {
+    private func controller(songs: Int = 2, storage: URL? = nil, dir: URL? = nil) async throws -> (Controller, Album, AVAudioEngine) {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!, maximumFrameCount: 480)
         let c = Controller(engine: engine, storage: storage)
@@ -191,5 +191,78 @@ struct AlarmRunTests {
         NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
         try await Task.sleep(for: .milliseconds(1500))
         #expect(c.status == .paused)
+    }
+
+    /// A row set for a few minutes ago, on every day.
+    private func justPassed(_ album: Album) -> (Alarm, Date) {
+        let ago = Date.now - 180
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: ago)
+        let row = Alarm(source: album.id, name: "Lauds", hour: parts.hour!, minute: parts.minute!, weekdays: Set(1...7))
+        return (row, row.next(after: .now - Controller.alarmLateness)!)
+    }
+
+    @Test func anAlarmMissedWhileTheAppWasClosedPlaysOnce() async throws {
+        let storage = try temp()
+        let (c, album, _) = try await controller(storage: storage)
+        let (row, due) = justPassed(album)
+        c.addAlarm(row)
+        c.loadAlarms()
+        #expect(c.status == .playing)
+        #expect(c.alarms.first?.lastFired == due)
+        // quit and opened again a minute later
+        let (again, _, _) = try await controller(storage: storage)
+        again.loadAlarms()
+        #expect(again.status == .idle)
+        #expect(again.problem == nil)
+    }
+
+    @Test func aMissedAlarmWaitsForTheCatalog() async throws {
+        let (first, album, engine) = try await controller()
+        let (row, _) = justPassed(album)
+        let storage = try temp()
+        try JSONEncoder().encode([row]).write(to: storage.appending(path: "alarms.json"))
+        let c = Controller(engine: engine, storage: storage)
+        c.loadAlarms()
+        #expect(c.status == .idle)
+        c.library = first.library
+        c.refreshTracks()
+        for _ in 0..<500 where c.status == .idle { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.status == .playing)
+    }
+
+    @Test func aClockSetBackDoesntPlayItTwice() async throws {
+        let (c, album, _) = try await controller()
+        let row = alarm(album)
+        c.addAlarm(row)
+        let due = Date.now
+        c.fire(row.id, due: due)
+        let queued = c.upNext.count
+        c.fire(row.id, due: due)
+        // played again, the whole collection would be queued
+        #expect(c.upNext.count == queued)
+    }
+
+    @Test func aSecondAlarmDueAtTheSameTimeSaysItDidntPlay() async throws {
+        let (c, album, _) = try await controller()
+        let (row, due) = justPassed(album)
+        var other = row
+        other.id = UUID()
+        other.name = "Compline"
+        c.addAlarm(row)
+        c.addAlarm(other)
+        c.fire(row.id, due: due)
+        #expect(c.problem?.contains("Compline didn't play") == true)
+        #expect(c.alarms.allSatisfy { $0.lastFired == due })
+    }
+
+    @Test func aOneOffIsGoneOnceItsWentOff() async throws {
+        let (c, album, _) = try await controller()
+        let (row, due) = justPassed(album)
+        var once = row
+        once.weekdays = []
+        once.day = .now
+        c.addAlarm(once)
+        c.fire(once.id, due: due)
+        #expect(c.alarms.isEmpty)
     }
 }

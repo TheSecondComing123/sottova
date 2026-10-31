@@ -31,6 +31,8 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     public var parts = 4
     /// The part that plays next time, from 0.
     public var nextPart = 0
+    /// The time it last went off for, so a relaunch or a clock set back doesn't play it again.
+    public var lastFired: Date?
 
     public init(source: String, name: String, hour: Int, minute: Int, weekdays: Set<Int> = [], day: Date? = nil, shuffled: Bool = false) {
         self.source = source
@@ -43,7 +45,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts, nextPart
+        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts, nextPart, lastFired
     }
 
     // alarms.json from before alarms could be turned off has no `on`
@@ -66,6 +68,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         rotates = try c.decodeIfPresent(Bool.self, forKey: .rotates) ?? false
         parts = try c.decodeIfPresent(Int.self, forKey: .parts) ?? 4
         nextPart = try c.decodeIfPresent(Int.self, forKey: .nextPart) ?? 0
+        lastFired = try c.decodeIfPresent(Date.self, forKey: .lastFired)
     }
 
     /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.

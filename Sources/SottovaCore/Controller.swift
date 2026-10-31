@@ -93,6 +93,8 @@ public final class Controller {
     @ObservationIgnored private var fromAlarm = false
     /// Off when alarms.json can't be read or moved, so saving doesn't overwrite it.
     @ObservationIgnored private var alarmsWritable = true
+    @ObservationIgnored private var alarmsLoaded = false
+    @ObservationIgnored private var alarmsCaughtUp = false
     /// How audio starts; a test can make it fail, as a device that's going away does.
     @ObservationIgnored var startEngine: (AVAudioEngine) throws -> Void = { try $0.start() }
     /// A piece waiting for the audio device, which isn't its fault.
@@ -411,7 +413,11 @@ public final class Controller {
         armAlarm()
     }
 
-    private func loadAlarms() {
+    func loadAlarms() {
+        defer {
+            alarmsLoaded = true
+            catchUpAlarms()
+        }
         guard let url = storage?.appending(path: "alarms.json"), FileManager.default.fileExists(atPath: url.path) else { return }
         let saved: [Alarm]
         do {
@@ -427,8 +433,8 @@ public final class Controller {
             }
             return
         }
-        // a one-off whose time passed while the app was closed is dropped, not played late
-        alarms = saved.filter { $0.next(after: .now) != nil || $0.whileHere && $0.window(containing: .now) != nil }
+        // a one-off whose time passed while the app was closed is dropped, not played late, unless it's only just passed
+        alarms = saved.filter { $0.next(after: .now - Self.alarmLateness) != nil || $0.whileHere && $0.window(containing: .now) != nil }
         if alarms != saved {
             alarmsChanged()
         } else {
@@ -482,8 +488,30 @@ public final class Controller {
         return order
     }
 
+    /// Alarms whose time passed moments ago without them going off.
+    private func dueAlarms(now: Date) -> [(alarm: Alarm, at: Date)] {
+        alarms.filter { $0.on && !$0.whileHere }.compactMap { alarm in
+            alarm.next(after: now - Self.alarmLateness).flatMap { $0 <= now && $0 != alarm.lastFired ? (alarm, $0) : nil }
+        }
+    }
+
+    /// An alarm whose time passed while the app wasn't running still goes off, the latest one if there are several.
+    /// Not before there's a catalog, which it needs to find its songs.
+    func catchUpAlarms(now: Date = .now) {
+        guard alarmsLoaded, !alarmsCaughtUp, !catalog.songsByID.isEmpty else { return }
+        alarmsCaughtUp = true
+        if let (alarm, at) = dueAlarms(now: now).max(by: { $0.at < $1.at }) { fire(alarm.id, due: at, now: now) }
+    }
+
     func fire(_ id: Alarm.ID, due: Date, now: Date = .now) {
-        guard let alarm = alarms.first(where: { $0.id == id }) else { return }
+        guard let index = alarms.firstIndex(where: { $0.id == id }) else { return }
+        // the clock was set back past it
+        if alarms[index].lastFired == due {
+            armAlarm()
+            return
+        }
+        alarms[index].lastFired = due
+        let alarm = alarms[index]
         if now.timeIntervalSince(due) > Self.alarmLateness {
             problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
         } else if alarm.heedsCalendar, calendarBusy() {
@@ -503,12 +531,13 @@ public final class Controller {
         } else {
             problem = "the \(alarm.name) alarm went off, but there's nothing in it to play"
         }
-        if alarm.weekdays.isEmpty {
-            alarms.removeAll { $0.id == id }
-            alarmsChanged()
-        } else {
-            armAlarm()
+        // one player: any other due now doesn't play, and says so
+        for (other, at) in dueAlarms(now: now) {
+            problem = "\(other.name) didn't play at \(at.formatted(date: .omitted, time: .shortened)): \(alarm.name) was starting"
+            if let i = alarms.firstIndex(where: { $0.id == other.id }) { alarms[i].lastFired = at }
         }
+        alarms.removeAll { $0.weekdays.isEmpty && !$0.whileHere && $0.lastFired != nil }
+        alarmsChanged()
     }
 
     private func songs(for alarm: Alarm) -> [Song] {
@@ -1354,6 +1383,7 @@ public final class Controller {
             let built = await Task.detached(priority: .userInitiated) { Catalog(entries: entries) }.value
             guard generation == catalogGeneration else { return }
             catalog = built
+            catchUpAlarms()
             if let path = file?.url.path {
                 current = catalog.songsByID[path]
                 // a piece restored before the catalog was built has only its file name as a title so far
