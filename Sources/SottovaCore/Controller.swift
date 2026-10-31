@@ -153,11 +153,12 @@ public final class Controller {
         machine = Machine(settings: profile)
         // Both decks are wired once with a fixed format; the player converts each file to it.
         // A player connected while the engine runs starts late, by about 8% of the time the engine has been running.
+        // The mixers need it said too: left out, they take a new mixer's default of 44.1 kHz and everything goes through that.
         let deckFormat = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
         for (player, mixer) in zip(players, mixers) {
             engine.attach(player)
             engine.attach(mixer)
-            engine.connect(mixer, to: engine.mainMixerNode, format: nil)
+            engine.connect(mixer, to: engine.mainMixerNode, format: deckFormat)
             engine.connect(player, to: mixer, format: deckFormat)
             mixer.outputVolume = 0
         }
