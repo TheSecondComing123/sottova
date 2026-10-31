@@ -79,4 +79,49 @@ struct AudioTests {
         let held = rms(session.left[(1 * 48_000)..<(2 * 48_000)])
         #expect(abs(20 * log10(held / (0.5 / 2.0.squareRoot()))) < 0.01, "held \(held)")
     }
+
+    /// A seek used to cut the old spot at full level and play the first 30 ms of the new one through the mixer's way
+    /// down to 0: a step 28 times the sine's own biggest, then a burst.
+    @Test func aSeekGoesQuietBeforeItJumps() throws {
+        let session = try Session(settings(fade: 0.5))
+        session.add(try tone(220, seconds: 8))
+        session.controller.toggle()
+        try session.render(2)
+        let at = session.left.count
+        session.controller.seek(to: 4.003)
+        try session.render(0.2)
+        let natural = Float(0.5 * 2 * .pi * 220 / Self.rate)
+        #expect(biggestJump(session.left[(at - 1)...]) <= natural * 1.01)
+        try session.render(1.6)
+        #expect(abs(rms(session.left[(session.left.count - 4_800)...]) - 0.5 / 2.0.squareRoot()) < 1e-3)
+    }
+
+    /// The mixer freezes on its way down when its deck stops, and finishes on the next thing that deck plays.
+    @Test func aPieceStartsSilentAfterAHardStop() throws {
+        let session = try Session(settings(fade: 0.5))
+        session.add(try tone(220, seconds: 6))
+        session.controller.toggle()
+        try session.render(2)
+        // closing the lid with a sleep timer set stops at once
+        session.controller.sleep(minutes: 5)
+        session.controller.systemWillSleep()
+        #expect(session.controller.status == .idle)
+        let at = session.left.count
+        session.controller.toggle()
+        try session.render(0.05)
+        #expect(rms(session.left[at..<(at + 1_920)]) < 1e-3, "\(rms(session.left[at..<(at + 1_920)]))")
+    }
+
+    @Test func aSeekWhilePausedComesBackSilent() throws {
+        let session = try Session(settings(fade: 0.5))
+        session.add(try tone(220, seconds: 6))
+        session.controller.toggle()
+        try session.render(2)
+        session.controller.pause()
+        session.controller.seek(to: 4)
+        session.controller.toggle()
+        let at = session.left.count
+        try session.render(0.05)
+        #expect(rms(session.left[at..<(at + 1_920)]) < 1e-3, "\(rms(session.left[at..<(at + 1_920)]))")
+    }
 }

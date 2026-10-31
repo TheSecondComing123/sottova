@@ -88,6 +88,10 @@ public final class Controller {
     /// Off when a library.json that can't be read can't be moved either, so saving doesn't overwrite it.
     @ObservationIgnored private var libraryWritable = true
     @ObservationIgnored private var needsReschedule = false
+    /// Seconds until a seek's jump.
+    @ObservationIgnored private var jumpIn: Double?
+    /// How long a mixer takes to reach a new volume, at most: measured 35 ms at 44.1 and 48 kHz.
+    static let mixerRamp = 0.04
     @ObservationIgnored private var pausedForSleep: Date?
     /// A longer sleep doesn't pick up where it was: often that's a scheduled wake, with nobody there.
     static let resumeWithin: TimeInterval = 60 * 60
@@ -1434,6 +1438,12 @@ public final class Controller {
 
     func advance(_ seconds: Double) {
         send(.tick(seconds))
+        guard let left = jumpIn, status == .playing else { return }
+        jumpIn = left - seconds
+        if left - seconds <= 0 {
+            reschedule()
+            players[active].play()
+        }
     }
 
     var deckGain: Float {
@@ -1545,12 +1555,11 @@ public final class Controller {
         case .seekPlayback:
             seeks += 1
             defer { saveResume() }
-            if status == .paused {
-                // picked up from the new spot on resume, like after a device change
-                needsReschedule = true
-            } else {
-                reschedule()
-                deck.play()
+            // picked up from the new spot on resume, like after a device change
+            needsReschedule = true
+            if status != .paused {
+                // the old spot goes on under the mixer's way down, so the jump itself is silent
+                jumpIn = Self.mixerRamp
             }
             if case .track(let track) = machine.phase {
                 nowPlaying?.update(status: status, title: title, track: track)
@@ -1599,6 +1608,8 @@ public final class Controller {
                 return
             }
             let duration = useSpan(of: file)
+            // a crossfade's incoming deck has to sound from its first frame, and its mixer has already landed
+            if machine.outgoing == nil { scheduleSilence(on: deck) }
             deck.scheduleSegment(file, startingFrame: span.start, frameCount: AVAudioFrameCount(span.end - span.start), at: nil, completionHandler: nil)
             deck.prepare(withFrameCount: 8192)
             deck.play()
@@ -1830,12 +1841,25 @@ public final class Controller {
     /// ponytail: only the current deck is rescheduled; a crossfade's outgoing track is dropped on a device change
     private func reschedule() {
         needsReschedule = false
+        jumpIn = nil
         guard let file, case .track(let track) = machine.phase else { return }
         let deck = players[active]
         let start = span.start + AVAudioFramePosition(track.elapsed * file.processingFormat.sampleRate)
         guard start < span.end else { return }
         deck.stop()
+        scheduleSilence(on: deck)
         deck.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(span.end - start), at: nil, completionHandler: nil)
+    }
+
+    /// A mixer whose deck stopped on its way down to 0 freezes there and finishes on whatever plays next, so that's silence.
+    private func scheduleSilence(on deck: AVAudioPlayerNode) {
+        let format = deck.outputFormat(forBus: 0)
+        let silence = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(Self.mixerRamp * format.sampleRate))!
+        silence.frameLength = silence.frameCapacity
+        for channel in 0..<Int(format.channelCount) {
+            silence.floatChannelData![channel].update(repeating: 0, count: Int(silence.frameLength))
+        }
+        deck.scheduleBuffer(silence, completionHandler: nil)
     }
 
     private func log(skipped: Bool, gap: Double) {
