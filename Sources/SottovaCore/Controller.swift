@@ -87,6 +87,8 @@ public final class Controller {
     @ObservationIgnored private var profileWritable = true
     @ObservationIgnored private var needsReschedule = false
     @ObservationIgnored private var pausedForSleep = false
+    /// An alarm started what's playing: when its music ends it stops, with nobody there to press stop.
+    @ObservationIgnored private var fromAlarm = false
     @ObservationIgnored private var assertion: IOPMAssertionID?
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var lastTick: ContinuousClock.Instant?
@@ -298,6 +300,7 @@ public final class Controller {
     public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false) {
         guard songs.indices.contains(index) else { return }
         releaseHour()
+        fromAlarm = false
         origin = Origin(key: Origin.key(of: songs, source: source), shuffled: shuffled)
         let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
@@ -465,6 +468,7 @@ public final class Controller {
             let history = storage.map { PlayRecord.read($0.appending(path: "plays.jsonl"), last: 2000) } ?? []
             play(alarm.shuffled ? Self.alarmOrder(songs, at: alarm, due: due, history: history, using: &rng) : songs,
                  source: playlist, shuffled: alarm.shuffled)
+            fromAlarm = true
             if status == .paused { toggle() }
             command(.rise)
             if let minutes = alarm.minutes { sleep(minutes: Double(minutes)) }
@@ -770,6 +774,7 @@ public final class Controller {
         var hour: UUID?
         /// What it was started from, so that page's play button still knows.
         var origin: Origin?
+        var fromAlarm: Bool?
     }
 
     /// Brings the clock up to now and saves, for when the app quits.
@@ -784,8 +789,8 @@ public final class Controller {
         let path = file?.url.path
         let state: ResumeState?
         switch machine.phase {
-        case .track(let track): state = path.map { ResumeState(path: $0, elapsed: track.elapsed, restLeft: nil, source: playingAlbum, upNext: [], origin: origin) }
-        case .resting: state = path.map { ResumeState(path: $0, elapsed: nil, restLeft: machine.restRemaining, source: playingAlbum, upNext: [], origin: origin) }
+        case .track(let track): state = path.map { ResumeState(path: $0, elapsed: track.elapsed, restLeft: nil, source: playingAlbum, upNext: [], origin: origin, fromAlarm: fromAlarm) }
+        case .resting: state = path.map { ResumeState(path: $0, elapsed: nil, restLeft: machine.restRemaining, source: playingAlbum, upNext: [], origin: origin, fromAlarm: fromAlarm) }
         case .idle: state = nil
         // a moment between pieces; the next status change saves
         case .loading: return
@@ -816,6 +821,7 @@ public final class Controller {
         }
         upNext = state.upNext.map { QueueEntry(path: $0.path, source: $0.source) }
         origin = state.origin
+        fromAlarm = state.fromAlarm ?? false
         // still the hour's while its window is open; past it, the next check ends it like any closing window
         if let id = state.hour, let hour = alarms.first(where: { $0.id == id }), let window = hour.window(containing: .now) {
             hourPlaying = id
@@ -1266,7 +1272,7 @@ public final class Controller {
         }
     }
 
-    public func systemWillSleep() {
+    public func systemWillSleep(now: Date = .now) {
         guard status == .playing || status == .resting else { return }
         // closing the lid with a sleep timer set means stop, not resume in the morning
         if machine.sleep != nil {
@@ -1277,7 +1283,7 @@ public final class Controller {
         command(.pause)
     }
 
-    public func systemDidWake() {
+    public func systemDidWake(now: Date = .now) {
         guard pausedForSleep else { return }
         pausedForSleep = false
         command(.resume)
@@ -1346,7 +1352,10 @@ public final class Controller {
         let new = machine.status
         guard new != status else { return }
         status = new
-        if new == .idle { hourEnding = false }
+        if new == .idle {
+            hourEnding = false
+            fromAlarm = false
+        }
         refreshNextTrack()
         keepAwake(wantsAwake)
         refreshSleep()
@@ -1416,7 +1425,8 @@ public final class Controller {
     }
 
     private func startNextTrack() {
-        guard let path = dequeue() ?? shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng) else {
+        let queued = dequeue()
+        guard let path = queued ?? (fromAlarm ? nil : shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng)) else {
             send(.stop)
             return
         }
