@@ -60,7 +60,7 @@ struct RotationTests {
             c.library.entries["/\(i)"] = Library.Entry(size: 0, modified: .now, meta: TrackMeta(title: "t", artist: "a", album: "R", duration: 60))
         }
         c.refreshTracks()
-        try await Task.sleep(for: .milliseconds(500))
+        for _ in 0..<500 where c.catalog.songsByID.count < 3 { try await Task.sleep(for: .milliseconds(10)) }
         let id = try #require(c.newPlaylist(songs: [1, 2, 3].map { song("/\($0)", 1) }))
         c.setBreak(true, at: 1, in: id)
         c.namePart(" Dusk ", at: 1, in: id)

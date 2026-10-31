@@ -89,6 +89,7 @@ struct MainWindow: View {
         // at the window, never inside a lazy row that could be recycled with the sheet open
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
+        .sheet(item: Binding(get: { router.presetEdit }, set: { router.presetEdit = $0 })) { PresetSheet(edit: $0) }
         .sheet(item: Binding(get: { router.trimming }, set: { router.trimming = $0 })) { TrimSheet(song: $0) }
     }
 
@@ -184,6 +185,7 @@ struct MainWindow: View {
 private struct Sidebar: View {
     let section: Route
     let select: (Route) -> Void
+    @Environment(Router.self) private var router
     @Environment(Controller.self) private var controller
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -223,15 +225,25 @@ private struct Sidebar: View {
             // the two lists scroll together, so many of yours never push the footer off the window
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Listening")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.faint)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 24)
-                        .padding(.bottom, 8)
+                    HStack {
+                        Text("Listening")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.faint)
+                        Spacer()
+                        IconButton(icon: .plus, weight: .bold, help: "new preset", size: 24) {
+                            var preset = controller.settings
+                            preset.name = ""
+                            preset.crossfade = false
+                            router.presetEdit = PresetEdit(preset: preset)
+                        }
+                    }
+                    .padding(.leading, 24)
+                    .padding(.trailing, 16)
+                    .padding(.top, 24)
+                    .padding(.bottom, 4)
 
                     VStack(spacing: 2) {
-                        ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
+                        ForEach(controller.allPresets, id: \.name) { preset in
                             presetRow(preset)
                         }
                         if controller.settings.name == "Custom" {
@@ -337,12 +349,22 @@ private struct Sidebar: View {
 
     /// Spread across the accents so neighbors differ: 2, 6, 10, 14…
     private func presetAccent(_ preset: SottovaCore.Settings) -> Int {
-        2 + 4 * (SottovaCore.Settings.presets.firstIndex { $0.name == preset.name } ?? SottovaCore.Settings.presets.count)
+        2 + 4 * (controller.allPresets.firstIndex { $0.name == preset.name } ?? controller.allPresets.count)
     }
 
     private func presetRow(_ preset: SottovaCore.Settings) -> some View {
         let active = controller.settings.name == preset.name
-        return Button { controller.apply(preset) } label: {
+        let custom = preset.name == "Custom"
+        let named = controller.customPresets.contains { $0.name == preset.name }
+        return Button {
+            if custom {
+                var saving = preset
+                saving.name = ""
+                router.presetEdit = PresetEdit(preset: saving)
+            } else {
+                controller.apply(preset)
+            }
+        } label: {
             HStack(spacing: 12) {
                 // the active mode is marked in the icon column; the rows are type only, so the ranges carry the comparison
                 RoundedRectangle(cornerRadius: 1)
@@ -370,9 +392,15 @@ private struct Sidebar: View {
         }
         .buttonStyle(PressStyle(scale: 0.98))
         .animation(Theme.quick, value: active)
-        .disabled(preset.name == "Custom")
         // the range is on the row already; only crossfade's overlap needs saying
-        .help(preset.crossfade ? Format.gaps(preset) : "")
+        .help(custom ? "save as a preset" : preset.crossfade ? Format.gaps(preset) : "")
+        .sottovaMenu {
+            guard named else { return [] }
+            return [
+                .item("Edit…") { router.presetEdit = PresetEdit(preset: preset, replacing: preset.name) },
+                .item("Delete") { controller.deletePreset(preset.name) },
+            ]
+        }
     }
 
     private func footerRow(_ label: String, _ icon: Ph, action: @escaping () -> Void) -> some View {

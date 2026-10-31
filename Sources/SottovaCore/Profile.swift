@@ -47,12 +47,12 @@ public struct Settings: Equatable, Sendable {
         return s
     }
 
-    /// True when the way it plays matches the preset of the same name. Loudness is a listening level, not part of
-    /// a mode, so it's left out: turning it down doesn't make Sparse "Custom".
-    public var matchesPreset: Bool {
+    /// How it plays, without the loudness: that's a listening level, not part of a mode, so turning it down doesn't
+    /// make Sparse "Custom".
+    var mode: Settings {
         var mode = self
         (mode.targetLufs, mode.ceilingDbtp) = (Settings().targetLufs, Settings().ceilingDbtp)
-        return Self.presets.contains(mode)
+        return mode
     }
 }
 
@@ -109,30 +109,33 @@ extension Settings {
     }
 }
 
-/// profile.json: the user's own settings at the top level, plus the albums that play with their own gaps.
+/// profile.json: the user's own settings at the top level, plus the albums that play with their own gaps and the
+/// presets they've named.
 struct ProfileFile: Codable {
     var settings: Settings
     var albums: [String: Settings]
+    var presets: [Settings]
 
     private enum Keys: String, CodingKey {
-        case albums
+        case albums, presets
     }
 
-    init(settings: Settings, albums: [String: Settings]) {
+    init(settings: Settings, albums: [String: Settings], presets: [Settings] = []) {
         self.settings = settings
         self.albums = albums
+        self.presets = presets
     }
 
     init(from decoder: any Decoder) throws {
         settings = try Settings(from: decoder)
         albums = try decoder.container(keyedBy: Keys.self).decodeIfPresent([String: Settings].self, forKey: .albums) ?? [:]
+        presets = try decoder.container(keyedBy: Keys.self).decodeIfPresent([Settings].self, forKey: .presets) ?? []
     }
 
     func encode(to encoder: any Encoder) throws {
         try settings.encode(to: encoder)
-        if !albums.isEmpty {
-            var c = encoder.container(keyedBy: Keys.self)
-            try c.encode(albums, forKey: .albums)
-        }
+        var c = encoder.container(keyedBy: Keys.self)
+        if !albums.isEmpty { try c.encode(albums, forKey: .albums) }
+        if !presets.isEmpty { try c.encode(presets, forKey: .presets) }
     }
 }

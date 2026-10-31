@@ -18,6 +18,44 @@ struct AlbumGapsTests {
         return (c, dir)
     }
 
+    @Test func aNamedPresetIsKeptAndWhatPlaysWithItFollows() throws {
+        let (c, dir) = controller()
+        var evening = sparse
+        (evening.name, evening.gapMin, evening.gapMax) = (" Evening ", 60, 90)
+        c.savePreset(evening)
+        // a new one takes effect, keeping the loudness, and stays itself rather than turning Custom
+        #expect(c.settings.name == "Evening")
+        #expect(c.settings.gapRange == 60...90)
+        #expect(c.settings.targetLufs == -23)
+        c.savePreset(evening)
+        #expect(c.customPresets.map(\.name) == ["Evening", "Evening 2"])
+        var taken = sparse
+        taken.name = "sparse"
+        c.savePreset(taken)
+        #expect(c.customPresets.last?.name == "sparse 2")
+        #expect(Controller(storage: dir).customPresets.map(\.name) == ["Evening", "Evening 2", "sparse 2"])
+
+        c.albumSettings["compline"] = c.customPresets[0]
+        c.apply(c.customPresets[0])
+        var changed = c.customPresets[0]
+        (changed.name, changed.gapMax) = ("Night", 200)
+        c.savePreset(changed, replacing: "Evening")
+        #expect(c.customPresets[0].name == "Night")
+        #expect(c.albumSettings["compline"]?.name == "Night")
+        #expect(c.settings.name == "Night")
+        #expect(c.settings.gapRange == 60...200)
+
+        // editing one by hand makes it Custom like any preset
+        c.settings.gapMax = 300
+        #expect(c.settings.name == "Custom")
+        c.apply(c.customPresets[0])
+        c.deletePreset("Night")
+        #expect(c.settings.name == "Custom")
+        #expect(c.settings.gapRange == 60...200)
+        #expect(c.albumSettings["compline"]?.name == "Custom")
+        #expect(c.albumSettings["compline"]?.gapRange == 60...200)
+    }
+
     @Test func albumPlaysWithItsGapsOverTheUsersLoudness() {
         let (c, _) = controller()
         c.useAlbumSettings(for: "compline")

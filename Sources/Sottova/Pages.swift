@@ -597,18 +597,21 @@ private struct AlbumGaps: View {
                 .padding(.bottom, 12)
 
             Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-                GridRow {
-                    card(named("Yours", yours), active: own == nil, accent: nil) { gaps = nil }
-                    preset(0, own)
-                    preset(1, own)
+                // Yours, then every preset, three to a row
+                let cells = controller.allPresets.count + 1
+                ForEach(Array(stride(from: 0, to: cells, by: 3)), id: \.self) { start in
+                    GridRow {
+                        ForEach(start..<min(start + 3, cells), id: \.self) { cell in
+                            if cell == 0 {
+                                card(named("Yours", yours), active: own == nil, accent: nil) { gaps = nil }
+                            } else {
+                                preset(cell - 1, own)
+                            }
+                        }
+                    }
                 }
                 GridRow {
-                    preset(2, own)
-                    preset(3, own)
-                    preset(4, own)
-                }
-                GridRow {
-                    card(named("Custom", own ?? yours), active: own?.name == "Custom", accent: 2 + 4 * SottovaCore.Settings.presets.count) {
+                    card(named("Custom", own ?? yours), active: own?.name == "Custom", accent: 2 + 4 * controller.allPresets.count) {
                         var custom = own ?? yours
                         custom.name = "Custom"
                         custom.crossfade = false
@@ -645,7 +648,7 @@ private struct AlbumGaps: View {
     }
 
     private func preset(_ index: Int, _ own: SottovaCore.Settings?) -> some View {
-        let preset = SottovaCore.Settings.presets[index]
+        let preset = controller.allPresets[index]
         return card(preset, active: own?.name == preset.name, accent: 2 + 4 * index) { gaps = preset }
     }
 

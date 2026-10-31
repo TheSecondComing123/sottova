@@ -136,9 +136,9 @@ private struct PlaybackPage: View {
             Heading(title: "Mode")
             // three to a row: five in one squeezed the names into two lines
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
+                ForEach(controller.allPresets, id: \.name) { preset in
                     PresetCard(preset: preset, active: s.name == preset.name,
-                           accent: 2 + 4 * (SottovaCore.Settings.presets.firstIndex { $0.name == preset.name } ?? 0)) { controller.apply(preset) }
+                           accent: 2 + 4 * (controller.allPresets.firstIndex { $0.name == preset.name } ?? 0)) { controller.apply(preset) }
                 }
             }
 
@@ -850,17 +850,94 @@ struct PresetPicker: View {
         Picker("preset", selection: Binding(
             get: { controller.settings.name },
             set: { name in
-                if let preset = SottovaCore.Settings.presets.first(where: { $0.name == name }) {
+                if let preset = controller.allPresets.first(where: { $0.name == name }) {
                     controller.apply(preset)
                 }
             }
         )) {
-            ForEach(SottovaCore.Settings.presets, id: \.name) { preset in
+            ForEach(controller.allPresets, id: \.name) { preset in
                 Text(preset.name).tag(preset.name)
             }
             if controller.settings.name == "Custom" {
                 Text("Custom").tag("Custom")
             }
         }
+    }
+}
+
+/// A preset to make, or the one it changes.
+struct PresetEdit: Identifiable {
+    let id = UUID()
+    var preset: SottovaCore.Settings
+    var replacing: String?
+}
+
+/// Names a preset and sets its gaps and fades; the rest of how it plays comes from where it started.
+struct PresetSheet: View {
+    let edit: PresetEdit
+    @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: SottovaCore.Settings
+    @FocusState private var typing: Bool
+
+    init(edit: PresetEdit) {
+        self.edit = edit
+        _draft = State(initialValue: edit.preset)
+    }
+
+    private var blank: Bool { draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TextField("Name this preset", text: $draft.name)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .focused($typing)
+                .onChange(of: typing) { _, focused in router.typing = focused }
+                .padding(.bottom, 16)
+
+            ScoreDiagram(settings: draft, height: 112)
+
+            if !draft.crossfade {
+                caption("Silence between tracks")
+                GapRange(low: $draft.gapMin, high: $draft.gapMax)
+                    .padding(.horizontal, 12)
+            }
+            caption("Fades")
+            HStack(spacing: 12) {
+                ValueStepper(label: "In", value: $draft.fadeIn, range: 0...20, unit: "s")
+                ValueStepper(label: "Out", value: $draft.fadeOut, range: 0...20, unit: "s")
+            }
+
+            HStack(spacing: 12) {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .buttonStyle(QuietButton())
+                Button("Save") {
+                    controller.savePreset(draft, replacing: edit.replacing)
+                    dismiss()
+                }
+                .buttonStyle(InvertedButton())
+                .keyboardShortcut(.defaultAction)
+                .disabled(blank)
+            }
+            .padding(.top, 24)
+        }
+        .padding(24)
+        .frame(width: 420)
+        .presentationBackground(Theme.raised)
+        .onAppear { typing = true }
+        .onDisappear { router.typing = false }
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Theme.muted)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
     }
 }

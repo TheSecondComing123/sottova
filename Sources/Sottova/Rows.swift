@@ -287,7 +287,7 @@ struct AlbumTile: View {
         .sottovaMenu {
             let gaps = controller.albumSettings[album.id]?.name
             var choices: [MenuEntry] = [.item("Your setting", checked: gaps == nil) { controller.albumSettings[album.id] = nil }]
-            choices += SottovaCore.Settings.presets.map { preset in
+            choices += controller.allPresets.map { preset in
                 .item(preset.name, checked: gaps == preset.name) { controller.albumSettings[album.id] = preset }
             }
             // Custom is edited on the album page; here it only shows that it's the one in use

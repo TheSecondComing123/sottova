@@ -27,13 +27,18 @@ public final class Controller {
     public var settings: Settings {
         didSet {
             // editing any field of a preset turns it into Custom; this re-enters didSet once
-            if settings.name != "Custom", !settings.matchesPreset {
+            if settings.name != "Custom", !allPresets.contains(settings.mode) {
                 settings.name = "Custom"
             }
             machine.settings = settings
             saveProfile()
         }
     }
+    /// The presets the user has named, after the built-in ones.
+    public var customPresets: [Settings] = [] {
+        didSet { saveProfile() }
+    }
+    public var allPresets: [Settings] { Settings.presets + customPresets }
     /// Albums that play with their own gaps and fades, by album id.
     public var albumSettings: [String: Settings] = [:] {
         didSet {
@@ -116,6 +121,7 @@ public final class Controller {
         let profile = file?.settings ?? Settings.presets.first { $0.name == "Short" }!
         settings = profile
         albumSettings = file?.albums ?? [:]
+        customPresets = file?.presets ?? []
         machine = Machine(settings: profile)
         // Both decks are wired once with a fixed format; the player converts each file to it.
         // A player connected while the engine runs starts late, by about 8% of the time the engine has been running.
@@ -215,6 +221,55 @@ public final class Controller {
         var preset = preset
         (preset.targetLufs, preset.ceilingDbtp) = (settings.targetLufs, settings.ceilingDbtp)
         settings = preset
+    }
+
+    /// Keeps `preset` under its name, or as the changed `old`, and whatever plays with `old` follows. A new one, or
+    /// the one in use, takes effect now.
+    public func savePreset(_ preset: Settings, replacing old: String? = nil) {
+        var preset = preset.mode
+        preset.name = presetName(preset.name, except: old)
+        let inUse = old == nil || settings.name == old
+        if let old, let i = customPresets.firstIndex(where: { $0.name == old }) {
+            customPresets[i] = preset
+        } else {
+            customPresets.append(preset)
+        }
+        if let old { everyoneOn(old) { preset.gaps(over: $0) } }
+        if inUse { apply(preset) }
+    }
+
+    /// Whatever played with it keeps those gaps, as Custom.
+    public func deletePreset(_ name: String) {
+        guard let i = customPresets.firstIndex(where: { $0.name == name }) else { return }
+        let preset = customPresets.remove(at: i)
+        everyoneOn(name) {
+            var s = $0
+            s.name = "Custom"
+            return s
+        }
+        if settings.name == name { settings.name = "Custom" }
+        undo?.registerUndo(withTarget: self) { $0.customPresets.insert(preset, at: min(i, $0.customPresets.count)) }
+        undo?.setActionName("Delete Preset")
+    }
+
+    /// The albums, collections and saved settings that play with this preset.
+    private func everyoneOn(_ name: String, change: (Settings) -> Settings) {
+        for (id, album) in albumSettings where album.name == name { albumSettings[id] = change(album) }
+        for playlist in playlists where playlist.gaps?.name == name { setGaps(playlist.gaps.map(change), for: playlist.id) }
+        if ownSettings?.name == name { ownSettings = ownSettings.map(change) }
+    }
+
+    /// Names are how presets are told apart, so a taken one gets a number.
+    private func presetName(_ wanted: String, except old: String?) -> String {
+        let wanted = wanted.trimmingCharacters(in: .whitespacesAndNewlines)
+        let taken = Set((allPresets.map(\.name) + ["Custom", "Yours"]).filter { $0 != old }.map { $0.lowercased() })
+        var name = wanted
+        var number = 2
+        while taken.contains(name.lowercased()) {
+            name = "\(wanted) \(number)"
+            number += 1
+        }
+        return name
     }
 
     /// Plays these songs in order from `index`, with the usual fades and gaps, then goes back to shuffling everything.
@@ -1187,7 +1242,7 @@ public final class Controller {
         case "skip": skip()
         case "preset":
             let name = url.lastPathComponent.lowercased()
-            if let preset = Settings.presets.first(where: { $0.name.lowercased() == name }) {
+            if let preset = allPresets.first(where: { $0.name.lowercased() == name }) {
                 apply(preset)
             }
         case "sleep":
@@ -1476,7 +1531,7 @@ public final class Controller {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             // while an album plays with its own gaps, the user's settings are what a restart should come back to
-            try encoder.encode(ProfileFile(settings: yourSettings, albums: albumSettings)).write(to: url, options: .atomic)
+            try encoder.encode(ProfileFile(settings: yourSettings, albums: albumSettings, presets: customPresets)).write(to: url, options: .atomic)
         } catch {
             problem = "couldn't save the profile: \(error.localizedDescription)"
         }

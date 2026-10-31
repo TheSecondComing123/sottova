@@ -119,6 +119,7 @@ final class MenuPresenter {
     private var resign: NSObjectProtocol?
 
     func show(_ entries: [MenuEntry], at point: NSPoint, over window: NSWindow) {
+        guard !entries.isEmpty else { return }
         close(fading: false)
         dragged = false
         owner = window

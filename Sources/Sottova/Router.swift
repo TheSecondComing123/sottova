@@ -22,6 +22,8 @@ final class Router {
     var coverFor: CoverTarget?
     /// The song whose start and end are being trimmed, shown as a sheet.
     var trimming: Song?
+    /// The preset being made or changed, shown as a sheet.
+    var presetEdit: PresetEdit?
     /// The alarm being set or changed, shown as a sheet.
     var alarm: AlarmRequest?
     /// Songs picked in a list: a click picks one, ⌘-click adds or takes one away, ⇧-click picks the run from the
