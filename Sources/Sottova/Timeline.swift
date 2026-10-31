@@ -15,8 +15,9 @@ struct Timeline: View {
         let resting = controller.status == .resting
         // only the breathing dots need frames; while playing the played part grows a few points a second
         // the hero and the bar share one rate, so a gap redraws the window 15 times a second, not 45
+        // the bar's gap is still, so only the hero's breathing dots need frames
         TimelineView(.animation(minimumInterval: resting ? 1 / 15 : 0.5,
-                                paused: !visible || controller.status == .idle || controller.status == .paused)) { context in
+                                paused: !visible || controller.status == .idle || controller.status == .paused || (compact && resting))) { context in
             Canvas { gc, size in
                 draw(in: gc, size: size, time: context.date.timeIntervalSinceReferenceDate)
             }
@@ -31,9 +32,8 @@ struct Timeline: View {
             // a hairline that swells to 4 pt while the track holds and thins out through its fades
             let middle = size.height / 2
             gc.fill(Path(CGRect(x: 0, y: middle - 0.5, width: size.width, height: 1)), with: .color(Theme.border))
-            if resting {
-                dots(in: gc, around: size.width / 2, y: middle, time: time, breathing: true)
-            } else if let track = controller.track {
+            // a gap is drawn as what it is: the line with no sound on it
+            if !resting, let track = controller.track {
                 stroke(track, in: gc, width: size.width, middle: middle)
             }
             return

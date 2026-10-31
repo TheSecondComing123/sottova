@@ -80,7 +80,7 @@ struct PlayerBar: View {
                     .animation(Theme.ambient, value: resting)
             }
             VStack(alignment: .leading, spacing: 2) {
-                // in a gap the last piece stays, dimmed: the dots under the transport already say it's resting
+                // in a gap the last piece stays, dimmed; the bare line under the transport says it's resting
                 Group {
                     if let song {
                         LinkText(text: song.work) { navigate(.album(song.albumID)) }
@@ -109,7 +109,7 @@ struct PlayerBar: View {
 }
 
 /// Elapsed and total time around the track's fade shape, so every page shows the fades. During a gap the times
-/// step back and the shape becomes breathing dots on a bare line. The labels change once a second, so that's their rate.
+/// go and the line is left bare. The labels change once a second, so that's their rate.
 private struct ProgressLine: View {
     @Environment(Controller.self) private var controller
     @Environment(\.windowVisible) private var visible
@@ -122,11 +122,13 @@ private struct ProgressLine: View {
             let track = controller.track
             HStack(spacing: 12) {
                 time(track?.elapsed ?? 0)
+                    .opacity(resting ? 0 : 1)
                 Timeline(controller: controller, compact: true, visible: visible)
                     // 24 pt to aim at, around a line that's at most 4 pt thick
                     .frame(height: 24)
                     .seeker(controller)
                 time(track?.duration ?? 0)
+                    .opacity(resting ? 0 : 1)
             }
         }
         .opacity(controller.status == .idle ? 0 : 1)
