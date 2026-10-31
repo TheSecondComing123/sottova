@@ -60,7 +60,11 @@ public final class Shelf {
     public private(set) var running = false
     public private(set) var problem: String?
 
-    public init() {}
+    private let session: URLSession
+
+    public init(session: URLSession = .shared) {
+        self.session = session
+    }
 
     /// One set after another into `root`. A file already there was finished (each lands by a move), so asking again
     /// picks up where a stopped download left off. Cancelling the task stops between files.
@@ -75,7 +79,8 @@ public final class Shelf {
             } catch is CancellationError {
                 return
             } catch {
-                problem = "couldn't download \(set.title): \(error.localizedDescription)"
+                let failure = "couldn't download \(set.title): \(error.localizedDescription)"
+                problem = problem.map { $0 + "\n" + failure } ?? failure
             }
         }
     }
@@ -92,9 +97,11 @@ public final class Shelf {
 
     private func fetch(_ set: ShelfSet, into dir: URL) async throws {
         let base = URL(string: "https://archive.org")!
-        let (data, _) = try await URLSession.shared.data(for: Self.request(base.appending(path: "metadata/\(set.id)")))
+        let (data, response) = try await session.data(for: Self.request(base.appending(path: "metadata/\(set.id)")))
+        try Self.check(response)
         let files = try JSONDecoder().decode(Item.self, from: data).files
         let mp3s = files.filter { $0.format == "VBR MP3" }
+        guard !mp3s.isEmpty else { throw Failure(detail: "archive.org lists no songs in it") }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let total = Double(mp3s.reduce(0) { $0 + (Int($1.size ?? "") ?? 0) })
@@ -104,7 +111,7 @@ public final class Shelf {
             try Task.checkCancellation()
             let dest = dir.appending(path: (file.name as NSString).lastPathComponent)
             if !FileManager.default.fileExists(atPath: dest.path) {
-                let (temp, _) = try await URLSession.shared.download(for: Self.request(base.appending(path: "download/\(set.id)/\(file.name)")))
+                let temp = try await download(base.appending(path: "download/\(set.id)/\(file.name)"), size: file.size)
                 if let retag = set.retag {
                     let audio = try Data(contentsOf: temp)
                     try ID3.retag(audio, [("TIT2", Self.title(file)), ("TPE1", retag.artist), ("TALB", retag.album),
@@ -120,12 +127,40 @@ public final class Shelf {
 
         let cover = dir.appending(path: "cover.jpg")
         if let jpeg = files.first(where: { $0.format == "JPEG" }), !FileManager.default.fileExists(atPath: cover.path) {
-            let (temp, _) = try await URLSession.shared.download(for: Self.request(base.appending(path: "download/\(set.id)/\(jpeg.name)")))
+            let temp = try await download(base.appending(path: "download/\(set.id)/\(jpeg.name)"), size: jpeg.size)
             try FileManager.default.moveItem(at: temp, to: cover)
         }
         let credits = "\(set.title)\n\(set.creator)\nlicense: \(set.license), \(set.licenseURL)\nsource: https://archive.org/details/\(set.id)\n"
         try credits.write(to: dir.appending(path: "credits.txt"), atomically: true, encoding: .utf8)
         progress[set.id] = 1
+    }
+
+    struct Failure: LocalizedError {
+        let detail: String
+        var errorDescription: String? { detail }
+    }
+
+    /// A temp file holding the real thing: an error page is a response like any other, and would land as a song.
+    private func download(_ url: URL, size: String?) async throws -> URL {
+        let (temp, response) = try await session.download(for: Self.request(url))
+        do {
+            try Self.check(response)
+            guard response.mimeType != "text/html" else { throw Failure(detail: "archive.org sent a web page instead of \(url.lastPathComponent)") }
+            let got = try temp.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            if let want = size.flatMap(Int.init), got != want {
+                throw Failure(detail: "\(url.lastPathComponent) came to \(got ?? 0) bytes, not \(want)")
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: temp)
+            throw error
+        }
+        return temp
+    }
+
+    private static func check(_ response: URLResponse) throws {
+        if let status = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
+            throw Failure(detail: "archive.org answered \(status)")
+        }
     }
 
     /// "Ballade no. 1 - Op. 23.mp3" reads as "Ballade No. 1, Op. 23", the way the catalog splits work from number.
