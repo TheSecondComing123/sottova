@@ -743,8 +743,25 @@ struct AlarmRunTests {
         let row = Alarm(source: "gone", name: "Lauds", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
         c.addAlarm(row)
         c.rescan()
-        try await Task.sleep(for: .milliseconds(200))
-        c.fire(row.id, due: .now)
+        // not used up while it waits for that scan
+        for _ in 0..<500 where c.problem?.contains("nothing in it") != true {
+            c.fire(row.id, due: .now)
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(c.problem?.contains("nothing in it") == true)
+    }
+
+    /// The tick the press itself runs ends the timer: what it starts must see that, not what the status said before.
+    @Test func anAlarmStartsWhenItsOwnTickEndsASleepTimer() async throws {
+        let (c, album, _) = try await controller()
+        c.play(album.songs)
+        c.sleep(minutes: 0.005)
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.lastTick = .now - .seconds(1)
+        c.fire(row.id, due: .now)
+        #expect(c.status == .playing)
+        #expect(c.machine.rise != nil)
+        #expect(c.upNext.count == album.songs.count - 1)
     }
 }

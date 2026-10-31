@@ -120,7 +120,7 @@ public final class Controller {
     @ObservationIgnored private var playbackProblem: String?
     @ObservationIgnored private var assertion: IOPMAssertionID?
     @ObservationIgnored private var ticker: Task<Void, Never>?
-    @ObservationIgnored private var lastTick: ContinuousClock.Instant?
+    @ObservationIgnored var lastTick: ContinuousClock.Instant?
     @ObservationIgnored private var analysis: Task<Void, Never>?
     @ObservationIgnored private var scanGeneration = 0
     @ObservationIgnored private var watcher: FolderWatcher?
@@ -347,6 +347,8 @@ public final class Controller {
     /// `row` is the alarm this is for and the time it's for.
     public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false, row: (id: Alarm.ID, time: Date)? = nil) {
         guard songs.indices.contains(index) else { return }
+        // first, since it can end what's playing: the check below and the alarm's marks have to come after that
+        catchUp()
         releaseHour()
         giveVolumeBack()
         fromAlarm = row != nil
