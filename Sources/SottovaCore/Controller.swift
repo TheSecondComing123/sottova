@@ -180,6 +180,8 @@ public final class Controller {
         lastTick = .now
         startTicker()
         nowPlaying = NowPlaying(controller: self)
+        // before alarms, whose message about a damaged file is the one that has to be read
+        loadTrims()
         // alarms first: a piece restored mid-hour goes on being the hour's
         loadAlarms()
         restoreResume()
@@ -187,7 +189,6 @@ public final class Controller {
         if alarms.contains(where: { $0.on && $0.heedsCalendar }) {
             Task { await Presence.askForCalendars() }
         }
-        loadTrims()
         publish()
         rescan()
     }
@@ -748,11 +749,13 @@ public final class Controller {
     public private(set) var trims: [String: Trim] = [:]
     /// The frames of the file on deck that play, past its trim.
     @ObservationIgnored private var span: (start: Int64, end: Int64) = (0, 0)
+    /// Off when trims.json can't be read or moved, so saving doesn't overwrite it.
+    @ObservationIgnored private var trimsWritable = true
 
     /// Takes effect the next time the song starts; nil plays the whole file again.
     public func setTrim(_ trim: Trim?, for path: String) {
         trims[path] = trim
-        guard let url = storage?.appending(path: "trims.json") else { return }
+        guard trimsWritable, let url = storage?.appending(path: "trims.json") else { return }
         do {
             try JSONEncoder().encode(trims).write(to: url, options: .atomic)
         } catch {
@@ -761,8 +764,19 @@ public final class Controller {
     }
 
     private func loadTrims() {
-        guard let url = storage?.appending(path: "trims.json"), let data = try? Data(contentsOf: url) else { return }
-        trims = (try? JSONDecoder().decode([String: Trim].self, from: data)) ?? [:]
+        guard let url = storage?.appending(path: "trims.json"), FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            trims = try JSONDecoder().decode([String: Trim].self, from: Data(contentsOf: url))
+        } catch {
+            let aside = url.deletingLastPathComponent().appending(path: "trims.json.unreadable-\(Int(Date.now.timeIntervalSince1970))")
+            do {
+                try FileManager.default.moveItem(at: url, to: aside)
+                problem = "couldn't read your trims, so songs play whole. the old file is \(aside.lastPathComponent)"
+            } catch {
+                trimsWritable = false
+                problem = "couldn't read your trims or set the file aside, so songs play whole and changes to trims won't be saved: \(error.localizedDescription)"
+            }
+        }
     }
 
     /// Sets `span` for the file and returns how long that part plays.

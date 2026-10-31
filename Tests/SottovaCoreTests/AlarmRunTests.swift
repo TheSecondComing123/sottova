@@ -175,6 +175,29 @@ struct AlarmRunTests {
         #expect(try String(contentsOf: aside, encoding: .utf8) == "{}")
     }
 
+    @Test func anUnreadableTrimsFileIsSetAsideAndSaid() throws {
+        let storage = try temp()
+        let url = storage.appending(path: "trims.json")
+        try Data("{\"broken".utf8).write(to: url)
+        let c = Controller(storage: storage)
+        c.run()
+        #expect(c.problem?.contains("trims.json.unreadable-") == true)
+        c.setTrim(Trim(), for: "/a.flac")
+        let files = try FileManager.default.contentsOfDirectory(atPath: storage.path)
+        let aside = try #require(files.first { $0.hasPrefix("trims.json.unreadable") })
+        #expect(try String(contentsOf: storage.appending(path: aside), encoding: .utf8) == "{\"broken")
+    }
+
+    /// Both damaged: losing every alarm is what must be read.
+    @Test func theAlarmsMessageOutlivesTheTrimsOne() throws {
+        let storage = try temp()
+        try Data("{\"broken".utf8).write(to: storage.appending(path: "trims.json"))
+        try Data("[{\"broken".utf8).write(to: storage.appending(path: "alarms.json"))
+        let c = Controller(storage: storage)
+        c.run()
+        #expect(c.problem?.contains("alarms") == true)
+    }
+
     @Test func aMissingAlarmsFileIsNothingToMention() throws {
         let c = Controller(storage: try temp())
         c.run()
