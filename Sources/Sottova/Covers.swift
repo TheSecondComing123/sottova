@@ -24,6 +24,8 @@ struct CoverPicker: View {
     @State private var picked: Painting?
     @State private var file: (data: Data, image: NSImage)?
     @State private var targeted = false
+    /// Use cover's download, which Cancel stops.
+    @State private var saveTask: Task<Void, Never>?
     @State private var saving = false
     @State private var failure: String?
     @FocusState private var typing: Bool
@@ -90,12 +92,16 @@ struct CoverPicker: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(failure == nil ? Theme.faint : Theme.text)
                 Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .buttonStyle(QuietButton())
+                Button("Cancel") {
+                    saveTask?.cancel()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                .buttonStyle(QuietButton())
                 Button(saving ? "Saving…" : "Use cover", action: save)
                     .buttonStyle(InvertedButton())
-                    .keyboardShortcut(.defaultAction)
+                    // while typing a search, return searches
+                    .keyboardShortcut(typing ? nil : .defaultAction)
                     .disabled((picked == nil && file == nil) || saving)
             }
         }
@@ -233,7 +239,7 @@ struct CoverPicker: View {
 
     private func save() {
         saving = true
-        Task {
+        saveTask = Task {
             defer { saving = false }
             let data: Data
             var credit: String?
@@ -250,6 +256,7 @@ struct CoverPicker: View {
             } else {
                 return
             }
+            guard !Task.isCancelled else { return }
             switch target {
             case .album(let id): controller.setCover(data, credit: credit, forAlbum: id)
             case .playlist(let id): controller.setCover(data, credit: credit, forPlaylist: id)
