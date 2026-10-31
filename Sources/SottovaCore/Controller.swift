@@ -273,7 +273,11 @@ public final class Controller {
         }
     }
 
+    /// Counts Play next, so the queue button can show each one landed.
+    public private(set) var queuedNext = 0
+
     public func playNext(_ songs: [Song], source: String? = nil) {
+        queuedNext += 1
         let source = source ?? Self.source(of: songs)
         upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: 0)
     }

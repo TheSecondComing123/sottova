@@ -41,6 +41,13 @@ struct PlayerBar: View {
                     // bold when open, so open reads differently from just being under the pointer
                     Ph.queue.icon(showsQueue ? .bold : .duotone, size: 16)
                         .foregroundStyle(showsQueue ? Theme.text : Theme.muted)
+                        // a nudge each time Play next lands, which otherwise shows only in a closed queue
+                        .keyframeAnimator(initialValue: 1.0, trigger: controller.queuedNext) { icon, scale in
+                            icon.scaleEffect(scale)
+                        } keyframes: { _ in
+                            SpringKeyframe(1.3, duration: 0.12, spring: .snappy)
+                            SpringKeyframe(1, duration: 0.35, spring: .smooth)
+                        }
                         .frame(width: 32, height: 32)
                         .background(showsQueue ? Theme.hover : .clear, in: .rect(cornerRadius: 8))
                         .hoverable(radius: 8)
