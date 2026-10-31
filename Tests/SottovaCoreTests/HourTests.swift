@@ -81,7 +81,7 @@ struct HourTests {
                                                         meta: TrackMeta(title: "t\(i)", artist: "a", album: "Overworld", duration: 3))
         }
         c.refreshTracks()
-        try await Task.sleep(for: .milliseconds(500))
+        for _ in 0..<500 where c.catalog.albums.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         let album = try #require(c.catalog.albums.first)
         c.presence = { _ in nil }
         return (c, album)

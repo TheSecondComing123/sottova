@@ -207,7 +207,7 @@ struct RenderTests {
         controller.library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10),
                                                              meta: TrackMeta(title: "t", artist: "a", album: "Lauds", duration: 3))
         controller.refreshTracks()
-        try await Task.sleep(for: .milliseconds(500))
+        for _ in 0..<500 where controller.catalog.albums.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         let album = try #require(controller.catalog.albums.first)
         let soon = Date.now.addingTimeInterval(60)
         let parts = Calendar.current.dateComponents([.hour, .minute], from: soon)

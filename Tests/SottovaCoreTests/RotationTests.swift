@@ -99,7 +99,7 @@ struct RotationTests {
             c.library.entries["/r/\(i).flac"] = Library.Entry(size: 0, modified: .now, meta: TrackMeta(title: "t\(i)", artist: "a", album: "R", duration: 60))
         }
         c.refreshTracks()
-        try await Task.sleep(for: .milliseconds(500))
+        for _ in 0..<500 where c.catalog.albums.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         let album = try #require(c.catalog.albums.first)
         var alarm = Alarm(source: album.id, name: "R", hour: 20, minute: 0, weekdays: Set(1...7))
         alarm.rotates = true
