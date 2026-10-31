@@ -93,6 +93,13 @@ public final class Controller {
     @ObservationIgnored private var fromAlarm = false
     /// Off when alarms.json can't be read or moved, so saving doesn't overwrite it.
     @ObservationIgnored private var alarmsWritable = true
+    /// How audio starts; a test can make it fail, as a device that's going away does.
+    @ObservationIgnored var startEngine: (AVAudioEngine) throws -> Void = { try $0.start() }
+    /// A piece waiting for the audio device, which isn't its fault.
+    @ObservationIgnored private var retrying: String?
+    @ObservationIgnored private var engineFailures = 0
+    /// How long to wait for a device that won't start, a try a second.
+    static let engineTries = 60
     /// A failure to play, which the next piece that plays puts right; other messages stay until they're read.
     @ObservationIgnored private var playbackProblem: String?
     @ObservationIgnored private var assertion: IOPMAssertionID?
@@ -1429,10 +1436,13 @@ public final class Controller {
             }
         case .resumePlayback:
             do {
-                try engine.start()
+                try startEngine(engine)
+                if problem == playbackProblem { problem = nil }
             } catch {
                 problem = "couldn't restart audio output: \(error.localizedDescription)"
                 playbackProblem = problem
+                // not playing, so nothing may say it is
+                send(.pause)
                 return
             }
             if needsReschedule {
@@ -1448,7 +1458,8 @@ public final class Controller {
     }
 
     private func startNextTrack() {
-        let queued = dequeue()
+        let queued = retrying ?? dequeue()
+        retrying = nil
         guard let path = queued ?? (fromAlarm ? nil : shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng)) else {
             send(.stop)
             return
@@ -1459,7 +1470,13 @@ public final class Controller {
             let file = try AVAudioFile(forReading: url)
             deck.stop()
             mixers[active].outputVolume = 0
-            try engine.start()
+            do {
+                try startEngine(engine)
+                engineFailures = 0
+            } catch {
+                waitForEngine(path, error)
+                return
+            }
             let duration = useSpan(of: file)
             deck.scheduleSegment(file, startingFrame: span.start, frameCount: AVAudioFrameCount(span.end - span.start), at: nil, completionHandler: nil)
             deck.prepare(withFrameCount: 8192)
@@ -1485,6 +1502,22 @@ public final class Controller {
                 return
             }
             send(.trackFailed)
+        }
+    }
+
+    private func waitForEngine(_ path: String, _ error: Error) {
+        engineFailures += 1
+        guard engineFailures < Self.engineTries else {
+            engineFailures = 0
+            problem = "couldn't start audio output: \(error.localizedDescription)"
+            playbackProblem = problem
+            send(.stop)
+            return
+        }
+        retrying = path
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            if retrying == path, case .loading = machine.phase { startNextTrack() }
         }
     }
 
@@ -1638,10 +1671,19 @@ public final class Controller {
     }
 
     /// The engine stops and drops scheduled audio on a device change, so pause and pick up from the same frame on resume.
+    /// An alarm goes on by itself, since nobody's there to press play.
     private func engineConfigurationChanged() {
+        if case .track = machine.phase { needsReschedule = true }
         guard status == .playing else { return }
-        needsReschedule = true
         command(.pause)
+        guard fromAlarm else { return }
+        Task {
+            for _ in 0..<Self.engineTries {
+                try? await Task.sleep(for: .seconds(1))
+                guard fromAlarm, status == .paused else { return }
+                command(.resume)
+            }
+        }
     }
 
     /// ponytail: only the current deck is rescheduled; a crossfade's outgoing track is dropped on a device change

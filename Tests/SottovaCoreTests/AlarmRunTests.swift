@@ -144,4 +144,52 @@ struct AlarmRunTests {
             #expect(c.machine.sleep == nil)
         }
     }
+
+    private struct DeviceGone: Error {}
+
+    @Test func aDeviceThatWontStartWaitsAndKeepsTheQueue() async throws {
+        let (c, album, _) = try await controller(songs: 3)
+        var fails = 2
+        c.startEngine = { engine in
+            if fails > 0 {
+                fails -= 1
+                throw DeviceGone()
+            }
+            try engine.start()
+        }
+        c.play(album.songs)
+        #expect(c.current == nil)
+        for _ in 0..<400 where c.current == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.current?.id == album.songs[0].id)
+        #expect(c.upNext.map(\.path) == album.songs.dropFirst().map(\.id))
+    }
+
+    @Test func anAlarmGoesOnAfterADeviceChange() async throws {
+        let (c, album, engine) = try await controller()
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        var fails = 1
+        c.startEngine = { engine in
+            if fails > 0 {
+                fails -= 1
+                throw DeviceGone()
+            }
+            try engine.start()
+        }
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(c.status == .paused)
+        for _ in 0..<400 where c.status != .playing { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.status == .playing)
+        #expect(c.current != nil)
+    }
+
+    @Test func musicYouStartedStaysPausedAfterADeviceChange() async throws {
+        let (c, album, engine) = try await controller()
+        c.play(album.songs)
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(c.status == .paused)
+    }
 }
