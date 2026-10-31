@@ -57,6 +57,12 @@ extension Controller {
         case .paused:
             return "paused"
         case .resting:
+            switch hold {
+            case .away: return "waiting till you're back"
+            case .call: return "waiting till your call ends"
+            case .media: return "waiting while something else plays"
+            case nil: break
+            }
             let left = nextTrackAt?.timeIntervalSince(now) ?? 0
             if left < 60 { return "next track in a moment" }
             if left < 300 { return "next track in a few minutes" }

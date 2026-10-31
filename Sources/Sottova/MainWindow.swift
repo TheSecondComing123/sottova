@@ -180,7 +180,7 @@ private struct Sidebar: View {
         (.songs, "Songs", .musicNote),
         (.collections, "Collections", .stack),
         (.artists, "Artists", .microphoneStage),
-        (.alarms, "Alarms", .alarm),
+        (.alarms, "Your day", .alarm),
         (.shelf, "Free music", .archive),
     ]
 
