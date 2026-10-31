@@ -31,7 +31,7 @@ struct PlayerBar: View {
                     .disabled(controller.status == .idle)
                 }
                 ProgressLine()
-                    .frame(minWidth: 220, maxWidth: 440)
+                    .frame(minWidth: 170, maxWidth: 440)
             }
             Spacer(minLength: 12)
             // the mode lives in the sidebar; here it was the same thing twice
