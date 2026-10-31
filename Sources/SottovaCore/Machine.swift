@@ -90,10 +90,13 @@ struct Machine: Sendable {
         case loading
         case track(Track)
         case resting(elapsed: Double, gap: Double)
+        /// Nothing came after a crossfade: the outgoing track finishes its fade, then it's over.
+        case ending
     }
 
     enum Event {
-        case start, stop, trackStarted(duration: Double), trackFailed, tick(Double), skip, pause, resume
+        /// `finish` is the stop for when nothing comes next: what's fading out gets to finish.
+        case start, stop, finish, trackStarted(duration: Double), trackFailed, tick(Double), skip, pause, resume
         case sleep(after: Double), sleepAfterCurrent, cancelSleep, sleepNow
         /// An alarm: start silent and come up to full over `riseLength` seconds of sound.
         case rise
@@ -153,7 +156,7 @@ struct Machine: Sendable {
         if paused { return .paused }
         switch phase {
         case .idle: return .idle
-        case .loading, .track: return .playing
+        case .loading, .track, .ending: return .playing
         case .resting: return .resting
         }
     }
@@ -236,6 +239,7 @@ struct Machine: Sendable {
         if case .tick(let dt) = event, !paused, var track = outgoing {
             track.elapsed += dt
             if track.finished {
+                if phase == .ending { return goToSleep() }
                 outgoing = nil
                 effects.append(.stopOutgoing)
             } else {
@@ -296,13 +300,22 @@ struct Machine: Sendable {
             return [.startNextTrack]
 
         case (.stop, _):
+            let fading = outgoing != nil
             phase = .idle
             paused = false
             sleep = nil
             rise = nil
             outgoing = nil
             crossfadeNext = false
+            return fading ? [.stopOutgoing] : []
+
+        case (.finish, .loading) where outgoing != nil:
+            phase = .ending
             return []
+
+        case (.skip, .ending):
+            phase = .loading
+            return [.startNextTrack]
 
         case (.trackStarted(let duration), .loading):
             phase = .track(makeTrack(duration: duration))

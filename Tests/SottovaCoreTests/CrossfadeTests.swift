@@ -28,6 +28,31 @@ struct CrossfadeTests {
         #expect(!effects.contains(.stopTrack(skipped: false)))
     }
 
+    @Test func nothingNextLetsTheFadeFinishThenStops() {
+        var m = continuous()
+        while !m.handle(.tick(0.01)).contains(.handOff) {}
+        #expect(m.handle(.finish).isEmpty)
+        #expect(m.status == .playing)
+        #expect(!tick(&m, seconds: 3).contains(.stopOutgoing))
+        #expect(m.outgoing != nil)
+        #expect(tick(&m, seconds: 1.1).contains(.stopOutgoing))
+        #expect(m.phase == .idle)
+    }
+
+    @Test func aStopTakesTheOutgoingDeckWithIt() {
+        var m = continuous()
+        while !m.handle(.tick(0.01)).contains(.handOff) {}
+        #expect(m.handle(.stop) == [.stopOutgoing])
+    }
+
+    @Test func aSkipDuringTheLastFadeStartsWhatsNowQueued() {
+        var m = continuous()
+        while !m.handle(.tick(0.01)).contains(.handOff) {}
+        _ = m.handle(.finish)
+        #expect(m.handle(.skip) == [.startNextTrack])
+        #expect(m.phase == .loading)
+    }
+
     @Test func overlapKeepsConstantPowerAndNeverRests() {
         var m = continuous()
         handOff(&m)

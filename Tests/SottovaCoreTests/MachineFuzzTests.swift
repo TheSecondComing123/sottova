@@ -32,6 +32,7 @@ struct MachineFuzzTests {
         case 16: return .event(.wait(length))
         case 17: return .event(.hold(Bool.random(using: &rng)))
         case 18: return .crossfade(Bool.random(using: &rng))
+        case 20: return .event(.finish)
         case 19: return .event(.restoreLevels(sleep: .timer(left: length, fade: min(180, length)), rise: Double.random(in: 1...90, using: &rng)))
         default: return .event(.tick(tick))
         }
@@ -40,6 +41,7 @@ struct MachineFuzzTests {
     /// What's wrong after `event` took `before` to `m`, if anything.
     private func broken(_ before: Machine, _ event: Machine.Event, _ m: Machine, _ effects: [Machine.Effect]) -> String? {
         if m.phase == .idle, m.sleep != nil || m.rise != nil || m.outgoing != nil || m.paused { return "idle with something left over" }
+        if before.outgoing != nil, m.outgoing == nil, !effects.contains(.stopOutgoing) { return "outgoing deck left playing" }
         if let rise = m.rise, !(rise > 0 && rise <= Machine.riseLength) { return "rise \(rise)" }
         for case .setGain(let gain) in effects where !gain.isFinite || !(0...1).contains(gain) { return "gain \(gain)" }
         for case .setOutgoingGain(let gain) in effects where !gain.isFinite || !(0...1).contains(gain) { return "outgoing gain \(gain)" }

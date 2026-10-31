@@ -992,7 +992,7 @@ public final class Controller {
         case .resting: state = ResumeState(path: path, elapsed: nil, restLeft: machine.restRemaining, source: playingAlbum, upNext: [], origin: origin, fromAlarm: fromAlarm)
         case .idle: state = nil
         // a moment between pieces; the next status change saves
-        case .loading: return
+        case .loading, .ending: return
         }
         guard var state else {
             try? FileManager.default.removeItem(at: url)
@@ -1668,6 +1668,8 @@ public final class Controller {
         case .stopOutgoing:
             players[1 - active].stop()
             mixers[1 - active].outputVolume = 0
+            // the last of the sound, as in stopTrack
+            if case .track = machine.phase {} else { engine.pause() }
         case .pausePlayback:
             players.forEach { $0.pause() }
             engine.pause()
@@ -1715,7 +1717,7 @@ public final class Controller {
                 problem = "the alarm stopped: \(failures) of its files wouldn't open"
                 playbackProblem = problem
             }
-            send(.stop)
+            send(machine.outgoing == nil ? .stop : .finish)
             return
         }
         let url = URL(filePath: path)

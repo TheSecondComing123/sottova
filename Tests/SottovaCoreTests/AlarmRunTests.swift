@@ -794,4 +794,32 @@ struct AlarmRunTests {
         c.fire(row.id, due: .now)
         #expect(c.current?.id == album.songs[0].id)
     }
+
+    /// Continuous: the last piece hands off to nothing, and goes on fading until it's done.
+    @Test func aCrossfadedAlarmsLastPieceFinishesItsFadeThenStops() async throws {
+        let (c, album, engine) = try await controller()
+        c.saveVolume = { _ in }
+        c.volume = 0.6
+        var settings = c.settings
+        (settings.crossfade, settings.crossfadeSec) = (true, 0.3)
+        c.settings = settings
+        var row = alarm(album)
+        row.volume = 0.15
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        var fading = 0
+        for _ in 0..<1500 where c.status != .idle {
+            c.advance(0.01)
+            if c.upNext.isEmpty, c.machine.outgoing != nil, c.machine.phase == .ending {
+                fading += 1
+                #expect(c.volume == 0.15)
+            }
+        }
+        #expect(c.status == .idle)
+        #expect(fading > 20)
+        #expect(c.machine.outgoing == nil)
+        #expect(c.mixerVolumes == [0, 0])
+        #expect(!engine.isRunning)
+        #expect(c.volume == 0.6)
+    }
 }
