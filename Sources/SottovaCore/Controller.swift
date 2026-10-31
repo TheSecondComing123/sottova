@@ -544,16 +544,27 @@ public final class Controller {
         }
     }
 
+    /// Not the library's yet: being built, or from before the first scan and short of what that may bring back.
+    private var catalogPending: Bool {
+        !catalogBuilt || !scanned && (catalog.songsByID.isEmpty || library.entries.values.contains { $0.unreachable == true })
+    }
+
     /// An alarm whose time passed while the app wasn't running still goes off, the latest one if there are several.
     /// Not before there's a catalog, which it needs to find its songs.
     func catchUpAlarms(now: Date = .now) {
-        guard alarmsLoaded, !alarmsCaughtUp, !catalog.songsByID.isEmpty else { return }
+        guard alarmsLoaded, !alarmsCaughtUp, !catalogPending else { return }
         alarmsCaughtUp = true
         if let (alarm, at) = dueAlarms(now: now).max(by: { $0.at < $1.at }) { fire(alarm.id, due: at, now: now) }
     }
 
     func fire(_ id: Alarm.ID, due: Date, now: Date = .now) {
         guard let index = alarms.firstIndex(where: { $0.id == id }) else { return }
+        // not spent: catch-up takes it once the catalog's there
+        if catalogPending, now.timeIntervalSince(due) <= Self.alarmLateness {
+            alarmsCaughtUp = false
+            armAlarm()
+            return
+        }
         // the clock was set back past it
         if alarms[index].lastFired == due {
             armAlarm()
@@ -1385,6 +1396,7 @@ public final class Controller {
             scanned = true
             library.merge(found)
             refreshTracks()
+            catchUpAlarms()
             saveLibrary()
             analyzePending()
             if found.unreachable != unreachableFolders {

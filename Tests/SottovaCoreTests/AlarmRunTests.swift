@@ -692,4 +692,59 @@ struct AlarmRunTests {
         let again = try await relaunched(storage)
         #expect(again.status == .playing)
     }
+
+    @Test func aTimerBeforeTheCatalogDoesntSpendTheAlarm() async throws {
+        let (first, album, engine) = try await controller()
+        let (row, due) = justPassed(album)
+        let storage = try temp()
+        try JSONEncoder().encode([row]).write(to: storage.appending(path: "alarms.json"))
+        let c = Controller(engine: engine, storage: storage)
+        c.loadAlarms()
+        c.fire(row.id, due: due)
+        #expect(c.alarms.first?.lastFired == nil)
+        #expect(c.problem == nil)
+        c.library = first.library
+        c.refreshTracks()
+        for _ in 0..<500 where c.status == .idle { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.status == .playing)
+        #expect(c.alarms.first?.lastFired == due)
+    }
+
+    /// Saved as out of reach by a run that's over, so the catalog lacks it until the first scan looks again.
+    @Test func aMissedAlarmWaitsForTheFirstScanToBringItsSongsBack() async throws {
+        let (_, _, engine) = try await controller()
+        let (wanted, elsewhere) = (try oneSongFolder(), try oneSongFolder())
+        let setup = Controller(storage: try temp())
+        setup.addFolders([wanted, elsewhere])
+        for _ in 0..<500 where setup.catalog.albums.count < 2 || setup.pendingAnalysis > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        let album = try #require(setup.catalog.albums.first { $0.songs[0].id.contains(wanted.lastPathComponent) })
+        let storage = try temp()
+        var library = setup.library
+        library.entries[album.songs[0].id]?.unreachable = true
+        try library.save(to: storage.appending(path: "library.json"))
+        let (row, due) = justPassed(album)
+        try JSONEncoder().encode([row]).write(to: storage.appending(path: "alarms.json"))
+
+        let c = Controller(engine: engine, storage: storage)
+        c.loadAlarms()
+        for _ in 0..<500 where c.catalog.albums.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(c.status == .idle)
+        #expect(c.alarms.first?.lastFired == nil)
+        c.rescan()
+        for _ in 0..<500 where c.status == .idle { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.status == .playing)
+        #expect(c.alarms.first?.lastFired == due)
+    }
+
+    @Test func anAlarmWithNoLibraryAfterTheFirstScanStillSaysSo() async throws {
+        let c = Controller(storage: try temp())
+        c.loadAlarms()
+        let row = Alarm(source: "gone", name: "Lauds", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
+        c.addAlarm(row)
+        c.rescan()
+        try await Task.sleep(for: .milliseconds(200))
+        c.fire(row.id, due: .now)
+        #expect(c.problem?.contains("nothing in it") == true)
+    }
 }
