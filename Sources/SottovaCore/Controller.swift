@@ -399,12 +399,11 @@ public final class Controller {
 
     func fire(_ id: Alarm.ID, due: Date, now: Date = .now) {
         guard let alarm = alarms.first(where: { $0.id == id }) else { return }
-        let songs = songs(for: alarm)
         if now.timeIntervalSince(due) > Self.alarmLateness {
             problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
         } else if alarm.heedsCalendar, calendarBusy() {
             problem = "\(alarm.name) didn't play at \(due.formatted(date: .omitted, time: .shortened)): your calendar had something on"
-        } else if !songs.isEmpty {
+        } else if case let songs = takeSongs(alarm), !songs.isEmpty {
             if let volume = alarm.volume { self.volume = volume }
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
             let history = storage.map { PlayRecord.read($0.appending(path: "plays.jsonl"), last: 2000) } ?? []
@@ -428,12 +427,48 @@ public final class Controller {
         playlists.first { $0.id == alarm.source }.map(songs(of:)) ?? catalog.albumsByID[alarm.source]?.songs ?? []
     }
 
+    /// An alarm's collection in the parts it rotates through: a collection's own breaks, or cut by length.
+    public func parts(for alarm: Alarm) -> [[Song]] {
+        if let playlist = playlists.first(where: { $0.id == alarm.source }), !playlist.breaks.isEmpty {
+            return playlist.partPaths.map { $0.compactMap { catalog.songsByID[$0] } }.filter { !$0.isEmpty }
+        }
+        return Self.split(songs(for: alarm), into: alarm.parts)
+    }
+
+    /// `songs` in `count` runs of about equal length, in order: each song goes to the part its middle falls in.
+    nonisolated static func split(_ songs: [Song], into count: Int) -> [[Song]] {
+        let count = max(1, min(count, songs.count))
+        let total = songs.reduce(0) { $0 + $1.duration }
+        guard total > 0 else { return songs.isEmpty ? [] : [songs] }
+        var parts = Array(repeating: [Song](), count: count)
+        var start = 0.0
+        for song in songs {
+            parts[min(count - 1, Int(Double(count) * (start + song.duration / 2) / total))].append(song)
+            start += song.duration
+        }
+        return parts.filter { !$0.isEmpty }
+    }
+
+    /// What an alarm plays this time: its whole collection, or, rotating, its next part, which then moves on. Only
+    /// called when it's about to play, so a day it didn't doesn't use a part up.
+    func takeSongs(_ alarm: Alarm) -> [Song] {
+        guard alarm.rotates else { return songs(for: alarm) }
+        let all = parts(for: alarm)
+        guard !all.isEmpty, let i = alarms.firstIndex(where: { $0.id == alarm.id }) else { return [] }
+        let part = alarm.nextPart % all.count
+        alarms[i].nextPart = (part + 1) % all.count
+        alarmsChanged()
+        return all[part]
+    }
+
     // MARK: Hours
 
     /// The alarm that plays while you're at the Mac whose collection is playing; nil once anything else is played.
     @ObservationIgnored private var hourPlaying: Alarm.ID?
     /// Where each hour's last window began, so one stopped by hand doesn't start again until its next window.
     @ObservationIgnored private var hourBegun: [Alarm.ID: Date] = [:]
+    /// What the hour playing goes round: its collection, or the part it's on today.
+    @ObservationIgnored private var hourSongs: [Song] = []
     @ObservationIgnored private var lastHourCheck = Date.distantPast
     /// The stop after this piece is the hour's, not yours, so whatever you play next isn't cut short by it.
     @ObservationIgnored private var hourEnding = false
@@ -469,7 +504,8 @@ public final class Controller {
         // paused counts as not playing: often it's only how a relaunch or a restart left things
         if hourPlaying == nil, let current, status == .idle || status == .paused,
            let window = current.window(containing: now), hourBegun[current.id] != window.start {
-            let songs = songs(for: current)
+            let songs = takeSongs(current)
+            hourSongs = songs
             hourBegun[current.id] = window.start
             if songs.isEmpty {
                 problem = "\(current.name) has nothing in it to play"
@@ -497,7 +533,8 @@ public final class Controller {
     private func follow(_ hour: Alarm, now: Date) {
         hourPlaying = hour.id
         hourBegun[hour.id] = hour.window(containing: now)?.start
-        queue(hour, songs(for: hour))
+        hourSongs = takeSongs(hour)
+        queue(hour, hourSongs)
         if case .resting(let elapsed, let gap) = machine.phase {
             send(.gap(elapsed + min(gap - elapsed, Double.random(in: gapRange(beforeNext: upNext.first), using: &rng))))
             refreshNextTrack()
@@ -519,10 +556,8 @@ public final class Controller {
 
     /// An hour that's played through its collection goes round again.
     private func refillHour() -> Bool {
-        guard let hour = alarms.first(where: { $0.id == hourPlaying }) else { return false }
-        let songs = songs(for: hour)
-        guard !songs.isEmpty else { return false }
-        queue(hour, songs)
+        guard let hour = alarms.first(where: { $0.id == hourPlaying }), !hourSongs.isEmpty else { return false }
+        queue(hour, hourSongs)
         return true
     }
 
@@ -704,9 +739,12 @@ public final class Controller {
         }
         upNext = state.upNext.map { QueueEntry(path: $0.path, source: $0.source) }
         // still the hour's while its window is open; past it, the next check ends it like any closing window
-        if let id = state.hour, let window = alarms.first(where: { $0.id == id })?.window(containing: .now) {
+        if let id = state.hour, let hour = alarms.first(where: { $0.id == id }), let window = hour.window(containing: .now) {
             hourPlaying = id
             hourBegun[id] = window.start
+            // the part it was on is the one before the next
+            let parts = parts(for: hour)
+            hourSongs = hour.rotates && !parts.isEmpty ? parts[(hour.nextPart + parts.count - 1) % parts.count] : songs(for: hour)
         }
         useAlbumSettings(for: state.source)
         self.file = file
@@ -753,16 +791,16 @@ public final class Controller {
 
     /// Adds at the end, or before `index`.
     public func add(_ songs: [Song], to id: String, at index: Int? = nil) {
-        update(id) { $0.paths.insert(contentsOf: songs.map(\.id), at: min(index ?? $0.paths.count, $0.paths.count)) }
+        update(id) { $0.insert(songs.map(\.id), at: index ?? $0.paths.count) }
     }
 
     public func removeFromPlaylist(_ id: String, at offsets: IndexSet) {
         guard let paths = playlists.first(where: { $0.id == id })?.paths else { return }
         let removed = offsets.filter(paths.indices.contains).map { ($0, paths[$0]) }
-        update(id) { $0.paths = $0.paths.enumerated().filter { !offsets.contains($0.offset) }.map(\.element) }
+        update(id) { $0.remove(at: offsets) }
         undo?.registerUndo(withTarget: self) { controller in
             controller.update(id) { playlist in
-                for (i, path) in removed { playlist.paths.insert(path, at: min(i, playlist.paths.count)) }
+                for (i, path) in removed { playlist.insert([path], at: i) }
             }
             controller.undo?.registerUndo(withTarget: controller) { $0.removeFromPlaylist(id, at: IndexSet(removed.map(\.0))) }
         }

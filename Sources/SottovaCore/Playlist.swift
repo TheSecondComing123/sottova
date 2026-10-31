@@ -11,6 +11,8 @@ public struct Playlist: Identifiable, Equatable, Sendable {
     public var gaps: Settings?
     /// The album it was made from, which Albums then leaves out.
     public var fromAlbum: String?
+    /// Where a new part starts: the index of its first song. A row that plays one part each time takes these.
+    public var breaks: Set<Int> = []
 
     public init(id: String, name: String, paths: [String] = [], gaps: Settings? = nil, fromAlbum: String? = nil) {
         self.id = id
@@ -22,6 +24,8 @@ public struct Playlist: Identifiable, Equatable, Sendable {
 
     private static let gapsTag = "#SOTTOVA-GAPS:"
     private static let fromAlbumTag = "#SOTTOVA-FROM-ALBUM:"
+    /// Alone on its line, before the song that starts a part.
+    private static let partTag = "#SOTTOVA-PART"
 
     /// Reads absolute paths, paths relative to the file and file:// URLs; skips every other `#` line.
     static func parse(_ text: String, at url: URL) -> Playlist {
@@ -33,6 +37,8 @@ public struct Playlist: Identifiable, Equatable, Sendable {
                 playlist.gaps = try? JSONDecoder().decode(Settings.self, from: Data(line.dropFirst(gapsTag.count).utf8))
             } else if line.hasPrefix(fromAlbumTag) {
                 playlist.fromAlbum = String(line.dropFirst(fromAlbumTag.count)).removingPercentEncoding
+            } else if line == partTag {
+                if !playlist.paths.isEmpty { playlist.breaks.insert(playlist.paths.count) }
             } else if line.isEmpty || line.hasPrefix("#") {
                 continue
             } else if line.hasPrefix("file://") {
@@ -57,13 +63,39 @@ public struct Playlist: Identifiable, Equatable, Sendable {
             lines.append(Self.fromAlbumTag + (fromAlbum.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? fromAlbum))
         }
         let folder = URL(filePath: id).deletingLastPathComponent().standardizedFileURL.pathComponents
-        for path in paths {
+        for (index, path) in paths.enumerated() {
+            if breaks.contains(index) {
+                lines.append(Self.partTag)
+            }
             if let (seconds, title) = info(path) {
                 lines.append("#EXTINF:\(Int(seconds.rounded())),\(title)")
             }
             lines.append(Self.relative(path, from: folder))
         }
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// Songs added at `index` join the part that's there; the parts after move along with them.
+    mutating func insert(_ added: [String], at index: Int) {
+        let index = min(index, paths.count)
+        paths.insert(contentsOf: added, at: index)
+        breaks = Set(breaks.map { $0 > index ? $0 + added.count : $0 })
+    }
+
+    /// A part keeps its place when songs leave it; one left empty goes.
+    mutating func remove(at offsets: IndexSet) {
+        paths = paths.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
+        breaks = Set(breaks.map { b in b - offsets.count { $0 < b } }.filter { $0 > 0 && $0 < paths.count })
+    }
+
+    /// The songs part by part, in order; one part when there are no breaks.
+    public var partPaths: [[String]] {
+        var parts: [[String]] = [[]]
+        for (index, path) in paths.enumerated() {
+            if breaks.contains(index), !parts[parts.count - 1].isEmpty { parts.append([]) }
+            parts[parts.count - 1].append(path)
+        }
+        return parts.filter { !$0.isEmpty }
     }
 
     /// `path` relative to the folder, so moving the music and its playlists together keeps them working.

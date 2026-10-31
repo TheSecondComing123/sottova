@@ -26,6 +26,11 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     /// While your calendar has something on, one that plays while you're here waits and one that starts by itself
     /// skips the day.
     public var heedsCalendar = false
+    /// Plays one part of its collection each time, in turn: the collection's own parts, or `parts` cut by length.
+    public var rotates = false
+    public var parts = 4
+    /// The part that plays next time, from 0.
+    public var nextPart = 0
 
     public init(source: String, name: String, hour: Int, minute: Int, weekdays: Set<Int> = [], day: Date? = nil, shuffled: Bool = false) {
         self.source = source
@@ -38,7 +43,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar
+        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts, nextPart
     }
 
     // alarms.json from before alarms could be turned off has no `on`
@@ -58,6 +63,9 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         whileHere = try c.decodeIfPresent(Bool.self, forKey: .whileHere) ?? false
         // saved before it was a choice: those that play while you're here already waited for the calendar
         heedsCalendar = try c.decodeIfPresent(Bool.self, forKey: .heedsCalendar) ?? whileHere
+        rotates = try c.decodeIfPresent(Bool.self, forKey: .rotates) ?? false
+        parts = try c.decodeIfPresent(Int.self, forKey: .parts) ?? 4
+        nextPart = try c.decodeIfPresent(Int.self, forKey: .nextPart) ?? 0
     }
 
     /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.

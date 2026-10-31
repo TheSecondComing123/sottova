@@ -31,6 +31,8 @@ struct AlarmSheet: View {
     @State private var shuffled: Bool
     @State private var volume: Double?
     @State private var heedsCalendar: Bool
+    @State private var rotates: Bool
+    @State private var partCount: Int
     private let preview = AlarmPreview.shared
 
     enum Kind: String, CaseIterable {
@@ -63,6 +65,8 @@ struct AlarmSheet: View {
             _repeats = State(initialValue: .once)
             _shuffled = State(initialValue: false)
             _heedsCalendar = State(initialValue: false)
+            _rotates = State(initialValue: false)
+            _partCount = State(initialValue: 4)
             _stops = State(initialValue: false)
             // quiet by default: whatever the speaker is turned up to, this is what wakes you
             _volume = State(initialValue: 0.15)
@@ -76,6 +80,8 @@ struct AlarmSheet: View {
             _repeats = State(initialValue: Repeat.allCases.first { $0.days == alarm.weekdays } ?? .weekdays)
             _shuffled = State(initialValue: alarm.shuffled)
             _heedsCalendar = State(initialValue: alarm.heedsCalendar)
+            _rotates = State(initialValue: alarm.rotates)
+            _partCount = State(initialValue: alarm.parts)
             _volume = State(initialValue: alarm.volume)
         }
     }
@@ -121,11 +127,14 @@ struct AlarmSheet: View {
         var alarm = Alarm(source: source, name: name, hour: parts.hour ?? 7, minute: parts.minute ?? 0, weekdays: repeats.days, shuffled: shuffled)
         alarm.volume = volume
         alarm.heedsCalendar = heedsCalendar
+        alarm.rotates = rotates
+        alarm.parts = partCount
         alarm.whileHere = kind == .whileHere
         alarm.minutes = alarm.whileHere || stops ? span : nil
         if case .edit(let old) = request {
             alarm.id = old.id
             alarm.on = old.on
+            alarm.nextPart = old.nextPart
         }
         alarm.scheduleOnce()
         return alarm
@@ -262,11 +271,41 @@ struct AlarmSheet: View {
         .foregroundStyle(Theme.muted)
     }
 
-    /// The order, the calendar, and the volume it plays at.
+    /// "its own 3 parts, part 2 next", or "about 30 min each, part 1 next".
+    private var partsLine: String? {
+        guard let alarm, rotates else { return nil }
+        let cut = controller.parts(for: alarm)
+        guard !cut.isEmpty else { return nil }
+        let next = "part \(alarm.nextPart % cut.count + 1) next"
+        if controller.playlists.first(where: { $0.id == alarm.source })?.breaks.isEmpty == false {
+            return "its own \(cut.count) parts, \(next)"
+        }
+        let total: Double = cut.joined().reduce(0) { $0 + $1.duration }
+        let minutes = Int((total / Double(cut.count) / 60).rounded())
+        return "about \(minutes) min each, \(next)"
+    }
+
+    /// The order, the calendar, the parts, and the volume it plays at.
     @ViewBuilder private var settings: some View {
         VStack(spacing: 8) {
             Toggle("Shuffled", isOn: $shuffled)
             Toggle("Not while my calendar is busy", isOn: $heedsCalendar)
+            Toggle("One part each time", isOn: $rotates)
+            if rotates {
+                HStack(spacing: 12) {
+                    // a collection with parts of its own uses those
+                    if controller.playlists.first(where: { $0.id == source })?.breaks.isEmpty != false {
+                        ValueStepper(value: Binding(get: { Double(partCount) }, set: { partCount = Int($0) }), range: 2...12, unit: "parts")
+                    }
+                    if let partsLine {
+                        Text(partsLine)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.faint)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .transition(.opacity)
+            }
             Toggle("Set the volume", isOn: Binding(get: { volume != nil }, set: { volume = $0 ? 0.15 : nil }))
             if let level = volume {
                 HStack(spacing: 12) {
@@ -288,6 +327,7 @@ struct AlarmSheet: View {
         }
         .toggleStyle(KnobToggle())
         .animation(Theme.quick, value: volume == nil)
+        .animation(Theme.quick, value: rotates)
     }
 }
 
@@ -618,6 +658,7 @@ struct AlarmLine: View {
     /// Under a row's name: "on weekdays, shuffled", "every day, while you're at the mac". Its end sits under its time.
     static func subtitle(_ alarm: Alarm) -> String {
         days(alarm) + (alarm.whileHere ? ", while you're at the mac" : alarm.shuffled ? ", shuffled" : "")
+            + (alarm.rotates ? ", a part each time" : "")
     }
 
     static func time(_ alarm: Alarm) -> String {
