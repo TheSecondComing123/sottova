@@ -489,4 +489,126 @@ struct AlarmRunTests {
         c.fire(once.id, due: due)
         #expect(c.alarms.isEmpty)
     }
+
+    /// Fails until `tries` have gone by, or for good.
+    private func failing(_ c: Controller, tries: Int = .max) {
+        var left = tries
+        c.startEngine = { engine in
+            if left > 0 {
+                left -= 1
+                throw DeviceGone()
+            }
+            try engine.start()
+        }
+    }
+
+    /// The usual morning: last night's piece paused, and the device not ready at 7:02.
+    @Test func anAlarmOverAPausedPieceKeepsTryingTheDevice() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(5)
+        c.play(album.songs)
+        c.toggle()
+        #expect(c.status == .paused)
+        let row = alarm(album)
+        c.addAlarm(row)
+        failing(c, tries: 5)
+        c.fire(row.id, due: .now)
+        #expect(c.problem?.contains("audio output") == true)
+        for _ in 0..<400 where c.status != .playing { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.status == .playing)
+        #expect(c.problem == nil)
+        #expect(c.machine.rise != nil)
+    }
+
+    @Test func musicYouStartedDoesntKeepTryingAfterAFailedResume() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(5)
+        c.play(album.songs)
+        c.toggle()
+        failing(c, tries: 1)
+        c.toggle()
+        #expect(c.status == .paused)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(c.status == .paused)
+    }
+
+    @Test func anAlarmWaitsTenMinutesForADeviceThenSaysSo() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(1)
+        let row = alarm(album)
+        c.addAlarm(row)
+        failing(c, tries: 100)
+        c.fire(row.id, due: .now)
+        for _ in 0..<500 where c.current == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.current != nil)
+        #expect(c.problem == nil)
+
+        let (gone, album2, _) = try await controller()
+        gone.retryWait = .milliseconds(1)
+        let row2 = alarm(album2)
+        gone.addAlarm(row2)
+        failing(gone)
+        gone.fire(row2.id, due: .now)
+        for _ in 0..<1000 where gone.status != .idle { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(gone.status == .idle)
+        #expect(gone.problem?.contains("ten minutes") == true)
+    }
+
+    @Test func aFailedResumeGivesUpAfterTenMinutesAndSaysSo() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(1)
+        c.play(album.songs)
+        c.toggle()
+        let row = alarm(album)
+        c.addAlarm(row)
+        failing(c)
+        c.fire(row.id, due: .now)
+        for _ in 0..<1000 where c.problem?.contains("ten minutes") != true { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.problem?.contains("ten minutes") == true)
+        #expect(c.status == .paused)
+    }
+
+    @Test func otherMusicGivesUpOnADeviceSooner() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(1)
+        failing(c, tries: 100)
+        c.play(album.songs)
+        for _ in 0..<500 where c.status != .idle { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.status == .idle)
+        #expect(c.current == nil)
+    }
+
+    @Test func aPauseAfterADeviceChangeStays() async throws {
+        let (c, album, engine) = try await controller()
+        c.retryWait = .milliseconds(5)
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        failing(c, tries: 1)
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
+        for _ in 0..<400 where c.status != .playing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(c.status == .playing)
+        c.pause()
+        #expect(c.status == .paused)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(c.status == .paused)
+    }
+
+    /// Pressed while it's trying: already paused, so pause changes nothing but ends the trying.
+    @Test func aPressEndsTheTrying() async throws {
+        for press in [{ (c: Controller) in c.pause() }, { (c: Controller) in c.toggle() }] {
+            let (c, album, engine) = try await controller()
+            c.retryWait = .milliseconds(5)
+            let row = alarm(album)
+            c.addAlarm(row)
+            c.fire(row.id, due: .now)
+            failing(c)
+            NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
+            for _ in 0..<50 where c.status != .paused { try await Task.sleep(for: .milliseconds(5)) }
+            press(c)
+            c.startEngine = { try $0.start() }
+            try await Task.sleep(for: .milliseconds(100))
+            #expect(c.status == .paused)
+        }
+    }
 }

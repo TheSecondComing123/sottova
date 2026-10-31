@@ -112,6 +112,10 @@ public final class Controller {
     @ObservationIgnored private var engineFailures = 0
     /// How long to wait for a device that won't start, a try a second.
     static let engineTries = 60
+    /// Between those tries; a test shortens it.
+    @ObservationIgnored var retryWait = Duration.seconds(1)
+    /// An alarm trying the device again after it couldn't go on. A press ends it.
+    @ObservationIgnored private var resuming: Task<Void, Never>?
     /// A failure to play, which the next piece that plays puts right; other messages stay until they're read.
     @ObservationIgnored private var playbackProblem: String?
     @ObservationIgnored private var assertion: IOPMAssertionID?
@@ -569,7 +573,7 @@ public final class Controller {
             useRowVolume(alarm.volume)
             // a timer set last night is about last night
             command(.cancelSleep)
-            if status == .paused { toggle() }
+            if status == .paused { command(.resume) }
             command(.rise)
             if let minutes = alarm.minutes { sleep(minutes: Double(minutes)) }
             saveResume()
@@ -1397,6 +1401,8 @@ public final class Controller {
     }
 
     public func toggle() {
+        // a press says what happens now, so nothing goes on trying behind it
+        defer { endResuming() }
         switch status {
         case .idle:
             guard !tracks.isEmpty else { return }
@@ -1414,6 +1420,7 @@ public final class Controller {
     }
 
     public func pause() {
+        endResuming()
         if status == .playing || status == .resting { toggle() }
     }
 
@@ -1500,6 +1507,7 @@ public final class Controller {
     }
 
     public func systemWillSleep(now: Date = .now) {
+        endResuming()
         guard status == .playing || status == .resting else { return }
         // closing the lid with a sleep timer set means stop, not resume in the morning
         if machine.sleep != nil {
@@ -1659,6 +1667,7 @@ public final class Controller {
                 playbackProblem = problem
                 // not playing, so nothing may say it is
                 send(.pause)
+                keepResuming()
                 return
             }
             if needsReschedule {
@@ -1726,16 +1735,20 @@ public final class Controller {
 
     private func waitForEngine(_ path: String, _ error: Error) {
         engineFailures += 1
-        guard engineFailures < Self.engineTries else {
+        guard engineFailures < (fromAlarm ? Int(Self.alarmLateness) : Self.engineTries) else {
             engineFailures = 0
-            problem = "couldn't start audio output: \(error.localizedDescription)"
+            problem = "\(fromAlarm ? "the alarm waited ten minutes and gave up. " : "")couldn't start audio output: \(error.localizedDescription)"
             playbackProblem = problem
             send(.stop)
             return
         }
+        if engineFailures == 1 {
+            problem = "waiting for audio output: \(error.localizedDescription)"
+            playbackProblem = problem
+        }
         retrying = path
         Task {
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: retryWait)
             if retrying == path, case .loading = machine.phase { startNextTrack() }
         }
     }
@@ -1915,14 +1928,28 @@ public final class Controller {
         if case .track = machine.phase { needsReschedule = true }
         guard status == .playing else { return }
         command(.pause)
-        guard fromAlarm else { return }
-        Task {
-            for _ in 0..<Self.engineTries {
-                try? await Task.sleep(for: .seconds(1))
-                guard fromAlarm, status == .paused else { return }
+        keepResuming()
+    }
+
+    /// An alarm goes on by itself, since nobody's there to press play.
+    private func keepResuming() {
+        guard fromAlarm, resuming == nil else { return }
+        resuming = Task {
+            defer { if !Task.isCancelled { resuming = nil } }
+            for _ in 0..<Int(Self.alarmLateness) {
+                try? await Task.sleep(for: retryWait)
+                guard !Task.isCancelled, fromAlarm, status == .paused else { return }
                 command(.resume)
+                if status != .paused { return }
             }
+            problem = "the alarm waited ten minutes for audio output and gave up, so it's paused"
+            playbackProblem = problem
         }
+    }
+
+    private func endResuming() {
+        resuming?.cancel()
+        resuming = nil
     }
 
     /// ponytail: only the current deck is rescheduled; a crossfade's outgoing track is dropped on a device change
