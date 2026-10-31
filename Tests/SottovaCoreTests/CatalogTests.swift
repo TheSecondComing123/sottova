@@ -69,6 +69,34 @@ struct CatalogTests {
         #expect(SongSort.newest.sorted(songs).map(\.artist) == ["B", "D", "A", "C"])
     }
 
+    @Test func aSortedPageIsTheSortOfItsFilteredSongs() {
+        var entries: [String: Library.Entry] = [:]
+        let names = ["Étude", "夜想曲", "Ноктюрн", "étude", "Prélude"]
+        for i in 0..<300 {
+            var meta = TrackMeta(title: "\(names[i % 5]) \(i % 7), Op. \(i % 11)", artist: "Dvořák \(i % 13)", album: "Sämtliche \(i % 17)", trackNumber: i % 3 + 1, duration: Double(i % 5))
+            meta.composer = i % 2 == 0 ? "Fauré \(i % 3)" : nil
+            entries["/m/\(i).flac"] = Library.Entry(size: 0, modified: .distantPast, meta: meta, added: Date(timeIntervalSince1970: Double(i % 9)))
+        }
+        let catalog = Catalog(entries: entries)
+        for sort in SongSort.allCases {
+            #expect(catalog.songs(by: sort).map(\.id) == sort.sorted(catalog.songs).map(\.id))
+            for typed in ["ETUDE", "夜", "sämt", "dvorak 1", "nothing like this"] {
+                let needle = Song.folded(typed)
+                #expect(catalog.songs(by: sort, matching: needle).map(\.id) == sort.sorted(catalog.songs.filter { $0.searchKey.contains(needle) }).map(\.id))
+            }
+        }
+        #expect(Catalog().songs(by: .title).isEmpty)
+    }
+
+    @Test func aDecomposedFileNameMatchesWhatsTyped() {
+        // file names can arrive decomposed; a keyboard types composed
+        let names = ["Dvor\u{30C}a\u{301}k", "\u{1112}\u{1161}\u{11AB}"]
+        let catalog = Catalog(entries: Dictionary(uniqueKeysWithValues: names.map { ("/m/\($0).flac", Library.Entry(size: 0, modified: .distantPast)) }))
+        #expect(catalog.songs(by: .title, matching: Song.folded("dvořák")).count == 1)
+        #expect(catalog.songs(by: .title, matching: Song.folded("\u{D55C}")).count == 1)
+        #expect(catalog.songs(by: .title, matching: Song.folded("X")).isEmpty)
+    }
+
     @Test func performersAndComposersBothGetPages() {
         let catalog = Catalog(entries: [
             "/m/1.flac": entry(title: "Nocturne", artist: "Luke Faulkner"),

@@ -22,6 +22,17 @@ public struct Song: Identifiable, Hashable, Sendable {
     public let searchKey: String
     /// When the file landed in its folder.
     public var added: Date? = nil
+
+    /// Folded as `searchKey` is. NFC too: a file name can arrive decomposed, what's typed doesn't.
+    public static func folded(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).precomposedStringWithCanonicalMapping
+    }
+
+    /// `needle` already folded. Bytes, since String's contains takes 15 ms over 10k songs, a whole frame per keystroke.
+    public func matches(_ needle: String) -> Bool {
+        var key = searchKey, needle = needle
+        return key.withUTF8 { key in needle.withUTF8 { memmem(key.baseAddress, key.count, $0.baseAddress, $0.count) != nil } }
+    }
 }
 
 /// One song waiting to play. Its own id, so the same song queued twice moves and goes away on its own.
@@ -60,6 +71,8 @@ public struct Artist: Identifiable, Hashable, Sendable {
 /// Songs grouped into albums and artists, rebuilt from the library cache whenever it changes.
 public struct Catalog: Sendable {
     public private(set) var songs: [Song] = []
+    /// Every order the Songs page offers, sorted here off the main actor: by title takes 100 ms at 10k.
+    private var orders: [SongSort: [Song]] = [:]
     public private(set) var albums: [Album] = []
     public private(set) var artists: [Artist] = []
     public private(set) var songsByID: [String: Song] = [:]
@@ -68,10 +81,17 @@ public struct Catalog: Sendable {
 
     public init() {}
 
+    /// `needle` already folded.
+    public func songs(by sort: SongSort, matching needle: String = "") -> [Song] {
+        let sorted = orders[sort] ?? []
+        return needle.isEmpty ? sorted : sorted.filter { $0.matches(needle) }
+    }
+
     init(entries: [String: Library.Entry]) {
         songs = entries.compactMap { path, entry in entry.unplayable || entry.unreachable == true ? nil : Self.song(path: path, meta: entry.meta, added: entry.added) }
             .sorted(by: Self.libraryOrder)
         songsByID = Dictionary(uniqueKeysWithValues: songs.map { ($0.id, $0) })
+        for sort in SongSort.allCases { orders[sort] = sort.sorted(songs) }
 
         albums = Dictionary(grouping: songs, by: \.albumID).map { id, songs in
             let artists = Set(songs.map(\.albumArtist))
@@ -120,7 +140,7 @@ public struct Catalog: Sendable {
             id: path, title: title, work: work, detail: detail, artist: artist, album: album, albumID: albumID, albumArtist: albumArtist,
             composer: meta?.composer,
             trackNumber: meta?.trackNumber, discNumber: meta?.discNumber, year: meta?.year, duration: meta?.duration ?? 0,
-            artwork: meta?.artwork, searchKey: "\(title) \(artist) \(albumArtist) \(meta?.composer ?? "") \(album)".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil),
+            artwork: meta?.artwork, searchKey: Song.folded("\(title) \(artist) \(albumArtist) \(meta?.composer ?? "") \(album)"),
             added: added
         )
     }

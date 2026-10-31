@@ -420,8 +420,8 @@ struct SongsPage: View {
         if all.isEmpty {
             EmptyLibrary(what: "songs")
         } else {
-            let needle = filter.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
-            let songs = sort.sorted(needle.isEmpty ? all : all.filter { $0.searchKey.contains(needle) })
+            let needle = Song.folded(filter)
+            let songs = controller.catalog.songs(by: sort, matching: needle)
             PageScroll {
                 let art = songs.contains { $0.artwork != nil }
                 let albums = Set(songs.map(\.albumID)).count > 1
@@ -1306,9 +1306,9 @@ struct SearchPage: View {
         .task(id: query) {
             try? await Task.sleep(for: .milliseconds(searched ? 120 : 0))
             guard !Task.isCancelled else { return }
-            let needle = query.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            let needle = Song.folded(query)
             let catalog = controller.catalog
-            songs = catalog.songs.filter { $0.searchKey.contains(needle) }
+            songs = catalog.songs.filter { $0.matches(needle) }
             collections = controller.collections.filter { collection in
                 if case .album(let album) = collection, album.artist.localizedStandardContains(query) { return true }
                 return collection.title.localizedStandardContains(query)
