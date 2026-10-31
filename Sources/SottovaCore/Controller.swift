@@ -944,7 +944,9 @@ public final class Controller {
     public func newPlaylist(named name: String = "New collection", songs: [Song] = [], fromAlbum: String? = nil) -> String? {
         guard let store = playlistStore else { return nil }
         var candidate = name, n = 2
-        while playlists.contains(where: { $0.name.localizedCaseInsensitiveCompare(candidate) == .orderedSame }) {
+        // the file too: "A/B" lands on A-B.m3u8, and a file that couldn't be read isn't in the list
+        while playlists.contains(where: { $0.name.localizedCaseInsensitiveCompare(candidate) == .orderedSame })
+            || FileManager.default.fileExists(atPath: store.url(for: candidate).path) {
             candidate = "\(name) \(n)"
             n += 1
         }

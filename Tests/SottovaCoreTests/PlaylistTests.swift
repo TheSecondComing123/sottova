@@ -54,6 +54,18 @@ struct PlaylistTests {
         #expect(Controller(storage: nil, playlistFolder: dir).playlists.map(\.name) == ["Évening", "New collection"])
     }
 
+    /// Slashes and colons turn into dashes in the file name.
+    @Test func aNewCollectionDoesntOverwriteOneWithTheSameFileName() throws {
+        let dir = temp()
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let first = try #require(c.newPlaylist(named: "A-B", songs: [song("/s/1.flac")]))
+        let second = try #require(c.newPlaylist(named: "A/B", songs: [song("/s/2.flac")]))
+        let third = try #require(c.newPlaylist(named: "A:B", songs: [song("/s/3.flac")]))
+        #expect(Set([first, second, third]).count == 3)
+        let reread = Controller(storage: nil, playlistFolder: dir).playlists
+        #expect(Set(reread.flatMap(\.paths)) == ["/s/1.flac", "/s/2.flac", "/s/3.flac"])
+    }
+
     @Test func aPlaylistsSongsPlayWithItsGaps() throws {
         let c = Controller(storage: nil, playlistFolder: temp())
         let own = c.settings
