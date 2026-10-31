@@ -72,6 +72,23 @@ private struct RightClick: NSViewRepresentable {
             show(event)
         }
 
+        // the press that opened the menu keeps coming here: sliding onto a row and letting go chooses it
+        override func rightMouseDragged(with event: NSEvent) {
+            MenuPresenter.shared.track(NSEvent.mouseLocation)
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            MenuPresenter.shared.track(NSEvent.mouseLocation)
+        }
+
+        override func rightMouseUp(with event: NSEvent) {
+            MenuPresenter.shared.release(at: NSEvent.mouseLocation)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            MenuPresenter.shared.release(at: NSEvent.mouseLocation)
+        }
+
         private func show(_ event: NSEvent) {
             guard let window else { return }
             open?(window.convertPoint(toScreen: event.locationInWindow), window)
@@ -103,6 +120,7 @@ final class MenuPresenter {
 
     func show(_ entries: [MenuEntry], at point: NSPoint, over window: NSWindow) {
         close(fading: false)
+        dragged = false
         owner = window
         open(entries, at: point, depth: 0)
         // a click anywhere else closes the menu and does nothing more, as a system menu does
@@ -251,6 +269,31 @@ final class MenuPresenter {
     }
 
     /// Row frames come from SwiftUI in the panel's flipped space; submenus are placed on the screen.
+    /// Whether the press that opened the menu has moved since; a click that doesn't move leaves the menu open.
+    private var dragged = false
+
+    func track(_ point: NSPoint) {
+        dragged = true
+        if let (index, depth) = row(at: point) { hover(index, depth: depth) }
+    }
+
+    func release(at point: NSPoint) {
+        defer { dragged = false }
+        guard dragged, let (index, depth) = row(at: point), case .action = panels[depth].level.entries[index].kind else { return }
+        choose(index, depth: depth)
+    }
+
+    /// The choosable row under a point on screen, in the deepest menu that has one there.
+    private func row(at point: NSPoint) -> (Int, Int)? {
+        for depth in panels.indices.reversed() {
+            let level = panels[depth].level
+            if let index = level.entries.indices.first(where: { level.entries[$0].selectable && screenRect($0, depth: depth).contains(point) }) {
+                return (index, depth)
+            }
+        }
+        return nil
+    }
+
     private func screenRect(_ index: Int, depth: Int) -> NSRect {
         let frame = panels[depth].panel.frame
         let row = panels[depth].level.frames[index] ?? .zero
