@@ -631,4 +631,65 @@ struct AlarmRunTests {
         #expect(c.status == .idle)
         #expect(c.problem == nil)
     }
+
+    private func relaunched(_ storage: URL) async throws -> Controller {
+        let (again, _, _) = try await controller(storage: storage)
+        again.restoreResume()
+        return again
+    }
+
+    @Test func anAlarmGoesOnByItselfAfterARelaunch() async throws {
+        let storage = try temp()
+        let (first, album, _) = try await controller(storage: storage)
+        let row = alarm(album)
+        first.addAlarm(row)
+        first.fire(row.id, due: .now)
+        first.advance(0.2)
+        first.quitting()
+        let again = try await relaunched(storage)
+        #expect(again.status == .playing)
+    }
+
+    @Test func anAlarmYouPausedStaysPausedAfterARelaunch() async throws {
+        let storage = try temp()
+        let (first, album, _) = try await controller(storage: storage)
+        let row = alarm(album)
+        first.addAlarm(row)
+        first.fire(row.id, due: .now)
+        first.advance(0.2)
+        first.pause()
+        first.quitting()
+        let again = try await relaunched(storage)
+        #expect(again.status == .paused)
+    }
+
+    /// Picked up hours later, by which time nobody wants it, the same as a long sleep.
+    @Test func anAlarmSavedLongAgoStaysPausedAfterARelaunch() async throws {
+        let storage = try temp()
+        let (first, album, _) = try await controller(storage: storage)
+        let row = alarm(album)
+        first.addAlarm(row)
+        first.fire(row.id, due: .now)
+        first.advance(0.2)
+        first.quitting()
+        try FileManager.default.setAttributes([.modificationDate: Date.now - 2 * Controller.resumeWithin], ofItemAtPath: storage.appending(path: "resume.json").path)
+        let again = try await relaunched(storage)
+        #expect(again.status == .paused)
+    }
+
+    /// It was only paused by the device, so that's not a pause to keep.
+    @Test func anAlarmCutOffWhileTryingTheDeviceGoesOnAfterACrash() async throws {
+        let storage = try temp()
+        let (first, album, engine) = try await controller(storage: storage)
+        let row = alarm(album)
+        first.addAlarm(row)
+        first.fire(row.id, due: .now)
+        first.advance(0.2)
+        failing(first)
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
+        for _ in 0..<50 where first.status != .paused { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(first.status == .paused)
+        let again = try await relaunched(storage)
+        #expect(again.status == .playing)
+    }
 }

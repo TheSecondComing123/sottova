@@ -194,13 +194,11 @@ struct RelaunchTests {
         #expect(rise != nil)
         let c = try relaunch(first, storage: storage)
         try await buildCatalog(c, from: first)
-        #expect(c.status == .paused)
+        // it goes on by itself, and still stops at its time
+        #expect(c.status == .playing)
         #expect(c.machine.sleep == sleep)
         #expect(c.machine.rise == rise)
-        if case .paused(let left)? = c.sleepTimer { #expect(left <= 3600 && left > 3590) } else { Issue.record("no timer") }
-        // pressed play, it still stops at its time
-        c.toggle()
-        #expect(c.status == .playing)
+        if case .at(let date)? = c.sleepTimer { #expect(date.timeIntervalSinceNow <= 3600 && date.timeIntervalSinceNow > 3590) } else { Issue.record("no timer") }
         c.advance(3600)
         #expect(c.status == .idle)
     }
@@ -351,7 +349,6 @@ struct RelaunchTests {
         c.loadAlarms()
         c.restoreResume()
         try await buildCatalog(c, from: first)
-        c.toggle()
         for _ in 0..<300 where c.status != .idle { c.advance(1) }
         #expect(c.status == .idle)
         #expect(c.volume == 0.6)
@@ -370,7 +367,6 @@ struct RelaunchTests {
         c.loadAlarms()
         c.restoreResume()
         try await buildCatalog(c, from: first)
-        c.toggle()
         for _ in 0..<300 where c.status != .idle { c.advance(1) }
         #expect(c.status == .idle)
         #expect(c.volume == 0.3)

@@ -983,7 +983,7 @@ public final class Controller {
         }
         state.upNext = upNext.map { ResumeState.Entry(path: $0.path, source: $0.source) }
         state.hour = hourPlaying
-        (state.sleep, state.rise, state.hourEnding, state.paused) = (machine.sleep, machine.rise, hourEnding, machine.paused)
+        (state.sleep, state.rise, state.hourEnding, state.paused) = (machine.sleep, machine.rise, hourEnding, machine.paused && resuming == nil)
         (state.ownVolume, state.rowVolume) = (ownVolume, rowVolume)
         do {
             try JSONEncoder().encode(state).write(to: url, options: .atomic)
@@ -1015,6 +1015,11 @@ public final class Controller {
            hour.window(containing: .now)?.start == hour.lastFired {
             resumingHour = true
         }
+        // an alarm too, unless it's from so long ago that nobody wants it
+        let saved = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+        if state.paused != true, fromAlarm, Date.now.timeIntervalSince(saved) < Self.resumeWithin {
+            resumingHour = true
+        }
         hourEnding = state.hourEnding ?? false
         useAlbumSettings(for: state.source)
         self.file = file
@@ -1040,7 +1045,7 @@ public final class Controller {
     private func resumeHour() {
         guard resumingHour, !catalog.songsByID.isEmpty else { return }
         resumingHour = false
-        if hourPlaying != nil, status == .paused { command(.resume) }
+        if hourPlaying != nil || fromAlarm, status == .paused { command(.resume) }
     }
 
     // MARK: Playlists
@@ -1666,8 +1671,8 @@ public final class Controller {
                 problem = "couldn't restart audio output: \(error.localizedDescription)"
                 playbackProblem = problem
                 // not playing, so nothing may say it is
-                send(.pause)
                 keepResuming()
+                send(.pause)
                 return
             }
             if needsReschedule {
@@ -1931,8 +1936,8 @@ public final class Controller {
     private func engineConfigurationChanged() {
         if case .track = machine.phase { needsReschedule = true }
         guard status == .playing else { return }
-        command(.pause)
         keepResuming()
+        command(.pause)
     }
 
     /// An alarm goes on by itself, since nobody's there to press play.
@@ -1952,8 +1957,10 @@ public final class Controller {
     }
 
     private func endResuming() {
-        resuming?.cancel()
+        guard let task = resuming else { return }
+        task.cancel()
         resuming = nil
+        saveResume()
     }
 
     /// ponytail: only the current deck is rescheduled; a crossfade's outgoing track is dropped on a device change
