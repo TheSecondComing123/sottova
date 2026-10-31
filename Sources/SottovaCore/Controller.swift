@@ -122,6 +122,7 @@ public final class Controller {
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored var lastTick: ContinuousClock.Instant?
     @ObservationIgnored private var analysis: Task<Void, Never>?
+    @ObservationIgnored private var coversTried = Set<String>()
     @ObservationIgnored private var scanGeneration = 0
     @ObservationIgnored private var watcher: FolderWatcher?
     @ObservationIgnored private var watchedPaths: [String] = []
@@ -1785,8 +1786,10 @@ public final class Controller {
     }
 
     func analyzePending() {
-        let pending = library.pending.map { ($0, library.entries[$0]?.loudness == nil) } + purgedCovers().map { ($0, false) }
-        guard analysis == nil, !pending.isEmpty else { return }
+        guard analysis == nil else { return }
+        // once a run: nothing marks one that won't read, so it would come straight back
+        let pending = library.pending.map { ($0, library.entries[$0]?.loudness == nil) } + purgedCovers().filter { coversTried.insert($0).inserted }.map { ($0, false) }
+        guard !pending.isEmpty else { return }
         let store = artwork
         analysis = Task {
             await withTaskGroup(of: (String, TrackMeta?, Loudness?).self) { group in
@@ -1814,7 +1817,10 @@ public final class Controller {
                                 library.entries[path]?.loudness = loudness
                             }
                         } else if FileManager.default.fileExists(atPath: path) {
-                            library.entries[path]?.unplayable = true
+                            // already analysed, this was only for its cover, and one failed read doesn't make a bad file
+                            if library.entries[path]?.loudness == nil || library.entries[path]?.meta == nil {
+                                library.entries[path]?.unplayable = true
+                            }
                         } else {
                             // a drive pulled mid-pass, not a bad file; the next scan sorts it out
                             library.entries[path]?.unreachable = true

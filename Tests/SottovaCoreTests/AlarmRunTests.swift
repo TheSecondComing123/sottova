@@ -822,4 +822,21 @@ struct AlarmRunTests {
         #expect(!engine.isRunning)
         #expect(c.volume == 0.6)
     }
+
+    /// The cover's gone and the file can't be opened just now: it's been analysed, so that's not a bad file.
+    @Test func aFailedCoverReReadDoesntMarkASongUnplayable() async throws {
+        let folder = try oneSongFolder()
+        try jpeg().write(to: folder.appending(path: "cover.jpg"))
+        let art = try temp().appending(path: "Artwork")
+        let c = Controller(storage: try temp(), artworkFolder: art)
+        c.addFolders([folder])
+        for _ in 0..<500 where c.catalog.songs.first?.artwork == nil || c.pendingAnalysis > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        let path = try #require(c.catalog.songs.first?.id)
+        try FileManager.default.removeItem(at: art)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: path) }
+        c.analyzePending()
+        for _ in 0..<100 where c.library.entries[path]?.unplayable != true { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.library.entries[path]?.unplayable == false)
+    }
 }
