@@ -356,7 +356,11 @@ public final class Controller {
         origin = Origin(key: Origin.key(of: songs, source: source), shuffled: shuffled)
         let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
-        if status == .idle {
+        if retrying != nil {
+            // nothing's playing to skip, and the piece it was waiting to start is no longer wanted
+            retrying = nil
+            startNextTrack()
+        } else if status == .idle {
             failures = 0
             command(.start)
         } else {
@@ -1622,6 +1626,8 @@ public final class Controller {
         var ended = new == .idle && status != .idle
         if case .stop = event { ended = true }
         if ended {
+            retrying = nil
+            engineFailures = 0
             hourEnding = false
             fromAlarm = false
             partDue = nil

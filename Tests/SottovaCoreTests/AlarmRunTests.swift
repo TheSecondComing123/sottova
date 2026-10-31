@@ -764,4 +764,34 @@ struct AlarmRunTests {
         #expect(c.machine.rise != nil)
         #expect(c.upNext.count == album.songs.count - 1)
     }
+
+    private func elsewhere(_ c: Controller) throws -> Album {
+        try #require(c.catalog.albums.first { $0.title == "Elsewhere" })
+    }
+
+    @Test func aStopWhileWaitingForTheDeviceForgetsThePiece() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(5)
+        failing(c)
+        c.play(try elsewhere(c).songs)
+        c.sleep(minutes: 60)
+        c.systemWillSleep()
+        #expect(c.status == .idle)
+        c.startEngine = { try $0.start() }
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        #expect(c.current?.id == album.songs[0].id)
+    }
+
+    @Test func anAlarmWhileOtherMusicWaitsForTheDeviceOpensWithItsOwnPiece() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(5)
+        failing(c, tries: 1)
+        c.play(try elsewhere(c).songs)
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        #expect(c.current?.id == album.songs[0].id)
+    }
 }
