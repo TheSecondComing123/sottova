@@ -1686,6 +1686,10 @@ public final class Controller {
         let queued = retrying ?? dequeue()
         retrying = nil
         guard let path = queued ?? (fromAlarm ? nil : shuffler.next(from: tracks.map(\.path), avoidingLast: settings.avoidLastN, using: &rng)) else {
+            if fromAlarm, failures > 0 {
+                problem = "the alarm stopped: \(failures) of its files wouldn't open"
+                playbackProblem = problem
+            }
             send(.stop)
             return
         }

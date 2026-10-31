@@ -611,4 +611,24 @@ struct AlarmRunTests {
             #expect(c.status == .paused)
         }
     }
+
+    @Test func anAlarmWhoseFilesWontOpenSaysSo() async throws {
+        let (c, album, _) = try await controller()
+        for song in album.songs { try FileManager.default.removeItem(atPath: song.id) }
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        #expect(c.status == .idle)
+        #expect(c.problem?.contains("wouldn't open") == true)
+    }
+
+    @Test func anAlarmThatPlayedThroughSaysNothing() async throws {
+        let (c, album, _) = try await controller()
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        for _ in 0..<1500 where c.status != .idle { c.advance(0.01) }
+        #expect(c.status == .idle)
+        #expect(c.problem == nil)
+    }
 }
