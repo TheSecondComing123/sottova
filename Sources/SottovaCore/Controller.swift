@@ -1646,9 +1646,9 @@ public final class Controller {
     /// A profile that won't decode (damaged, or written by a newer build) is moved aside before the defaults take over,
     /// so the next save can't overwrite it.
     private static func loadProfile(from storage: URL?) -> (ProfileFile?, problem: String?, writable: Bool) {
-        guard let url = storage?.appending(path: "profile.json"), let data = try? Data(contentsOf: url) else { return (nil, nil, true) }
+        guard let url = storage?.appending(path: "profile.json"), FileManager.default.fileExists(atPath: url.path) else { return (nil, nil, true) }
         do {
-            return (try JSONDecoder().decode(ProfileFile.self, from: data), nil, true)
+            return (try JSONDecoder().decode(ProfileFile.self, from: Data(contentsOf: url)), nil, true)
         } catch {
             let stamp = Date.now.formatted(.iso8601.year().month().day().dateSeparator(.dash))
             let aside = url.deletingLastPathComponent().appending(path: "profile.json.unreadable-\(stamp)-\(Int(Date.now.timeIntervalSince1970))")

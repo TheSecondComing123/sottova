@@ -158,6 +158,23 @@ struct AlarmRunTests {
         #expect(Set(texts) == ["first {", "second {"])
     }
 
+    /// Can't be opened at all, which isn't the same as not being there.
+    @Test func aProfileThatCantBeOpenedIsSetAsideToo() throws {
+        let storage = try temp()
+        let url = storage.appending(path: "profile.json")
+        try Data("{}".utf8).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: url.path)
+        let c = Controller(storage: storage)
+        #expect(c.problem?.contains("profile.json.unreadable-") == true)
+        var changed = c.settings
+        changed.gapMin = 7
+        c.settings = changed
+        let files = try FileManager.default.contentsOfDirectory(atPath: storage.path)
+        let aside = storage.appending(path: try #require(files.first { $0.hasPrefix("profile.json.unreadable-") }))
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: aside.path)
+        #expect(try String(contentsOf: aside, encoding: .utf8) == "{}")
+    }
+
     @Test func aMissingAlarmsFileIsNothingToMention() throws {
         let c = Controller(storage: try temp())
         c.run()
