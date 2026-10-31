@@ -300,7 +300,7 @@ private struct Sidebar: View {
             }
 
             VStack(spacing: 2) {
-                footerRow("Add folder", .folderPlus, action: controller.chooseFolders)
+                footerRow("Add folder…", .folderPlus, action: controller.chooseFolders)
                 footerRow("Settings", .gearSix) { openSettings() }
             }
             .padding(.horizontal, 12)

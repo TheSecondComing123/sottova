@@ -99,6 +99,7 @@ struct SottovaCommands: Commands {
             Button("Collections") { router.go(to: .collections) }.keyboardShortcut("3")
             Button("Artists") { router.go(to: .artists) }.keyboardShortcut("4")
             Button("Your day") { router.go(to: .alarms) }.keyboardShortcut("5")
+            Button("Free music") { router.go(to: .shelf) }.keyboardShortcut("6")
             Divider()
             Button("Search") {
                 openWindow(id: "main")

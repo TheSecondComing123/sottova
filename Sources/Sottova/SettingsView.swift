@@ -763,7 +763,7 @@ private struct GeneralPage: View {
                     .padding(.horizontal, 12)
             }
             SwitchRow(title: "Keep the Mac awake during gaps",
-                      detail: "the audio engine pauses between tracks, so without this the Mac can go to sleep in the middle of a silence",
+                      detail: "the audio engine pauses between tracks, so without this the mac can go to sleep in the middle of a silence",
                       isOn: $controller.keepsMacAwake)
             SwitchRow(title: "Accept sottova:// links",
                       detail: "play, pause, toggle, skip and preset/minecraft, from Raycast, Shortcuts or a script. status.json in Application Support/Sottova follows every change.",
