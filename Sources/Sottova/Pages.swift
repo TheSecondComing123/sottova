@@ -399,6 +399,8 @@ struct QuietButton: ButtonStyle {
             .foregroundStyle(Theme.muted)
             .padding(.horizontal, 12)
             .frame(height: 40)
+            // an edge, so one standing alone ("Hear it") still reads as a button, not a caption
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
             .contentShape(.rect)
             .hoverable(radius: 8)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
