@@ -153,6 +153,12 @@ public final class Controller {
         _ = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.engineConfigurationChanged() }
         }
+        // a new zone or a changed clock moves when the next alarm is
+        for name in [Notification.Name.NSSystemTimeZoneDidChange, .NSSystemClockDidChange] {
+            _ = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.armAlarm() }
+            }
+        }
         engine.mainMixerNode.outputVolume = Float(volume)
         if let storage {
             // avoid-last-N survives a relaunch

@@ -757,7 +757,7 @@ final class SystemWake {
         needed(for: alarms, now: now).first.map { !scheduled.contains($0) } ?? false
     }
 
-    /// Fills in the wakes without asking, once the rule is in. Runs at launch and on every wake from sleep.
+    /// Fills in the wakes without asking, once the rule is in. Runs at launch, on every wake from sleep, and every six hours.
     func renew(for alarms: [Alarm]) {
         if trusted || FileManager.default.fileExists(atPath: Self.looseRule) { schedule(for: alarms, asking: false) }
     }

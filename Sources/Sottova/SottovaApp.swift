@@ -21,6 +21,10 @@ struct SottovaApp: App {
         }
         controller.run()
         SystemWake.shared.renew(for: controller.alarms)
+        // a Mac that never sleeps never gets a wake from sleep to top these up on
+        Timer.scheduledTimer(withTimeInterval: 6 * 60 * 60, repeats: true) { _ in
+            MainActor.assumeIsolated { SystemWake.shared.renew(for: controller.alarms) }
+        }
         let center = NSWorkspace.shared.notificationCenter
         _ = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { controller.systemWillSleep() }
