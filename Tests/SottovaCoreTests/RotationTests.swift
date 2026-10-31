@@ -34,7 +34,22 @@ struct RotationTests {
         #expect(p.partPaths == [["/m/1", "/m/x", "/m/2"], ["/m/5"]])
     }
 
-    @Test func eachTimeItPlaysItTakesTheNextPartButASkippedDayDoesnt() async throws {
+    @Test func aPartStartsOnlyInsideTheList() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-parts-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let id = try #require(c.newPlaylist(songs: [song("/1", 1), song("/2", 1), song("/3", 1)]))
+        c.setBreak(true, at: 2, in: id)
+        c.setBreak(true, at: 0, in: id)
+        c.setBreak(true, at: 3, in: id)
+        #expect(c.playlists.first?.breaks == [2])
+        // read back from the file
+        #expect(Controller(storage: nil, playlistFolder: dir).playlists.first?.breaks == [2])
+        c.setBreak(false, at: 2, in: id)
+        #expect(c.playlists.first?.breaks.isEmpty == true)
+    }
+
+        @Test func eachTimeItPlaysItTakesTheNextPartButASkippedDayDoesnt() async throws {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!, maximumFrameCount: 480)
         let c = Controller(engine: engine, storage: nil)

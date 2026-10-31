@@ -16,6 +16,8 @@ struct SongRow: View {
     var performerFirst = false
     /// Told when this row starts being dragged, so a playlist knows which of two copies of a song is moving.
     var dragStarted: (() -> Void)?
+    /// In a playlist: whether a part starts at this song, and what flips it.
+    var part: (starts: Bool, flip: () -> Void)?
     let play: () -> Void
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -106,6 +108,9 @@ struct SongRow: View {
             entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })
             if let remove {
                 entries.append(.item("Remove from this collection") { remove([song.id]) })
+            }
+            if let part {
+                entries.append(.item(part.starts ? "Join the part before" : "Start a new part here", action: part.flip))
             }
             entries += [
                 .divider,

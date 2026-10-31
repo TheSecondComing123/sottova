@@ -807,6 +807,14 @@ public final class Controller {
         undo?.setActionName("Remove from Collection")
     }
 
+    /// A part of the collection starts at this song, or stops starting there.
+    public func setBreak(_ on: Bool, at index: Int, in id: String) {
+        update(id) { playlist in
+            guard index > 0, index < playlist.paths.count else { return }
+            if on { playlist.breaks.insert(index) } else { playlist.breaks.remove(index) }
+        }
+    }
+
     public func movePlaylistSongs(_ id: String, fromOffsets offsets: IndexSet, toOffset destination: Int) {
         update(id) { playlist in
             let moving = offsets.map { playlist.paths[$0] }

@@ -738,6 +738,12 @@ struct PlaylistPage: View {
                     SongColumns()
                     LazyVStack(spacing: 0) {
                         ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
+                            // where a part starts, a thin rule with its number; part 1 is named once there are others
+                            if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
+                                PartRule(number: playlist.breaks.count { $0 <= index } + 1, removable: index > 0) {
+                                    withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
+                                }
+                            }
                             row(path, at: index, in: playlist, songs: songs)
                                 .overlay(alignment: .top) { insertionLine(playlist, at: index) }
                                 .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
@@ -820,7 +826,9 @@ struct PlaylistPage: View {
                 // one row is this row, even when the song is in here twice
                 let rows = ids == [path] ? IndexSet([index]) : IndexSet(playlist.paths.indices.filter { ids.contains(playlist.paths[$0]) })
                 withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: rows) }
-            }, dragStarted: { dragFrom = index }) {
+            }, dragStarted: { dragFrom = index }, part: index == 0 ? nil : (playlist.breaks.contains(index), {
+                withAnimation(Theme.quick) { controller.setBreak(!playlist.breaks.contains(index), at: index, in: pid) }
+            })) {
                 controller.play(songs, from: playable, source: pid)
             }
         } else {
@@ -908,6 +916,32 @@ struct PlaylistPage: View {
 }
 
 /// The … button beside a collection's gaps.
+/// "Part 2" over the song that starts it, with a way to join it to the part before.
+private struct PartRule: View {
+    let number: Int
+    let removable: Bool
+    let join: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Part \(number)")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+            Rectangle().fill(Theme.border).frame(height: 1)
+            if removable {
+                IconButton(icon: .x, weight: .bold, help: "join the part before", size: 20, action: join)
+                    .opacity(hovering ? 1 : 0)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, number == 1 ? 0 : 16)
+        .frame(height: number == 1 ? 24 : 40, alignment: .bottom)
+        .contentShape(.rect)
+        .onHover { hovering = $0 }
+    }
+}
+
 struct MoreMenu<Content: View>: View {
     @ViewBuilder let content: Content
 
