@@ -19,7 +19,7 @@ public final class Controller {
     public private(set) var recent: [Song] = []
     public var volume = UserDefaults.standard.object(forKey: "volume") as? Double ?? 1 {
         didSet {
-            UserDefaults.standard.set(volume, forKey: "volume")
+            saveVolume(volume)
             engine.mainMixerNode.outputVolume = Float(volume)
         }
     }
@@ -103,6 +103,8 @@ public final class Controller {
     @ObservationIgnored private var alarmsCaughtUp = false
     /// Where a replaced cover goes; a test keeps it out of the real Trash.
     @ObservationIgnored var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+    /// Where the level is kept; tests put their own in, since every test process shares these defaults.
+    @ObservationIgnored var saveVolume: (Double) -> Void = { UserDefaults.standard.set($0, forKey: "volume") }
     /// How audio starts; a test can make it fail, as a device that's going away does.
     @ObservationIgnored var startEngine: (AVAudioEngine) throws -> Void = { try $0.start() }
     /// A piece waiting for the audio device, which isn't its fault.
@@ -339,6 +341,7 @@ public final class Controller {
     public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false, row: (id: Alarm.ID, time: Date)? = nil) {
         guard songs.indices.contains(index) else { return }
         releaseHour()
+        giveVolumeBack()
         fromAlarm = row != nil
         partDue = row
         origin = Origin(key: Origin.key(of: songs, source: source), shuffled: shuffled)
@@ -556,11 +559,11 @@ public final class Controller {
         } else if alarm.heedsCalendar, calendarBusy() {
             problem = "\(alarm.name) didn't play at \(due.formatted(date: .omitted, time: .shortened)): your calendar had something on"
         } else if case let songs = rowSongs(alarm), !songs.isEmpty {
-            if let volume = alarm.volume { self.volume = volume }
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
             let history = storage.map { PlayRecord.read($0.appending(path: "plays.jsonl"), last: 2000) } ?? []
             play(alarm.shuffled ? Self.alarmOrder(songs, at: alarm, due: due, history: history, using: &rng) : songs,
                  source: playlist, shuffled: alarm.shuffled, row: (alarm.id, due))
+            useRowVolume(alarm.volume)
             // a timer set last night is about last night
             command(.cancelSleep)
             if status == .paused { toggle() }
@@ -652,6 +655,9 @@ public final class Controller {
     @ObservationIgnored private var hourPlaying: Alarm.ID?
     /// A relaunch cut an hour off mid-piece or mid-silence, and it hasn't gone on yet.
     @ObservationIgnored private var resumingHour = false
+    /// While a row plays at its own volume: your level to go back to, and the one it put in its place.
+    @ObservationIgnored private var ownVolume: Double?
+    @ObservationIgnored private var rowVolume: Double?
     /// The row whose part the next piece to start uses up, and the time it's for.
     @ObservationIgnored private var partDue: (id: Alarm.ID, time: Date)?
     @ObservationIgnored private var lastHourCheck = Date.distantPast
@@ -710,6 +716,7 @@ public final class Controller {
                 failures = 0
                 // out of silence, but not a long one
                 send(.wait(Double.random(in: 10...45, using: &rng)))
+                useRowVolume(current.volume)
             }
         }
         // a one-off whose window has closed is done
@@ -734,6 +741,7 @@ public final class Controller {
             refreshNextTrack()
             publish()
         }
+        useRowVolume(hour.volume)
         saveResume()
     }
 
@@ -745,7 +753,7 @@ public final class Controller {
         return alarms[i]
     }
 
-    /// The hour's collection as what plays next, at its volume; shuffled, the piece just heard goes last.
+    /// The hour's collection as what plays next; shuffled, the piece just heard goes last.
     private func queue(_ hour: Alarm, _ songs: [Song]) {
         var order = hour.shuffled ? songs.shuffled(using: &rng) : songs
         if hour.shuffled, let last = file?.url.path, let i = order.firstIndex(where: { $0.id == last }) {
@@ -753,7 +761,21 @@ public final class Controller {
         }
         upNext = order.map { QueueEntry(path: $0.id, source: hour.source) }
         origin = origin(of: hour)
-        if let volume = hour.volume { self.volume = volume }
+    }
+
+    /// A row's own level goes on. A level you set while the last row played is yours now, so it's the one to go back to.
+    private func useRowVolume(_ level: Double?) {
+        guard let level, status != .idle else { return }
+        if ownVolume == nil || volume != rowVolume { ownVolume = volume }
+        rowVolume = level
+        volume = level
+        saveResume()
+    }
+
+    /// When a row is over, unless you changed the level while it played: that's what you chose.
+    private func giveVolumeBack() {
+        if let ownVolume, volume == rowVolume { volume = ownVolume }
+        (ownVolume, rowVolume) = (nil, nil)
     }
 
     /// Its whole collection, whichever part it's on, so the collection's page knows it's playing.
@@ -926,6 +948,8 @@ public final class Controller {
         var rise: Double?
         var hourEnding: Bool?
         var paused: Bool?
+        var ownVolume: Double?
+        var rowVolume: Double?
     }
 
     /// Brings the clock up to now and saves, for when the app quits.
@@ -953,6 +977,7 @@ public final class Controller {
         state.upNext = upNext.map { ResumeState.Entry(path: $0.path, source: $0.source) }
         state.hour = hourPlaying
         (state.sleep, state.rise, state.hourEnding, state.paused) = (machine.sleep, machine.rise, hourEnding, machine.paused)
+        (state.ownVolume, state.rowVolume) = (ownVolume, rowVolume)
         do {
             try JSONEncoder().encode(state).write(to: url, options: .atomic)
         } catch {
@@ -965,10 +990,12 @@ public final class Controller {
     func restoreResume() {
         guard status == .idle, let url = storage?.appending(path: "resume.json"), let data = try? Data(contentsOf: url),
               let state = try? JSONDecoder().decode(ResumeState.self, from: data) else { return }
+        (ownVolume, rowVolume) = (state.ownVolume, state.rowVolume)
         let fileURL = state.path.map { URL(filePath: $0) }
         let file = fileURL.flatMap { try? AVAudioFile(forReading: $0) }
         if let fileURL, file == nil {
             problem = "couldn't pick up where you left off: \(fileURL.lastPathComponent) isn't there anymore"
+            giveVolumeBack()
             try? FileManager.default.removeItem(at: url)
             return
         }
@@ -1571,6 +1598,7 @@ public final class Controller {
             hourEnding = false
             fromAlarm = false
             partDue = nil
+            giveVolumeBack()
         }
         guard new != status else { return }
         status = new
