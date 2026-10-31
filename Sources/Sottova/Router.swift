@@ -24,6 +24,25 @@ final class Router {
     var trimming: Song?
     /// The alarm being set or changed, shown as a sheet.
     var alarm: AlarmRequest?
+    /// Songs picked in a list: a click picks one, ⌘-click adds or takes one away, ⇧-click picks the run from the
+    /// last one picked. Gone when the page changes.
+    var selected: Set<String> = []
+    @ObservationIgnored private var anchor: String?
+
+    func select(_ id: String, in order: [String]) {
+        let keys = NSEvent.modifierFlags
+        if keys.contains(.shift), let anchor, let a = order.firstIndex(of: anchor), let b = order.firstIndex(of: id) {
+            selected = Set(order[min(a, b)...max(a, b)])
+            return
+        }
+        if keys.contains(.command) {
+            if selected.remove(id) == nil { selected.insert(id) }
+        } else {
+            selected = [id]
+        }
+        anchor = id
+    }
+
     /// The queue's slide-over, so the Controls menu can open it too.
     var showsQueue = false
     /// A collection about to go to the Trash with alarms that would go with it, asked about first.
@@ -31,6 +50,7 @@ final class Router {
 
     func go(to destination: Route) {
         query = ""
+        selected = []
         guard destination != route else { return }
         restore = nil
         withAnimation(Theme.page) {

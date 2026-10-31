@@ -460,6 +460,7 @@ struct SongsPage: View {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                             SongRow(song: song, number: index + 1, showsArt: art, showsAlbum: albums) { controller.play(songs, from: index) }
                         }
+                        .environment(\.songOrder, songs.map(\.id))
                     }
                 }
             }
@@ -739,6 +740,7 @@ struct PlaylistPage: View {
                                     if on { target = index } else if target == index { target = nil }
                                 }
                         }
+                        .environment(\.songOrder, playlist.paths)
                         // below the last row: drop to add at the end
                         Color.clear
                             .frame(height: 48)
@@ -810,8 +812,10 @@ struct PlaylistPage: View {
         if let song = controller.catalog.songsByID[path] {
             // where this row sits among the songs that can play
             let playable = playlist.paths[..<index].count { controller.catalog.songsByID[$0] != nil }
-            SongRow(song: song, number: index + 1, remove: {
-                withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) }
+            SongRow(song: song, number: index + 1, remove: { ids in
+                // one row is this row, even when the song is in here twice
+                let rows = ids == [path] ? IndexSet([index]) : IndexSet(playlist.paths.indices.filter { ids.contains(playlist.paths[$0]) })
+                withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: rows) }
             }) {
                 controller.play(songs, from: playable, source: pid)
             }
@@ -983,6 +987,7 @@ struct AlbumPage: View {
                             controller.play(album.songs, from: index)
                         }
                     }
+                    .environment(\.songOrder, album.songs.map(\.id))
                 }
             }
         } else {
@@ -1092,6 +1097,7 @@ struct ComposerPage: View {
                             ForEach(Array(work.recordings.enumerated()), id: \.element.id) { index, song in
                                 SongRow(song: song, number: index + 1, performerFirst: true) { controller.play(work.recordings, from: index) }
                             }
+                            .environment(\.songOrder, work.recordings.map(\.id))
                         }
                     }
                 }
@@ -1155,6 +1161,7 @@ struct ArtistPage: View {
                         // the artist's own name under every title would only repeat the page's
                         SongRow(song: song, number: index + 1, showsArt: art, albumArtist: name) { controller.play(songs, from: index) }
                     }
+                    .environment(\.songOrder, songs.map(\.id))
                 }
             }
         } else {
@@ -1199,6 +1206,7 @@ struct SearchPage: View {
                             ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                                 SongRow(song: song, number: index + 1, showsArt: art) { controller.play(songs, from: index) }
                             }
+                            .environment(\.songOrder, songs.map(\.id))
                         }
                     }
                 }

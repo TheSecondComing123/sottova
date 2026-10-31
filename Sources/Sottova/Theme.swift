@@ -171,6 +171,8 @@ extension EnvironmentValues {
     @Entry var renaming: Binding<String?> = .constant(nil)
     /// False while the main window is minimized or covered, so nothing animates unseen.
     @Entry var windowVisible = true
+    /// The songs of the list a row sits in, in order, so ⇧-click can pick the run between two.
+    @Entry var songOrder: [String] = []
 }
 
 /// A row or tile that lights up under the pointer, instantly, as in Finder and Music.

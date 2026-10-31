@@ -10,17 +10,26 @@ struct SongRow: View {
     var showsAlbum = true
     /// On an album page the artist line only shows when a track's artist differs from the album's.
     var albumArtist: String?
-    /// On a playlist page: takes the song out of the playlist.
-    var remove: (() -> Void)?
+    /// On a playlist page: takes these songs out of the playlist (just this row, when it's the only one picked).
+    var remove: ((Set<String>) -> Void)?
     /// Under a work's heading the title would repeat it, so the performer leads.
     var performerFirst = false
     let play: () -> Void
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
+    @Environment(\.songOrder) private var order
     @State private var hovering = false
 
+    /// The other songs picked with this one, in list order; just this one when it isn't among several picked.
+    private var picked: [Song] {
+        guard router.selected.count > 1, router.selected.contains(song.id) else { return [song] }
+        let ids = order.isEmpty ? Array(router.selected) : order.filter(router.selected.contains)
+        return ids.compactMap { controller.catalog.songsByID[$0] }
+    }
+
     var body: some View {
+        let isPicked = router.selected.contains(song.id)
         HStack(spacing: 12) {
             Marker(song: song, number: number, hovering: hovering, play: play)
                 .frame(width: 28)
@@ -61,13 +70,29 @@ struct SongRow: View {
         }
         .padding(.horizontal, 12)
         .frame(height: showsArt ? 60 : 48)
-        .background(Theme.hover.opacity(hovering ? 1 : 0), in: .rect(cornerRadius: 8))
+        // picked has an edge as well as the fill, so it reads differently from being under the pointer
+        .background(Theme.hover.opacity(hovering || isPicked ? 1 : 0), in: .rect(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.faint.opacity(isPicked ? 1 : 0)))
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: play)
+        // alongside the double-click, so picking doesn't wait to see whether a second click comes
+        .simultaneousGesture(TapGesture().onEnded { router.select(song.id, in: order) })
+        .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityAction(named: "Play", play)
         .draggable(URL(filePath: song.id))
         .sottovaMenu {
+            let songs = picked
+            if songs.count > 1 {
+                var entries: [MenuEntry] = [
+                    .item("Play \(songs.count) next") { controller.playNext(songs) },
+                    .addToCollection(songs, name: "\(songs.count) songs", controller: controller),
+                ]
+                if let remove {
+                    entries.append(.item("Remove \(songs.count) from this collection") { remove(Set(songs.map(\.id))) })
+                }
+                return entries
+            }
             var entries: [MenuEntry] = [
                 .item("Play", action: play),
                 .item("Play next") { controller.playNext([song]) },
@@ -75,7 +100,7 @@ struct SongRow: View {
             ]
             entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })
             if let remove {
-                entries.append(.item("Remove from this collection", action: remove))
+                entries.append(.item("Remove from this collection") { remove([song.id]) })
             }
             entries += [
                 .divider,
