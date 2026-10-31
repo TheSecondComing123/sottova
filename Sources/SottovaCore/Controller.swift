@@ -280,6 +280,8 @@ public final class Controller {
     // MARK: Alarms
 
     public private(set) var alarms: [Alarm] = []
+    /// The main window's, so Edit › Undo brings back what was removed.
+    @ObservationIgnored public weak var undo: UndoManager?
     @ObservationIgnored private var alarmTimer: DispatchSourceTimer?
     /// Held while an alarm is set: an idle menu-bar app gets App Nap, which may hold its timers back.
     @ObservationIgnored private var alarmActivity: NSObjectProtocol?
@@ -298,8 +300,17 @@ public final class Controller {
     }
 
     public func removeAlarm(_ id: Alarm.ID) {
-        alarms.removeAll { $0.id == id }
+        guard let i = alarms.firstIndex(where: { $0.id == id }) else { return }
+        let alarm = alarms.remove(at: i)
         alarmsChanged()
+        undo?.registerUndo(withTarget: self) { $0.insertAlarm(alarm, at: i) }
+        undo?.setActionName("Delete \(alarm.name)")
+    }
+
+    private func insertAlarm(_ alarm: Alarm, at i: Int) {
+        alarms.insert(alarm, at: min(i, alarms.count))
+        alarmsChanged()
+        undo?.registerUndo(withTarget: self) { $0.removeAlarm(alarm.id) }
     }
 
     /// The soonest alarm that starts by itself and when it goes off.
@@ -728,7 +739,16 @@ public final class Controller {
     }
 
     public func removeFromPlaylist(_ id: String, at offsets: IndexSet) {
+        guard let paths = playlists.first(where: { $0.id == id })?.paths else { return }
+        let removed = offsets.filter(paths.indices.contains).map { ($0, paths[$0]) }
         update(id) { $0.paths = $0.paths.enumerated().filter { !offsets.contains($0.offset) }.map(\.element) }
+        undo?.registerUndo(withTarget: self) { controller in
+            controller.update(id) { playlist in
+                for (i, path) in removed { playlist.paths.insert(path, at: min(i, playlist.paths.count)) }
+            }
+            controller.undo?.registerUndo(withTarget: controller) { $0.removeFromPlaylist(id, at: IndexSet(removed.map(\.0))) }
+        }
+        undo?.setActionName("Remove from Collection")
     }
 
     public func movePlaylistSongs(_ id: String, fromOffsets offsets: IndexSet, toOffset destination: Int) {
@@ -784,6 +804,11 @@ public final class Controller {
             try FileManager.default.trashItem(at: URL(filePath: id), resultingItemURL: nil)
             try? FileManager.default.trashItem(at: Self.coverURL(forPlaylist: id), resultingItemURL: nil)
             forget(id)
+            // what's left pointing at it has nothing to play; the window asks before this happens
+            if alarms.contains(where: { $0.source == id }) {
+                alarms.removeAll { $0.source == id }
+                alarmsChanged()
+            }
         } catch {
             problem = "couldn't move the collection to the Trash: \(error.localizedDescription)"
         }
@@ -892,7 +917,13 @@ public final class Controller {
     }
 
     public func clearQueue() {
+        let queued = upNext
         upNext.removeAll()
+        undo?.registerUndo(withTarget: self) { controller in
+            controller.upNext = queued
+            controller.undo?.registerUndo(withTarget: controller) { $0.clearQueue() }
+        }
+        undo?.setActionName("Clear Queue")
     }
 
     /// Songs from one album play with that album's gaps, wherever they were queued from.
@@ -936,8 +967,15 @@ public final class Controller {
     }
 
     public func removeFolder(_ url: URL) {
-        library.folders.removeAll { $0.path == url.path }
+        guard let i = library.folders.firstIndex(where: { $0.path == url.path }) else { return }
+        let folder = library.folders.remove(at: i)
         rescan()
+        undo?.registerUndo(withTarget: self) { controller in
+            controller.library.folders.insert(folder, at: min(i, controller.library.folders.count))
+            controller.rescan()
+            controller.undo?.registerUndo(withTarget: controller) { $0.removeFolder(url) }
+        }
+        undo?.setActionName("Remove \(url.lastPathComponent)")
     }
 
     public func rescan() {

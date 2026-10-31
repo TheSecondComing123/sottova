@@ -426,6 +426,10 @@ extension MenuEntry {
             .item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
             .divider,
             .item("Move to Trash") {
+                if !controller.alarmsLost(trashing: playlist).isEmpty {
+                    router.trashing = playlist.id
+                    return
+                }
                 if router.route == .playlist(playlist.id) { navigate(.home) }
                 controller.trashPlaylist(playlist.id)
             },

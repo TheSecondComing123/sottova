@@ -24,6 +24,8 @@ final class Router {
     var trimming: Song?
     /// The alarm being set or changed, shown as a sheet.
     var alarm: AlarmRequest?
+    /// A collection about to go to the Trash with alarms that would go with it, asked about first.
+    var trashing: String?
 
     func go(to destination: Route) {
         query = ""

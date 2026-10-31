@@ -562,7 +562,11 @@ struct AlarmLine: View {
                 ForEach(mine) { alarm in
                     Text(Self.describe(alarm))
                         .foregroundStyle(Theme.muted)
-                    LinkText(text: "cancel") { controller.removeAlarm(alarm.id) }
+                    LinkText(text: "turn off") {
+                        var off = alarm
+                        off.on = false
+                        controller.updateAlarm(off)
+                    }
                         .foregroundStyle(Theme.text)
                 }
             }
@@ -613,6 +617,11 @@ struct AlarmLine: View {
 }
 
 extension Controller {
+    /// The alarms that would go with this collection to the Trash; one made from an album gives its alarms back instead.
+    func alarmsLost(trashing playlist: Playlist) -> [Alarm] {
+        playlist.fromAlbum == nil ? alarms.filter { $0.source == playlist.id } : []
+    }
+
     /// What an alarm's album or playlist is called now; a rename since it was set shows.
     func alarmName(of source: String) -> String {
         playlists.first { $0.id == source }?.name ?? catalog.albumsByID[source]?.title ?? "this"

@@ -795,8 +795,12 @@ struct PlaylistPage: View {
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {
-                navigate(.home)
-                controller.trashPlaylist(pid)
+                if controller.alarmsLost(trashing: playlist).isEmpty {
+                    navigate(.home)
+                    controller.trashPlaylist(pid)
+                } else {
+                    router.trashing = pid
+                }
             }
         }
     }

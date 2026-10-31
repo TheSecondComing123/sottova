@@ -12,6 +12,7 @@ struct MainWindow: View {
     @State private var showsQueue = false
     @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.undoManager) private var undoManager
 
     var body: some View {
         HStack(spacing: 0) {
@@ -75,10 +76,26 @@ struct MainWindow: View {
             return !folders.isEmpty
         }
         .onAppear(perform: watchMouseButtons)
+        .onAppear { controller.undo = undoManager }
+        .onChange(of: undoManager) { controller.undo = undoManager }
+        .confirmationDialog(trashQuestion, isPresented: Binding(get: { router.trashing != nil }, set: { if !$0 { router.trashing = nil } })) {
+            Button("Move to Trash", role: .destructive) {
+                guard let id = router.trashing else { return }
+                if router.route == .playlist(id) { router.go(to: .home) }
+                controller.trashPlaylist(id)
+            }
+        } message: {
+            Text("its alarms go too: they'd have nothing to play")
+        }
         // at the window, never inside a lazy row that could be recycled with the sheet open
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
         .sheet(item: Binding(get: { router.trimming }, set: { router.trimming = $0 })) { TrimSheet(song: $0) }
+    }
+
+    private var trashQuestion: String {
+        let name = controller.playlists.first { $0.id == router.trashing }?.name ?? "this collection"
+        return "Move \(name) to the Trash?"
     }
 
     @ViewBuilder
