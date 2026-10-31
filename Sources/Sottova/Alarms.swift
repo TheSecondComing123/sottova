@@ -24,12 +24,12 @@ struct AlarmSheet: View {
     @State private var source: String?
     @State private var kind: Kind
     @State private var time: Date
-    /// Where a stretch that plays while you're at the Mac ends.
+    /// Where it ends: always for one that plays while you're here, and when `stops` for one that starts by itself.
     @State private var until: Date
+    @State private var stops: Bool
     @State private var repeats: Repeat
     @State private var shuffled: Bool
     @State private var volume: Double?
-    @State private var minutes: Int?
     private let preview = AlarmPreview.shared
 
     enum Kind: String, CaseIterable {
@@ -58,22 +58,22 @@ struct AlarmSheet: View {
             }
             _kind = State(initialValue: .byItself)
             _time = State(initialValue: Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: .now)!)
-            _until = State(initialValue: Calendar.current.date(bySettingHour: 19, minute: 0, second: 0, of: .now)!)
+            _until = State(initialValue: Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: .now)!)
             _repeats = State(initialValue: .once)
             _shuffled = State(initialValue: false)
+            _stops = State(initialValue: false)
             // quiet by default: whatever the speaker is turned up to, this is what wakes you
             _volume = State(initialValue: 0.15)
-            _minutes = State(initialValue: nil)
         case .edit(let alarm):
             _source = State(initialValue: alarm.source)
             _kind = State(initialValue: alarm.whileHere ? .whileHere : .byItself)
             let start = Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: .now)!
             _time = State(initialValue: start)
             _until = State(initialValue: start + Double(alarm.minutes ?? 60) * 60)
+            _stops = State(initialValue: alarm.minutes != nil)
             _repeats = State(initialValue: Repeat.allCases.first { $0.days == alarm.weekdays } ?? .weekdays)
             _shuffled = State(initialValue: alarm.shuffled)
             _volume = State(initialValue: alarm.volume)
-            _minutes = State(initialValue: alarm.minutes)
         }
     }
 
@@ -109,15 +109,10 @@ struct AlarmSheet: View {
     private var alarm: Alarm? {
         guard let source, let name else { return nil }
         let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
-        var alarm = Alarm(source: source, name: name, hour: parts.hour ?? 7, minute: parts.minute ?? 0, weekdays: repeats.days,
-                          shuffled: shuffled || kind == .whileHere)
-        if kind == .whileHere {
-            alarm.whileHere = true
-            alarm.minutes = span
-        } else {
-            alarm.volume = volume
-            alarm.minutes = minutes
-        }
+        var alarm = Alarm(source: source, name: name, hour: parts.hour ?? 7, minute: parts.minute ?? 0, weekdays: repeats.days, shuffled: shuffled)
+        alarm.volume = volume
+        alarm.whileHere = kind == .whileHere
+        alarm.minutes = alarm.whileHere || stops ? span : nil
         if case .edit(let old) = request {
             alarm.id = old.id
             alarm.on = old.on
@@ -163,11 +158,13 @@ struct AlarmSheet: View {
             Strip(selection: $kind)
             // when: the time reads as a time, 7 : 00 AM, with what it repeats on and what that means right under it
             VStack(alignment: .leading, spacing: 12) {
-                // one label column in both, so switching doesn't slide the steppers under the pointer
+                // the same two rows in both, so switching doesn't move anything under the pointer; one that starts by
+                // itself may play on, so its end has a switch
                 clock($time, label: kind == .whileHere ? "From" : "At")
-                if kind == .whileHere {
-                    clock($until, label: "Until")
-                }
+                clock($until, label: "Until", on: kind == .whileHere ? nil : Binding(get: { stops }, set: { on in
+                    if on, !stops { until = time + 3600 }
+                    stops = on
+                }))
                 Strip(selection: $repeats)
                 if let alarm {
                     Text(alarm.whileHere ? "plays now and then, \(AlarmLine.time(alarm)) to \(AlarmLine.end(of: alarm, minutes: span)) \(AlarmLine.days(alarm)). waits while you're away, on a call or playing something else"
@@ -177,14 +174,12 @@ struct AlarmSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if kind == .byItself {
-                settings
-            }
+            settings
             HStack(spacing: 12) {
-                if let alarm, !alarm.whileHere {
+                if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
                         .buttonStyle(QuietButton())
-                        .help("a few seconds at the volume it rises to")
+                        .help(alarm.whileHere ? "a few seconds at its volume" : "a few seconds at the volume it rises to")
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -207,36 +202,51 @@ struct AlarmSheet: View {
         .presentationBackground(Theme.background)
         .animation(Theme.quick, value: kind)
         .onChange(of: kind) {
-            // a new one starts from a sensible stretch: the afternoon at the desk, or 7 AM
+            // a new one starts from what suits it: the afternoon at the desk, shuffled, at whatever the speaker is at;
+            // or 7 AM, quiet
             guard !editing else { return }
-            time = Calendar.current.date(bySettingHour: kind == .whileHere ? 15 : 7, minute: 0, second: 0, of: .now)!
-            repeats = kind == .whileHere ? .daily : .once
+            let here = kind == .whileHere
+            time = Calendar.current.date(bySettingHour: here ? 15 : 7, minute: 0, second: 0, of: .now)!
+            until = Calendar.current.date(bySettingHour: here ? 19 : 8, minute: 0, second: 0, of: .now)!
+            repeats = here ? .daily : .once
+            shuffled = here
+            volume = here ? nil : 0.15
         }
         .onDisappear { preview.stop() }
     }
 
-    /// "At 7 : 00 AM" as two steppers.
-    private func clock(_ date: Binding<Date>, label: String) -> some View {
+    /// "At 7 : 00 AM" as two steppers; with `on`, a switch at the end, and the steppers stand down while it's off.
+    private func clock(_ date: Binding<Date>, label: String, on: Binding<Bool>? = nil) -> some View {
         HStack(spacing: 4) {
             Text(label)
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 48, alignment: .leading)
-            TimeStep(text: hourText(date.wrappedValue), help: "hour") { date.wrappedValue = date.wrappedValue.addingTimeInterval(Double($0) * 3600) }
-            Text(":")
-            TimeStep(text: date.wrappedValue.formatted(.dateTime.minute(.twoDigits)), help: "minute") {
-                date.wrappedValue = date.wrappedValue.addingTimeInterval(Double($0) * 60)
+            HStack(spacing: 4) {
+                TimeStep(text: hourText(date.wrappedValue), help: "hour") { date.wrappedValue = date.wrappedValue.addingTimeInterval(Double($0) * 3600) }
+                Text(":")
+                TimeStep(text: date.wrappedValue.formatted(.dateTime.minute(.twoDigits)), help: "minute") {
+                    date.wrappedValue = date.wrappedValue.addingTimeInterval(Double($0) * 60)
+                }
+                if Self.twelveHour {
+                    Text(Calendar.current.component(.hour, from: date.wrappedValue) < 12 ? Calendar.current.amSymbol : Calendar.current.pmSymbol)
+                        .padding(.leading, 4)
+                }
             }
-            if Self.twelveHour {
-                Text(Calendar.current.component(.hour, from: date.wrappedValue) < 12 ? Calendar.current.amSymbol : Calendar.current.pmSymbol)
-                    .padding(.leading, 4)
-            }
+            .opacity(on?.wrappedValue == false ? 0.35 : 1)
+            .disabled(on?.wrappedValue == false)
             Spacer(minLength: 0)
+            if let on {
+                Button { on.wrappedValue.toggle() } label: { SwitchKnob(on: on.wrappedValue) }
+                    .buttonStyle(PressStyle())
+                    .help(on.wrappedValue ? "play on instead" : "stop at a set time, easing down over the last three minutes")
+                    .accessibilityRepresentation { Toggle("Stops", isOn: on) }
+            }
         }
         .font(.system(size: 17, weight: .semibold))
         .foregroundStyle(Theme.muted)
     }
 
-    /// What only an alarm that starts by itself has: the order, the volume it rises to, and when it stops.
+    /// The order, and the volume it plays at.
     @ViewBuilder private var settings: some View {
         VStack(spacing: 8) {
             Toggle("Shuffled", isOn: $shuffled)
@@ -252,7 +262,7 @@ struct AlarmSheet: View {
                 }
                 .transition(.opacity)
                 // the machine's rise, Machine.riseLength
-                Text("starts silent and rises to this over a minute and a half")
+                Text(kind == .whileHere ? "set as it begins, whatever the speaker was left at" : "starts silent and rises to this over a minute and a half")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.faint)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -261,24 +271,6 @@ struct AlarmSheet: View {
         }
         .toggleStyle(KnobToggle())
         .animation(Theme.quick, value: volume == nil)
-        VStack(spacing: 8) {
-            Toggle("Stop after a while", isOn: Binding(get: { minutes != nil }, set: { minutes = $0 ? 60 : nil }))
-            if let length = minutes {
-                HStack(spacing: 12) {
-                    ValueStepper(value: Binding(get: { Double(length) }, set: { minutes = Int($0) }), range: 15...480, unit: "min", step: 15)
-                    Spacer(minLength: 0)
-                    // the sleep timer's ease-down, so the last three minutes get quieter
-                    if let alarm {
-                        Text("easing down to a stop at \(AlarmLine.end(of: alarm, minutes: length))")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Theme.faint)
-                    }
-                }
-                .transition(.opacity)
-            }
-        }
-        .toggleStyle(KnobToggle())
-        .animation(Theme.quick, value: minutes == nil)
     }
 }
 

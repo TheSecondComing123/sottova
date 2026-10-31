@@ -16,7 +16,7 @@ struct HourTests {
     }
 
     private func hour(from h: Int, _ m: Int, minutes: Int, weekdays: Set<Int> = Set(1...7), source: String = "x") -> Alarm {
-        var alarm = Alarm(source: source, name: "Overworld", hour: h, minute: m, weekdays: weekdays)
+        var alarm = Alarm(source: source, name: "Overworld", hour: h, minute: m, weekdays: weekdays, shuffled: true)
         alarm.minutes = minutes
         alarm.whileHere = true
         return alarm
@@ -200,6 +200,16 @@ struct HourTests {
         c.addAlarm(once)
         c.checkHours()
         #expect(c.alarms.isEmpty)
+    }
+
+    @Test func anHourInOrderPlaysInOrder() async throws {
+        let (c, album) = try await controller(songs: 3)
+        var alarm = open(c, album)
+        alarm.shuffled = false
+        c.updateAlarm(alarm)
+        c.checkHours()
+        #expect(c.upNext.map(\.path) == album.songs.map(\.id))
+        #expect(c.origin?.shuffled == false)
     }
 
     @Test func anHourGoesRoundItsCollectionAgain() async throws {

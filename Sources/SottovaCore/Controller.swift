@@ -476,15 +476,16 @@ public final class Controller {
         }
     }
 
-    /// The hour's collection, shuffled, as what plays next; the piece just heard goes last.
+    /// The hour's collection as what plays next, at its volume; shuffled, the piece just heard goes last.
     private func queue(_ hour: Alarm, _ songs: [Song]) {
-        var order = songs.shuffled(using: &rng)
-        if let last = file?.url.path, let i = order.firstIndex(where: { $0.id == last }) {
+        var order = hour.shuffled ? songs.shuffled(using: &rng) : songs
+        if hour.shuffled, let last = file?.url.path, let i = order.firstIndex(where: { $0.id == last }) {
             order.append(order.remove(at: i))
         }
         upNext = order.map { QueueEntry(path: $0.id, source: hour.source) }
         let playlist = playlists.contains { $0.id == hour.source } ? hour.source : nil
-        origin = Origin(key: Origin.key(of: songs, source: playlist), shuffled: true)
+        origin = Origin(key: Origin.key(of: songs, source: playlist), shuffled: hour.shuffled)
+        if let volume = hour.volume { self.volume = volume }
     }
 
     /// An hour that's played through its collection goes round again.
