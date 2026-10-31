@@ -102,6 +102,47 @@ struct AlarmRunTests {
         #expect(try String(contentsOf: storage.appending(path: aside), encoding: .utf8) == "[{\"broken")
     }
 
+    /// One real file, measured by the app, in a folder that then can't be read.
+    @Test func aFolderOutOfReachIsSaidAndComesBackWithItsAnalysis() async throws {
+        let folder = try temp()
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4800)!
+        buffer.frameLength = 4800
+        try AVAudioFile(forWriting: folder.appending(path: "a.caf"), settings: format.settings).write(from: buffer)
+        let c = Controller(storage: try temp())
+        c.addFolders([folder])
+        for _ in 0..<500 where c.tracks.isEmpty || c.pendingAnalysis > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.tracks.count == 1)
+        let entries = c.library.entries
+
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: folder.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
+        c.rescan()
+        for _ in 0..<500 where c.problem == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.problem?.contains(folder.lastPathComponent) == true)
+        #expect(c.tracks.isEmpty)
+        #expect(c.library.entries.count == 1)
+        #expect(c.folders.count == 1)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+        c.rescan()
+        for _ in 0..<500 where c.problem != nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.problem == nil)
+        #expect(c.library.entries == entries)
+        #expect(c.tracks.count == 1)
+    }
+
+    /// Unplugged while it's being analyzed: that's not a bad file.
+    @Test func aFileGoneDuringAnalysisIsntMarkedUnplayable() async throws {
+        let c = Controller(storage: nil)
+        let path = try temp().appending(path: "gone.flac").path
+        c.library.entries[path] = Library.Entry(size: 1, modified: .now)
+        c.analyzePending()
+        for _ in 0..<500 where c.library.entries[path]?.unreachable != true { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.library.entries[path]?.unplayable == false)
+        #expect(c.library.entries[path]?.unreachable == true)
+    }
+
     @Test func aMissingAlarmsFileIsNothingToMention() throws {
         let c = Controller(storage: try temp())
         c.run()

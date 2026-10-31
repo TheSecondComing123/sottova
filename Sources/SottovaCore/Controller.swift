@@ -111,6 +111,9 @@ public final class Controller {
     @ObservationIgnored private var scanGeneration = 0
     @ObservationIgnored private var watcher: FolderWatcher?
     @ObservationIgnored private var watchedPaths: [String] = []
+    /// What the last scan couldn't read, and what was said about it, which goes once it can.
+    @ObservationIgnored private var unreachableFolders: [String] = []
+    @ObservationIgnored private var unreachableProblem: String?
     @ObservationIgnored private var nowPlaying: NowPlaying?
     /// Songs the listener picked, played in order before shuffle takes over again.
     public private(set) var playlists: [Playlist] = []
@@ -1214,7 +1217,8 @@ public final class Controller {
     public func rescan() {
         let urls = library.resolveFolders()
         folders = urls
-        let paths = urls.map(\.path)
+        // watching a folder's own path says nothing when its drive comes back; a mount shows up only from above it
+        let paths = urls.map(\.path) + (unreachableFolders.isEmpty ? [] : ["/Volumes"])
         if paths != watchedPaths {
             watchedPaths = paths
             // hop out of the FSEvents callback before rescanning, since a rescan may replace this watcher
@@ -1231,7 +1235,22 @@ public final class Controller {
             refreshTracks()
             saveLibrary()
             analyzePending()
+            if found.unreachable != unreachableFolders {
+                sayUnreachable(found.unreachable)
+                // once more, so the watcher above can see the drive come back
+                rescan()
+            }
         }
+    }
+
+    private func sayUnreachable(_ paths: [String]) {
+        unreachableFolders = paths
+        if problem == unreachableProblem { problem = nil }
+        unreachableProblem = nil
+        guard !paths.isEmpty else { return }
+        let names = paths.map { URL(filePath: $0).lastPathComponent }.joined(separator: ", ")
+        unreachableProblem = "can't reach \(names). the songs there won't play until \(paths.count == 1 ? "it's" : "they're") back, and what's known about them is kept"
+        problem = unreachableProblem
     }
 
     public func toggle() {
@@ -1557,7 +1576,7 @@ public final class Controller {
         }
     }
 
-    private func analyzePending() {
+    func analyzePending() {
         let pending = library.pending.map { ($0, library.entries[$0]?.loudness == nil) }
         guard analysis == nil, !pending.isEmpty else { return }
         let store = artwork
@@ -1586,8 +1605,11 @@ public final class Controller {
                             if let loudness {
                                 library.entries[path]?.loudness = loudness
                             }
-                        } else {
+                        } else if FileManager.default.fileExists(atPath: path) {
                             library.entries[path]?.unplayable = true
+                        } else {
+                            // a drive pulled mid-pass, not a bad file; the next scan sorts it out
+                            library.entries[path]?.unreachable = true
                         }
                     }
                     pendingAnalysis = max(0, pendingAnalysis - 1)

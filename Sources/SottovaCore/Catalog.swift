@@ -69,7 +69,7 @@ public struct Catalog: Sendable {
     public init() {}
 
     init(entries: [String: Library.Entry]) {
-        songs = entries.compactMap { path, entry in entry.unplayable ? nil : Self.song(path: path, meta: entry.meta, added: entry.added) }
+        songs = entries.compactMap { path, entry in entry.unplayable || entry.unreachable == true ? nil : Self.song(path: path, meta: entry.meta, added: entry.added) }
             .sorted(by: Self.libraryOrder)
         songsByID = Dictionary(uniqueKeysWithValues: songs.map { ($0.id, $0) })
 
