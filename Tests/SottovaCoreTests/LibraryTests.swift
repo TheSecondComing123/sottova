@@ -71,7 +71,7 @@ struct LibraryTests {
         #expect(loaded.folders == library.folders)
     }
 
-    /// Digital silence measures −∞ LUFS and −∞ dBTP, which plain JSON can't hold.
+    /// Digital silence measures −∞ LUFS and −∞ dBTP, which plain JSON can't hold, so it's kept as a low number.
     @Test func aSilentFileDoesntStopSaves() throws {
         let url = folder.appending(path: "silent.caf")
         let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
@@ -80,10 +80,11 @@ struct LibraryTests {
         try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
         var library = Library()
         library.entries[url.path] = Library.Entry(size: 1, modified: Date(timeIntervalSince1970: 1), loudness: try Loudness.measure(url), meta: TrackMeta(duration: 1))
-        #expect(library.entries[url.path]?.loudness?.lufs == -.infinity)
+        #expect(library.entries[url.path]?.loudness?.lufs == Loudness.silent)
         let file = folder.appending(path: "library.json")
         try library.save(to: file)
-        let loaded = try Library.load(from: file)
+        // a plain decoder is what any older build has
+        let loaded = try JSONDecoder().decode(Library.self, from: Data(contentsOf: file))
         #expect(loaded.entries == library.entries)
         #expect(loaded.entries[url.path]?.loudness?.gainDb() == 0)
         // and it's measured, so it isn't analyzed again every launch

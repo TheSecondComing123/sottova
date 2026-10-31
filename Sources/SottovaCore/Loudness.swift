@@ -5,10 +5,13 @@ public struct Loudness: Codable, Equatable, Sendable {
     public var lufs: Double
     public var truePeakDb: Double
 
+    /// What's saved for a file that measures −∞: plain JSON can't hold that, and every build can read this.
+    static let silent = -200.0
+
     /// Defaults are ReplayGain 2.0's −18 LUFS reference with loudgain's −1 dBTP ceiling.
     public func gainDb(target: Double = -18, ceiling: Double = -1) -> Double {
-        // digital silence measures −∞; leave it alone
-        guard lufs.isFinite, truePeakDb.isFinite else { return 0 }
+        // nothing to go by; leave it alone
+        guard lufs > Self.silent, truePeakDb > Self.silent else { return 0 }
         return min(target - lufs, ceiling - truePeakDb)
     }
 
@@ -54,7 +57,7 @@ public struct Loudness: Codable, Equatable, Sendable {
             try check(ebur128_true_peak(state, channel, &channelPeak))
             peak = max(peak, channelPeak)
         }
-        return Loudness(lufs: lufs, truePeakDb: 20 * log10(peak))
+        return Loudness(lufs: max(lufs, silent), truePeakDb: max(20 * log10(peak), silent))
     }
 
     private static func check(_ code: Int32) throws {

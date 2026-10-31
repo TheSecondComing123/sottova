@@ -74,6 +74,9 @@ struct LoudnessTests {
         #expect(Loudness(lufs: -10, truePeakDb: -0.5).gainDb() == -8)
         #expect(Loudness(lufs: -25, truePeakDb: -3).gainDb() == 2)
         #expect(Loudness(lufs: -.infinity, truePeakDb: -.infinity).gainDb() == 0)
+        #expect(Loudness(lufs: Loudness.silent, truePeakDb: Loudness.silent).gainDb() == 0)
+        // below the gate: real samples, but no loudness to go by
+        #expect(Loudness(lufs: Loudness.silent, truePeakDb: -80).gainDb() == 0)
     }
 
     private func stereoFile(_ samples: [Float], name: String) throws -> URL {
