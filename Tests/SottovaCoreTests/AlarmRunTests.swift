@@ -70,6 +70,25 @@ struct AlarmRunTests {
         #expect(resume.fromAlarm == true)
     }
 
+    @Test func aSleepTimerSetLastNightDoesntCutAnAlarmShort() async throws {
+        let (c, album, _) = try await controller()
+        c.play(album.songs)
+        c.sleepAfterCurrent()
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        #expect(c.machine.sleep == nil)
+    }
+
+    @Test func anAlarmWithItsOwnLengthStillSetsIt() async throws {
+        let (c, album, _) = try await controller()
+        var row = alarm(album)
+        row.minutes = 60
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        #expect(c.machine.sleep != nil)
+    }
+
     @Test func anUnreadableAlarmsFileIsSetAsideAndSaid() throws {
         let storage = try temp()
         let url = storage.appending(path: "alarms.json")
@@ -97,5 +116,32 @@ struct AlarmRunTests {
         c.fire(row.id, due: .now)
         #expect(c.status == .playing)
         #expect(c.problem != nil)
+    }
+
+    @Test func aLongSleepDoesntResumeLastNightsPiece() async throws {
+        let (c, album, _) = try await controller()
+        c.play(album.songs)
+        let night = Date.now
+        c.systemWillSleep(now: night)
+        c.systemDidWake(now: night.addingTimeInterval(8 * 3600))
+        #expect(c.status == .paused)
+    }
+
+    @Test func aShortSleepStillResumes() async throws {
+        let (c, album, _) = try await controller()
+        c.play(album.songs)
+        let now = Date.now
+        c.systemWillSleep(now: now)
+        c.systemDidWake(now: now.addingTimeInterval(600))
+        #expect(c.status == .playing)
+    }
+
+    @Test func aSleepLinkWithNoRealLengthIsIgnored() async throws {
+        let (c, album, _) = try await controller()
+        c.play(album.songs)
+        for length in ["inf", "1e300", "nan", "-5"] {
+            c.open(URL(string: "sottova://sleep/\(length)")!)
+            #expect(c.machine.sleep == nil)
+        }
     }
 }

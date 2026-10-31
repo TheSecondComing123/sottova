@@ -86,7 +86,9 @@ public final class Controller {
     /// False when an unreadable profile.json couldn't be moved aside: saving would overwrite it.
     @ObservationIgnored private var profileWritable = true
     @ObservationIgnored private var needsReschedule = false
-    @ObservationIgnored private var pausedForSleep = false
+    @ObservationIgnored private var pausedForSleep: Date?
+    /// A longer sleep doesn't pick up where it was: often that's a scheduled wake, with nobody there.
+    static let resumeWithin: TimeInterval = 60 * 60
     /// An alarm started what's playing: when its music ends it stops, with nobody there to press stop.
     @ObservationIgnored private var fromAlarm = false
     /// Off when alarms.json can't be read or moved, so saving doesn't overwrite it.
@@ -486,6 +488,8 @@ public final class Controller {
             play(alarm.shuffled ? Self.alarmOrder(songs, at: alarm, due: due, history: history, using: &rng) : songs,
                  source: playlist, shuffled: alarm.shuffled)
             fromAlarm = true
+            // a timer set last night is about last night
+            command(.cancelSleep)
             if status == .paused { toggle() }
             command(.rise)
             if let minutes = alarm.minutes { sleep(minutes: Double(minutes)) }
@@ -1282,7 +1286,8 @@ public final class Controller {
             switch url.lastPathComponent.lowercased() {
             case "off": cancelSleep()
             case "after": sleepAfterCurrent()
-            case let minutes: if let minutes = Double(minutes), minutes > 0 { sleep(minutes: minutes) }
+            // a day at most: the ticker turns what's left into an Int
+            case let minutes: if let minutes = Double(minutes), minutes > 0, minutes <= 24 * 60 { sleep(minutes: minutes) }
             }
         default:
             break
@@ -1296,14 +1301,14 @@ public final class Controller {
             command(.sleepNow)
             return
         }
-        pausedForSleep = true
+        pausedForSleep = now
         command(.pause)
     }
 
     public func systemDidWake(now: Date = .now) {
-        guard pausedForSleep else { return }
-        pausedForSleep = false
-        command(.resume)
+        guard let since = pausedForSleep else { return }
+        pausedForSleep = nil
+        if now.timeIntervalSince(since) < Self.resumeWithin { command(.resume) }
     }
 
     func advance(_ seconds: Double) {
