@@ -14,6 +14,8 @@ struct TrimSheet: View {
     @State private var peaks: [Float] = []
     @State private var preview: AVAudioPlayer?
     @State private var previewStop: Task<Void, Never>?
+    /// Whether hearing a handle paused the music, which comes back when the sheet closes.
+    @State private var pausedQueue = false
     /// How long "hear it" plays from a handle.
     private let listen = 6.0
 
@@ -74,6 +76,7 @@ struct TrimSheet: View {
         .onDisappear {
             preview?.stop()
             previewStop?.cancel()
+            if pausedQueue { controller.play() }
         }
     }
 
@@ -120,7 +123,10 @@ struct TrimSheet: View {
 
     /// A few seconds from a handle, on a player of its own; the queue is paused so the two don't play at once.
     private func hear(from time: Double) {
-        if controller.status == .playing { controller.toggle() }
+        if controller.status == .playing {
+            controller.toggle()
+            pausedQueue = true
+        }
         previewStop?.cancel()
         guard let player = preview ?? (try? AVAudioPlayer(contentsOf: URL(filePath: song.id))) else { return }
         player.volume = Float(controller.volume)

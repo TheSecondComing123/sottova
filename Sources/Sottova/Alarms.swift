@@ -77,6 +77,12 @@ struct AlarmSheet: View {
         }
     }
 
+    /// What a new one starts from: 7 AM, once, quiet; or the afternoon at the desk, every day, shuffled, at whatever
+    /// the speaker is at.
+    private static func defaults(_ kind: Kind) -> (start: Int, end: Int, repeats: Repeat, shuffled: Bool, volume: Double?) {
+        kind == .whileHere ? (15, 19, .daily, true, nil) : (7, 8, .once, false, 0.15)
+    }
+
     /// Whether this Mac's clock shows AM and PM.
     private static let twelveHour = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? false
 
@@ -201,16 +207,16 @@ struct AlarmSheet: View {
         .background(Theme.background)
         .presentationBackground(Theme.background)
         .animation(Theme.quick, value: kind)
-        .onChange(of: kind) {
-            // a new one starts from what suits it: the afternoon at the desk, shuffled, at whatever the speaker is at;
-            // or 7 AM, quiet
+        .onChange(of: kind) { old, new in
+            // a new one moves to what suits the other kind, except where you've already changed something
             guard !editing else { return }
-            let here = kind == .whileHere
-            time = Calendar.current.date(bySettingHour: here ? 15 : 7, minute: 0, second: 0, of: .now)!
-            until = Calendar.current.date(bySettingHour: here ? 19 : 8, minute: 0, second: 0, of: .now)!
-            repeats = here ? .daily : .once
-            shuffled = here
-            volume = here ? nil : 0.15
+            let (was, next) = (Self.defaults(old), Self.defaults(new))
+            let at = { (hour: Int) in Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: .now)! }
+            if time == at(was.start) { time = at(next.start) }
+            if until == at(was.end) { until = at(next.end) }
+            if repeats == was.repeats { repeats = next.repeats }
+            if shuffled == was.shuffled { shuffled = next.shuffled }
+            if volume == was.volume { volume = next.volume }
         }
         .onDisappear { preview.stop() }
     }
@@ -750,17 +756,22 @@ final class AlarmPreview {
     private(set) var playing: Alarm.ID?
     @ObservationIgnored private var player: AVAudioPlayer?
     @ObservationIgnored private var ending: Task<Void, Never>?
+    /// The player whose music this paused, to pick it back up once the preview is over.
+    @ObservationIgnored private weak var paused: Controller?
 
     func toggle(_ alarm: Alarm, controller: Controller) {
         if playing == alarm.id { stop() } else { play(alarm, controller: controller) }
     }
 
     private func play(_ alarm: Alarm, controller: Controller) {
-        stop()
+        halt()
         let songs = controller.playlists.first { $0.id == alarm.source }.map(controller.songs(of:)) ?? controller.catalog.albumsByID[alarm.source]?.songs ?? []
         guard let song = alarm.shuffled ? songs.randomElement() : songs.first,
               let player = try? AVAudioPlayer(contentsOf: URL(filePath: song.id)) else { return }
-        if controller.status == .playing { controller.toggle() }
+        if controller.status == .playing {
+            controller.toggle()
+            paused = controller
+        }
         let own = controller.albumSettings[alarm.source] ?? controller.playlists.first { $0.id == alarm.source }?.gaps
         let fadeIn = (own?.gaps(over: controller.yourSettings) ?? controller.yourSettings).fadeIn
         player.currentTime = controller.trims[song.id]?.start ?? 0
@@ -780,6 +791,12 @@ final class AlarmPreview {
     }
 
     func stop() {
+        halt()
+        paused?.play()
+        paused = nil
+    }
+
+    private func halt() {
         ending?.cancel()
         player?.stop()
         player = nil
