@@ -86,11 +86,16 @@ struct Library: Codable {
 
     static func load(from url: URL) throws -> Library {
         guard FileManager.default.fileExists(atPath: url.path) else { return Library() }
-        return try JSONDecoder().decode(Library.self, from: Data(contentsOf: url))
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        return try decoder.decode(Library.self, from: Data(contentsOf: url))
     }
 
     func save(to url: URL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(self).write(to: url, options: .atomic)
+        let encoder = JSONEncoder()
+        // a silent file measures −∞, which plain JSON can't hold; gainDb plays it at unity
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        try encoder.encode(self).write(to: url, options: .atomic)
     }
 }

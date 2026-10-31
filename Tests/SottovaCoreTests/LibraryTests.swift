@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import SottovaCore
@@ -68,6 +69,25 @@ struct LibraryTests {
         let loaded = try Library.load(from: file)
         #expect(loaded.entries == library.entries)
         #expect(loaded.folders == library.folders)
+    }
+
+    /// Digital silence measures −∞ LUFS and −∞ dBTP, which plain JSON can't hold.
+    @Test func aSilentFileDoesntStopSaves() throws {
+        let url = folder.appending(path: "silent.caf")
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48_000)!
+        buffer.frameLength = 48_000
+        try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
+        var library = Library()
+        library.entries[url.path] = Library.Entry(size: 1, modified: Date(timeIntervalSince1970: 1), loudness: try Loudness.measure(url), meta: TrackMeta(duration: 1))
+        #expect(library.entries[url.path]?.loudness?.lufs == -.infinity)
+        let file = folder.appending(path: "library.json")
+        try library.save(to: file)
+        let loaded = try Library.load(from: file)
+        #expect(loaded.entries == library.entries)
+        #expect(loaded.entries[url.path]?.loudness?.gainDb() == 0)
+        // and it's measured, so it isn't analyzed again every launch
+        #expect(loaded.pending.isEmpty)
     }
 
     @Test func bookmarkFollowsAMovedFolder() throws {
