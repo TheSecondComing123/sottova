@@ -335,10 +335,12 @@ public final class Controller {
     public private(set) var origin: Origin?
 
     /// `source` is a playlist id, whose gaps the songs play with; without one, songs from one album play with its gaps.
-    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false) {
+    /// `row` is the alarm this is for and the time it's for.
+    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false, row: (id: Alarm.ID, time: Date)? = nil) {
         guard songs.indices.contains(index) else { return }
         releaseHour()
-        fromAlarm = false
+        fromAlarm = row != nil
+        partDue = row
         origin = Origin(key: Origin.key(of: songs, source: source), shuffled: shuffled)
         let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
@@ -553,13 +555,12 @@ public final class Controller {
             problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
         } else if alarm.heedsCalendar, calendarBusy() {
             problem = "\(alarm.name) didn't play at \(due.formatted(date: .omitted, time: .shortened)): your calendar had something on"
-        } else if case let songs = takeSongs(alarm), !songs.isEmpty {
+        } else if case let songs = rowSongs(alarm), !songs.isEmpty {
             if let volume = alarm.volume { self.volume = volume }
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
             let history = storage.map { PlayRecord.read($0.appending(path: "plays.jsonl"), last: 2000) } ?? []
             play(alarm.shuffled ? Self.alarmOrder(songs, at: alarm, due: due, history: history, using: &rng) : songs,
-                 source: playlist, shuffled: alarm.shuffled)
-            fromAlarm = true
+                 source: playlist, shuffled: alarm.shuffled, row: (alarm.id, due))
             // a timer set last night is about last night
             command(.cancelSleep)
             if status == .paused { toggle() }
@@ -589,15 +590,15 @@ public final class Controller {
         return Self.split(songs(for: alarm), into: alarm.parts)
     }
 
+    /// A part whose files are all gone keeps its place, so the others stay where `nextPart` expects them.
     private func ownParts(of playlist: Playlist) -> [(name: String?, songs: [Song])] {
         zip(playlist.partStarts, playlist.partPaths)
             .map { (playlist.partNames[$0], $1.compactMap { catalog.songsByID[$0] }) }
-            .filter { !$0.songs.isEmpty }
     }
 
     /// The part a row plays next: its name, or "part 2".
     public func nextPartName(for alarm: Alarm) -> String {
-        let part = alarm.nextPart % max(parts(for: alarm).count, 1)
+        let part = partIndex(from: alarm.nextPart, in: parts(for: alarm)) ?? 0
         guard let playlist = playlists.first(where: { $0.id == alarm.source }), !playlist.breaks.isEmpty else { return "part \(part + 1)" }
         let own = ownParts(of: playlist)
         return part < own.count ? own[part].name ?? "part \(part + 1)" : "part \(part + 1)"
@@ -617,26 +618,39 @@ public final class Controller {
         return parts.filter { !$0.isEmpty }
     }
 
-    /// What an alarm plays this time: its whole collection, or, rotating, its next part, which then moves on. Only
-    /// called when it's about to play, so a day it didn't doesn't use a part up.
-    func takeSongs(_ alarm: Alarm) -> [Song] {
+    /// The first part from `start` on that has songs left.
+    private func partIndex(from start: Int, in all: [[Song]]) -> Int? {
+        all.indices.map { (start + $0) % all.count }.first { !all[$0].isEmpty }
+    }
+
+    /// What a row plays this time: its whole collection, or, rotating, the part it's on: the next one, or, once its
+    /// window has used that up, the one before the next.
+    func rowSongs(_ alarm: Alarm) -> [Song] {
         guard alarm.rotates else { return songs(for: alarm) }
         let all = parts(for: alarm)
-        guard !all.isEmpty, let i = alarms.firstIndex(where: { $0.id == alarm.id }) else { return [] }
-        let part = alarm.nextPart % all.count
+        let spent = alarm.lastFired != nil && alarm.partSpent == alarm.lastFired
+        return partIndex(from: alarm.nextPart + (spent ? all.count - 1 : 0), in: all).map { all[$0] } ?? []
+    }
+
+    /// A piece has started with a row's part waiting to be used up, which only sound does: a day or a window that
+    /// never got that far keeps its part.
+    private func spendPart() {
+        guard let due = partDue, let i = alarms.firstIndex(where: { $0.id == due.id }) else { return }
+        partDue = nil
+        guard alarms[i].rotates, alarms[i].partSpent != due.time else { return }
+        let all = parts(for: alarms[i])
+        guard let part = partIndex(from: alarms[i].nextPart, in: all) else { return }
         alarms[i].nextPart = (part + 1) % all.count
+        alarms[i].partSpent = due.time
         alarmsChanged()
-        return all[part]
     }
 
     // MARK: Hours
 
     /// The alarm that plays while you're at the Mac whose collection is playing; nil once anything else is played.
     @ObservationIgnored private var hourPlaying: Alarm.ID?
-    /// Where each hour's last window began, so one stopped by hand doesn't start again until its next window.
-    @ObservationIgnored private var hourBegun: [Alarm.ID: Date] = [:]
-    /// What the hour playing goes round: its collection, or the part it's on today.
-    @ObservationIgnored private var hourSongs: [Song] = []
+    /// The row whose part the next piece to start uses up, and the time it's for.
+    @ObservationIgnored private var partDue: (id: Alarm.ID, time: Date)?
     @ObservationIgnored private var lastHourCheck = Date.distantPast
     /// The stop after this piece is the hour's, not yours, so whatever you play next isn't cut short by it.
     @ObservationIgnored private var hourEnding = false
@@ -662,10 +676,10 @@ public final class Controller {
         let current = openHour(at: now)
         let open = current?.window(containing: now)
         // the same row's next window counts as a new hour: nothing has checked since yesterday's closed
-        if let id = hourPlaying, id != current?.id || hourBegun[id] != open?.start {
+        if let id = hourPlaying, id != current?.id || current?.lastFired != open?.start {
             hourPlaying = nil
-            if let current, status == .playing || status == .resting {
-                follow(current, now: now)
+            if let current, let window = open, status == .playing || status == .resting {
+                follow(current, from: window.start)
             } else {
                 upNext.removeAll()
                 origin = nil
@@ -679,15 +693,16 @@ public final class Controller {
             }
         }
         // paused counts as not playing: often it's only how a relaunch or a restart left things
-        if hourPlaying == nil, let current, let window = open, status == .idle || status == .paused, hourBegun[current.id] != window.start {
-            let songs = takeSongs(current)
-            hourSongs = songs
-            hourBegun[current.id] = window.start
+        // not before there's a catalog, which it needs to find its songs
+        if hourPlaying == nil, let current, let window = open, status == .idle || status == .paused,
+           current.lastFired != window.start, !catalog.songsByID.isEmpty {
+            let songs = rowSongs(begin(current, at: window.start))
             if songs.isEmpty {
                 problem = "\(current.name) has nothing in it to play"
             } else {
                 if status == .paused { send(.sleepNow) }
                 hourPlaying = current.id
+                partDue = (current.id, window.start)
                 queue(current, songs)
                 failures = 0
                 // out of silence, but not a long one
@@ -706,16 +721,24 @@ public final class Controller {
 
     /// The next hour takes over from the one playing: its collection is next, and a silence already under way can only
     /// get shorter.
-    private func follow(_ hour: Alarm, now: Date) {
+    private func follow(_ hour: Alarm, from start: Date) {
+        let hour = begin(hour, at: start)
         hourPlaying = hour.id
-        hourBegun[hour.id] = hour.window(containing: now)?.start
-        hourSongs = takeSongs(hour)
-        queue(hour, hourSongs)
+        partDue = (hour.id, start)
+        queue(hour, rowSongs(hour))
         if case .resting(let elapsed, let gap) = machine.phase {
             send(.gap(elapsed + min(gap - elapsed, Double.random(in: gapRange(beforeNext: upNext.first), using: &rng))))
             refreshNextTrack()
             publish()
         }
+    }
+
+    /// Notes the window an hour started in, so one stopped by hand doesn't start again until its next, even after a relaunch.
+    private func begin(_ hour: Alarm, at start: Date) -> Alarm {
+        guard hour.lastFired != start, let i = alarms.firstIndex(where: { $0.id == hour.id }) else { return hour }
+        alarms[i].lastFired = start
+        alarmsChanged()
+        return alarms[i]
     }
 
     /// The hour's collection as what plays next, at its volume; shuffled, the piece just heard goes last.
@@ -737,8 +760,8 @@ public final class Controller {
 
     /// An hour that's played through its collection goes round again.
     private func refillHour() -> Bool {
-        guard let hour = alarms.first(where: { $0.id == hourPlaying }), !hourSongs.isEmpty else { return false }
-        queue(hour, hourSongs)
+        guard let hour = alarms.first(where: { $0.id == hourPlaying }), case let songs = rowSongs(hour), !songs.isEmpty else { return false }
+        queue(hour, songs)
         return true
     }
 
@@ -942,12 +965,8 @@ public final class Controller {
         origin = state.origin
         fromAlarm = state.fromAlarm ?? false
         // still the hour's while its window is open; past it, the next check ends it like any closing window
-        if let id = state.hour, let hour = alarms.first(where: { $0.id == id }), let window = hour.window(containing: .now) {
+        if let id = state.hour, let hour = alarms.first(where: { $0.id == id }), hour.window(containing: .now) != nil {
             hourPlaying = id
-            hourBegun[id] = window.start
-            // the part it was on is the one before the next
-            let parts = parts(for: hour)
-            hourSongs = hour.rotates && !parts.isEmpty ? parts[(hour.nextPart + parts.count - 1) % parts.count] : songs(for: hour)
             origin = origin(of: hour)
         }
         useAlbumSettings(for: state.source)
@@ -1518,12 +1537,16 @@ public final class Controller {
             lastTrack = track
         }
         let new = machine.status
-        guard new != status else { return }
-        status = new
-        if new == .idle {
+        // a stop can come while status still says idle: the first file of an alarm can fail before it says anything else
+        var ended = new == .idle && status != .idle
+        if case .stop = event { ended = true }
+        if ended {
             hourEnding = false
             fromAlarm = false
+            partDue = nil
         }
+        guard new != status else { return }
+        status = new
         refreshNextTrack()
         keepAwake(wantsAwake)
         refreshSleep()
@@ -1630,6 +1653,7 @@ public final class Controller {
             failures = 0
             if problem == playbackProblem { problem = nil }
             send(.trackStarted(duration: duration))
+            spendPart()
             publish()
             saveResume()
         } catch {

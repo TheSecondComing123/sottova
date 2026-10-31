@@ -136,6 +136,7 @@ struct AlarmSheet: View {
             alarm.on = old.on
             alarm.nextPart = old.nextPart
             alarm.lastFired = old.lastFired
+            alarm.partSpent = old.partSpent
         }
         alarm.scheduleOnce()
         return alarm

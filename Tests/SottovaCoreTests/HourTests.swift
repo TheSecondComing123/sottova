@@ -89,10 +89,10 @@ struct HourTests {
 
     // MARK: The player in a window
 
-    private func controller(songs: Int = 2) async throws -> (Controller, Album) {
+    private func controller(songs: Int = 2, storage: URL? = nil, playlists: URL? = nil) async throws -> (Controller, Album) {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!, maximumFrameCount: 480)
-        let c = Controller(engine: engine, storage: nil)
+        let c = Controller(engine: engine, storage: storage, playlistFolder: playlists)
         for i in 0..<songs {
             let url = try tone(named: "hour-\(i)")
             c.library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10),
@@ -327,6 +327,169 @@ struct HourTests {
         #expect(c.current == playing)
         #expect(c.sleepTimer == nil)
         #expect(c.upNext.count == 2)
+    }
+
+    // MARK: Parts
+
+    private func rotating(_ c: Controller, _ album: Album) -> Alarm {
+        var row = open(c, album)
+        row.rotates = true
+        row.parts = 2
+        c.updateAlarm(row)
+        return row
+    }
+
+    private func temp() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-hour-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    @Test func aPartHeldAllWindowIsntUsedUp() async throws {
+        let (c, album) = try await controller(songs: 4)
+        _ = rotating(c, album)
+        c.presence = { _ in .away }
+        c.checkHours()
+        c.advance(100)
+        c.checkHours(now: .now + 3600)
+        #expect(c.status == .idle)
+        #expect(c.alarms.first?.nextPart == 0)
+    }
+
+    @Test func aPartIsUsedUpWhenItSoundsAndOnlyOnce() async throws {
+        let (c, album) = try await controller(songs: 4)
+        let row = rotating(c, album)
+        let part = c.parts(for: row)[0].map(\.id)
+        c.checkHours()
+        #expect(c.alarms.first?.nextPart == 0)
+        #expect(Set(c.upNext.map(\.path)) == Set(part))
+        c.advance(46)
+        #expect(c.status == .playing)
+        #expect(c.alarms.first?.nextPart == 1)
+        // the next piece, then round again: still the part it's on
+        c.advance(3.1)
+        c.advance(121)
+        #expect(c.status == .playing)
+        #expect(c.alarms.first?.nextPart == 1)
+        #expect(c.upNext.isEmpty)
+        #expect(part.contains(try #require(c.dequeue())))
+    }
+
+    @Test func playingSomethingElseFirstLeavesThePartForNextTime() async throws {
+        let (c, album) = try await controller(songs: 4)
+        _ = rotating(c, album)
+        c.checkHours()
+        c.play(album.songs)
+        #expect(c.status == .playing)
+        c.advance(1.1)
+        #expect(c.alarms.first?.nextPart == 0)
+    }
+
+    @Test func overlappingRowsDontUseAPartUpTwice() async throws {
+        let (c, album) = try await controller(songs: 4)
+        let row = rotating(c, album)
+        let part = c.parts(for: row)[0].map(\.id)
+        c.checkHours()
+        c.advance(46)
+        #expect(c.alarms.first?.nextPart == 1)
+        // one starts inside it, ends, and the first has the time again
+        let inside = Calendar.current.dateComponents([.hour, .minute], from: .now + 120)
+        var other = hour(from: inside.hour!, inside.minute!, minutes: 5, source: album.id)
+        other.shuffled = false
+        c.addAlarm(other)
+        c.checkHours(now: .now + 180)
+        #expect(c.origin?.shuffled == false)
+        c.checkHours(now: .now + 600)
+        #expect(c.origin?.shuffled == true)
+        #expect(Set(c.upNext.map(\.path)) == Set(part))
+        c.advance(3.1)
+        c.advance(121)
+        #expect(c.status == .playing)
+        #expect(c.alarms.first?.nextPart == 1)
+    }
+
+    @Test func aStoppedHourStaysStoppedAfterARelaunch() async throws {
+        let storage = try temp()
+        let (c, album) = try await controller(storage: storage)
+        _ = open(c, album)
+        c.checkHours()
+        c.sleep(minutes: 60)
+        c.systemWillSleep()
+        #expect(c.status == .idle)
+        let (again, _) = try await controller(storage: storage)
+        again.loadAlarms()
+        again.checkHours()
+        #expect(again.status == .idle)
+    }
+
+    @Test func aPartWithNoSongsLeftDoesntMoveTheOthers() async throws {
+        let (c, album) = try await controller(songs: 2, playlists: try temp())
+        let songs = album.songs
+        let id = try #require(c.newPlaylist(songs: songs))
+        c.add([Song(id: "/gone", title: "t", work: "t", detail: nil, artist: "p", album: "a", albumID: "a", albumArtist: "",
+                    composer: nil, trackNumber: nil, discNumber: nil, year: nil, duration: 60, artwork: nil, searchKey: "/gone")], to: id, at: 1)
+        c.setBreak(true, at: 1, in: id)
+        c.setBreak(true, at: 2, in: id)
+        var row = open(c, album)
+        row.source = id
+        row.rotates = true
+        row.nextPart = 2
+        c.updateAlarm(row)
+        #expect(c.parts(for: row).map(\.count) == [1, 0, 1])
+        #expect(c.nextPartName(for: row) == "part 3")
+        c.checkHours()
+        #expect(c.upNext.map(\.path) == [songs[1].id])
+        c.advance(46)
+        #expect(c.alarms.first?.nextPart == 0)
+        // on the part that's gone, the one after it plays
+        var next = try #require(c.alarms.first)
+        next.nextPart = 1
+        #expect(c.nextPartName(for: next) == "part 3")
+    }
+
+    private struct DeviceGone: Error {}
+
+    @Test func anAlarmThatCantStartYetKeepsItsPart() async throws {
+        let (c, album) = try await controller(songs: 4)
+        var row = Alarm(source: album.id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        row.rotates = true
+        row.parts = 2
+        c.addAlarm(row)
+        var fails = 1
+        c.startEngine = { engine in
+            if fails > 0 {
+                fails -= 1
+                throw DeviceGone()
+            }
+            try engine.start()
+        }
+        c.fire(row.id, due: .now)
+        #expect(c.alarms.first?.nextPart == 0)
+        for _ in 0..<400 where c.current == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.current != nil)
+        #expect(c.alarms.first?.nextPart == 1)
+    }
+
+    @Test func anAlarmWhoseFilesAreAllBadDoesntWanderOrBlockPlay() async throws {
+        let (c, _) = try await controller()
+        let other = try tone(named: "hour-other")
+        c.library.entries[other.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10),
+                                                      meta: TrackMeta(title: "other", artist: "b", album: "Elsewhere", duration: 3))
+        c.refreshTracks()
+        for _ in 0..<500 where c.catalog.albums.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        let bad = try temp().appending(path: "bad.caf")
+        try Data("not audio".utf8).write(to: bad)
+        c.library.entries[bad.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10),
+                                                    meta: TrackMeta(title: "bad", artist: "c", album: "Bad", duration: 3))
+        c.refreshTracks()
+        for _ in 0..<500 where c.catalog.albums.count < 3 { try await Task.sleep(for: .milliseconds(10)) }
+        let row = Alarm(source: try #require(c.catalog.albums.first { $0.title == "Bad" }).id, name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        #expect(c.status == .idle)
+        #expect(c.current == nil)
+        c.toggle()
+        #expect(c.status == .playing)
     }
 
     @Test func anHourGoesRoundItsCollectionAgain() async throws {

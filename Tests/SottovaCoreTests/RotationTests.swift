@@ -91,12 +91,19 @@ struct RotationTests {
         #expect(c.playlists.first?.breaks.isEmpty == true)
     }
 
-        @Test func eachTimeItPlaysItTakesTheNextPartButASkippedDayDoesnt() async throws {
+    @Test func eachTimeItPlaysItTakesTheNextPartButASkippedDayDoesnt() async throws {
         let engine = AVAudioEngine()
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!, maximumFrameCount: 480)
         let c = Controller(engine: engine, storage: nil)
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-parts-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+        let silence = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48_000)!
+        silence.frameLength = 48_000
         for i in 0..<4 {
-            c.library.entries["/r/\(i).flac"] = Library.Entry(size: 0, modified: .now, meta: TrackMeta(title: "t\(i)", artist: "a", album: "R", duration: 60))
+            let url = dir.appending(path: "\(i).caf")
+            try AVAudioFile(forWriting: url, settings: format.settings).write(from: silence)
+            c.library.entries[url.path] = Library.Entry(size: 0, modified: .now, meta: TrackMeta(title: "t\(i)", artist: "a", album: "R", duration: 60))
         }
         c.refreshTracks()
         for _ in 0..<500 where c.catalog.albums.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
@@ -107,11 +114,17 @@ struct RotationTests {
         c.addAlarm(alarm)
         c.fire(alarm.id, due: .now)
         #expect(c.alarms.first?.nextPart == 1)
-        // the next time it takes the second part, then the first again
         let parts = c.parts(for: try #require(c.alarms.first))
         #expect(parts.count == 2)
-        #expect(c.takeSongs(try #require(c.alarms.first)) == parts[1])
-        #expect(c.takeSongs(try #require(c.alarms.first)) == parts[0])
+        // the next time it takes the second part, then the first again
+        c.fire(alarm.id, due: .now)
+        #expect(Set(c.upNext.map(\.path)) == Set(parts[1].map(\.id)))
+        c.advance(1.1)
+        #expect(c.alarms.first?.nextPart == 0)
+        c.fire(alarm.id, due: .now)
+        #expect(Set(c.upNext.map(\.path)) == Set(parts[0].map(\.id)))
+        c.advance(1.1)
+        #expect(c.alarms.first?.nextPart == 1)
         c.calendarBusy = { true }
         var minding = try #require(c.alarms.first)
         minding.heedsCalendar = true
@@ -120,6 +133,7 @@ struct RotationTests {
         #expect(c.alarms.first?.nextPart == 1)
         c.calendarBusy = { false }
         c.fire(alarm.id, due: .now)
+        c.advance(1.1)
         #expect(c.alarms.first?.nextPart == 0)
     }
 }
