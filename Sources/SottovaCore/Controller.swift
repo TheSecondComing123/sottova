@@ -327,10 +327,13 @@ public final class Controller {
         }
 
         /// A playlist by its id; anything else by which songs it holds, whatever their order, so a song clicked in
-        /// a list and that page's play button agree.
+        /// a list and that page's play button agree. A PlayRow body asks up to four times, so a 10k page can't afford
+        /// a joined string of the paths. A sum of FNV-1a hashes doesn't care about order and, saved across launches,
+        /// still matches where a hashValue wouldn't. Only a playlist can hold a song twice, and that goes by its id.
         public static func key(of songs: [Song], source: String?) -> String {
-            // saved across launches, where a hashValue wouldn't match
-            source ?? Set(songs.map(\.id)).sorted().joined(separator: "\n")
+            source ?? String(songs.reduce(UInt64(0)) { sum, song in
+                sum &+ song.id.utf8.reduce(0xcbf29ce484222325) { ($0 ^ UInt64($1)) &* 0x100000001b3 }
+            }, radix: 16)
         }
     }
 

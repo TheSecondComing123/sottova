@@ -142,4 +142,19 @@ struct GapEstimateTests {
         s.crossfade = true
         #expect(s.lengthWithGaps(count: 12, music: 3720) == 3720)
     }
+
+    @Test @MainActor func anOriginsKeyIsShortAndStaysTheSameAcrossLaunches() {
+        func song(_ path: String) -> Song {
+            Song(id: path, title: "", work: "", detail: nil, artist: "", album: "", albumID: "", albumArtist: "", composer: nil,
+                 trackNumber: nil, discNumber: nil, year: nil, duration: 0, artwork: nil, searchKey: "")
+        }
+        let (a, b) = (song("/Music/é/a.flac"), song("/Music/é/b.flac"))
+        // saved in resume.json, so a page's play button still knows after a relaunch: changing this forgets that once
+        #expect(Controller.Origin.key(of: [a, b], source: nil) == "b95a60d13113890b")
+        #expect(Controller.Origin.key(of: [b, a], source: nil) == Controller.Origin.key(of: [a, b], source: nil))
+        #expect(Controller.Origin.key(of: [a], source: nil) != Controller.Origin.key(of: [a, b], source: nil))
+        #expect(Controller.Origin.key(of: [a, b], source: "/p.m3u8") == "/p.m3u8")
+        let tenThousand = (0..<10_000).map { song("/Music/some folder/\($0).flac") }
+        #expect(Controller.Origin.key(of: tenThousand, source: nil).utf8.count <= 16)
+    }
 }
