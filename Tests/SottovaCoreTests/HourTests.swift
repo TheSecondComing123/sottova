@@ -69,6 +69,24 @@ struct HourTests {
         #expect(track.elapsed == 10)
     }
 
+    @Test func heldWithCrossfadeTheNextPieceStillWaits() {
+        var settings = Settings()
+        settings.crossfade = true
+        var m = Machine(settings: settings, seed: 1)
+        _ = m.handle(.start)
+        _ = m.handle(.trackStarted(duration: 10))
+        _ = m.handle(.hold(true))
+        var effects: [Machine.Effect] = []
+        for _ in 0..<1100 { effects += m.handle(.tick(0.01)) }
+        #expect(!effects.contains(.startNextTrack))
+        #expect(m.status == .resting)
+        #expect(m.outgoing == nil)
+        _ = m.handle(.gap(0))
+        #expect(m.handle(.tick(0.01)).isEmpty)
+        _ = m.handle(.hold(false))
+        #expect(m.handle(.tick(0.01)) == [.startNextTrack])
+    }
+
     // MARK: The player in a window
 
     private func controller(songs: Int = 2) async throws -> (Controller, Album) {

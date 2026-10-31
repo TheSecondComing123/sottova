@@ -358,7 +358,8 @@ struct Machine: Sendable {
 
         case (.tick(let dt), .track(var track)) where !paused:
             track.elapsed += dt
-            if track.equalPowerOut, settings.crossfade, sleep != .afterCurrent, track.elapsed >= track.outStart {
+            // held, it fades out alone and the next piece waits in a silence, however long the settings make that
+            if track.equalPowerOut, settings.crossfade, sleep != .afterCurrent, !held, track.elapsed >= track.outStart {
                 // the next track starts underneath while this one keeps fading on the other deck
                 outgoing = track
                 crossfadeNext = true
