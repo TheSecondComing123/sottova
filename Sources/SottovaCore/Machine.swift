@@ -103,6 +103,10 @@ struct Machine: Sendable {
         case restoreRest(left: Double)
         /// The answer to `planGap`: how long this silence lasts.
         case gap(Double)
+        /// From idle, a silence this long before the first piece.
+        case wait(Double)
+        /// While held, a silence doesn't count down, so the next piece waits; whatever is playing goes on.
+        case hold(Bool)
     }
 
     /// Stop after `left` more seconds of playing time, easing the volume down over the last `fade` of them;
@@ -134,6 +138,7 @@ struct Machine: Sendable {
     private(set) var sleep: Sleep?
     /// Seconds of sound left in an alarm's rise.
     private(set) var rise: Double?
+    private(set) var held = false
     private var crossfadeNext = false
     private var rng: SplitMix64
 
@@ -204,6 +209,9 @@ struct Machine: Sendable {
             guard phase != .idle else { return [] }
             rise = Self.riseLength
             return currentGains()
+        case .hold(let on):
+            held = on
+            return []
         default:
             break
         }
@@ -304,6 +312,10 @@ struct Machine: Sendable {
             paused = true
             return []
 
+        case (.wait(let gap), .idle):
+            phase = .resting(elapsed: 0, gap: max(gap, 0))
+            return []
+
         case (.restoreRest(let left), .idle):
             phase = .resting(elapsed: 0, gap: max(left, 0))
             paused = true
@@ -372,7 +384,7 @@ struct Machine: Sendable {
             phase = .resting(elapsed: elapsed, gap: gap)
             return []
 
-        case (.tick(let dt), .resting(let elapsed, let gap)) where !paused:
+        case (.tick(let dt), .resting(let elapsed, let gap)) where !paused && !held:
             guard elapsed + dt >= gap else {
                 phase = .resting(elapsed: elapsed + dt, gap: gap)
                 return []

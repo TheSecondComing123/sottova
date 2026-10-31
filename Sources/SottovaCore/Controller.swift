@@ -54,7 +54,7 @@ public final class Controller {
     public var keepsMacAwake = UserDefaults.standard.object(forKey: "keepsMacAwake") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(keepsMacAwake, forKey: "keepsMacAwake")
-            keepAwake(keepsMacAwake && (status == .playing || status == .resting))
+            keepAwake(wantsAwake)
         }
     }
     public var acceptsURLs = UserDefaults.standard.object(forKey: "acceptsURLs") as? Bool ?? true {
@@ -145,8 +145,9 @@ public final class Controller {
         lastTick = .now
         startTicker()
         nowPlaying = NowPlaying(controller: self)
-        restoreResume()
+        // alarms first: a piece restored mid-hour goes on being the hour's
         loadAlarms()
+        restoreResume()
         loadTrims()
         publish()
         rescan()
@@ -162,6 +163,10 @@ public final class Controller {
                 try? await Task.sleep(for: interval)
                 guard !Task.isCancelled else { return }
                 self?.catchUp()
+                // here, not in catchUp, which a command runs first: an hour starting there would swallow a press of play
+                if let self, Date.now.timeIntervalSince(lastHourCheck) >= 5 {
+                    checkHours()
+                }
             }
         }
     }
@@ -231,6 +236,7 @@ public final class Controller {
     /// `source` is a playlist id, whose gaps the songs play with; without one, songs from one album play with its gaps.
     public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false) {
         guard songs.indices.contains(index) else { return }
+        releaseHour()
         origin = Origin(key: Origin.key(of: songs, source: source), shuffled: shuffled)
         let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
@@ -277,6 +283,7 @@ public final class Controller {
     @ObservationIgnored private var alarmTimer: DispatchSourceTimer?
     /// Held while an alarm is set: an idle menu-bar app gets App Nap, which may hold its timers back.
     @ObservationIgnored private var alarmActivity: NSObjectProtocol?
+    @ObservationIgnored private var activityOptions: ProcessInfo.ActivityOptions?
 
     public func addAlarm(_ alarm: Alarm) {
         alarms.append(alarm)
@@ -295,9 +302,9 @@ public final class Controller {
         alarmsChanged()
     }
 
-    /// The soonest alarm and when it goes off.
+    /// The soonest alarm that starts by itself and when it goes off.
     public func nextAlarm(after now: Date = .now) -> (alarm: Alarm, at: Date)? {
-        alarms.filter(\.on).compactMap { alarm in alarm.next(after: now).map { (alarm, $0) } }.min { $0.1 < $1.1 }
+        alarms.filter { $0.on && !$0.whileHere }.compactMap { alarm in alarm.next(after: now).map { (alarm, $0) } }.min { $0.1 < $1.1 }
     }
 
     private func alarmsChanged() {
@@ -315,7 +322,7 @@ public final class Controller {
         guard let url = storage?.appending(path: "alarms.json"), let data = try? Data(contentsOf: url),
               let saved = try? JSONDecoder().decode([Alarm].self, from: data) else { return }
         // a one-off whose time passed while the app was closed is dropped, not played late
-        alarms = saved.filter { $0.next(after: .now) != nil }
+        alarms = saved.filter { $0.next(after: .now) != nil || $0.whileHere && $0.window(containing: .now) != nil }
         if alarms != saved {
             alarmsChanged()
         } else {
@@ -328,14 +335,17 @@ public final class Controller {
     private func armAlarm() {
         alarmTimer?.cancel()
         alarmTimer = nil
-        guard let (alarm, at) = nextAlarm() else {
+        let next = nextAlarm()
+        // an alarm keeps the app awake to its timer and the Mac from sleeping when idle (the screen still turns off);
+        // an hour only needs its checks on time, since it plays only while you're there
+        let wanted: ProcessInfo.ActivityOptions? = next != nil ? .userInitiated
+            : alarms.contains { $0.on && $0.whileHere } ? .userInitiatedAllowingIdleSystemSleep : nil
+        if wanted != activityOptions {
             alarmActivity.map(ProcessInfo.processInfo.endActivity)
-            alarmActivity = nil
-            return
+            alarmActivity = wanted.map { ProcessInfo.processInfo.beginActivity(options: $0, reason: next != nil ? "an alarm is set" : "an hour is set") }
+            activityOptions = wanted
         }
-        // keeps the app awake to its timer, and the Mac from sleeping when idle; the screen still turns off
-        alarmActivity = alarmActivity ?? ProcessInfo.processInfo.beginActivity(
-            options: [.userInitiated], reason: "an alarm is set")
+        guard let (alarm, at) = next else { return }
         let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
         timer.schedule(wallDeadline: .now() + max(at.timeIntervalSinceNow, 0), leeway: .milliseconds(100))
         timer.setEventHandler { [weak self] in
@@ -368,7 +378,7 @@ public final class Controller {
 
     func fire(_ id: Alarm.ID, due: Date, now: Date = .now) {
         guard let alarm = alarms.first(where: { $0.id == id }) else { return }
-        let songs = playlists.first { $0.id == alarm.source }.map(songs(of:)) ?? catalog.albumsByID[alarm.source]?.songs ?? []
+        let songs = songs(for: alarm)
         if now.timeIntervalSince(due) > Self.alarmLateness {
             problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
         } else if !songs.isEmpty {
@@ -389,6 +399,130 @@ public final class Controller {
         } else {
             armAlarm()
         }
+    }
+
+    private func songs(for alarm: Alarm) -> [Song] {
+        playlists.first { $0.id == alarm.source }.map(songs(of:)) ?? catalog.albumsByID[alarm.source]?.songs ?? []
+    }
+
+    // MARK: Hours
+
+    /// The alarm that plays while you're at the Mac whose collection is playing; nil once anything else is played.
+    @ObservationIgnored private var hourPlaying: Alarm.ID?
+    /// Where each hour's last window began, so one stopped by hand doesn't start again until its next window.
+    @ObservationIgnored private var hourBegun: [Alarm.ID: Date] = [:]
+    @ObservationIgnored private var lastHourCheck = Date.distantPast
+    /// The stop after this piece is the hour's, not yours, so whatever you play next isn't cut short by it.
+    @ObservationIgnored private var hourEnding = false
+    /// Reads the Mac for a reason to wait; tests put their own in.
+    @ObservationIgnored var presence: @MainActor () -> Hold? = { Presence.hold() }
+    /// Why the next piece of an hour is waiting.
+    public private(set) var hold: Hold?
+
+    /// Starts an hour from silence when its window opens and nothing else is playing, moves to the next hour without
+    /// cutting the piece, ends with the piece playing as the window closes, and holds the next piece while you're
+    /// away, on a call or listening to something else.
+    func checkHours(now: Date = .now) {
+        lastHourCheck = now
+        let current = alarms.first { $0.on && $0.whileHere && $0.window(containing: now) != nil }
+        if let id = hourPlaying, id != current?.id {
+            hourPlaying = nil
+            if let current, status != .idle {
+                follow(current, now: now)
+            } else {
+                upNext.removeAll()
+                origin = nil
+                // paused counts too: a lid closed mid-hour and opened tomorrow mustn't carry on with everything
+                if case .resting = machine.phase {
+                    send(.stop)
+                } else if status != .idle {
+                    sleepAfterCurrent()
+                    hourEnding = true
+                }
+            }
+        }
+        if hourPlaying == nil, let current, status == .idle, let window = current.window(containing: now), hourBegun[current.id] != window.start {
+            let songs = songs(for: current)
+            hourBegun[current.id] = window.start
+            if songs.isEmpty {
+                problem = "\(current.name) has nothing in it to play"
+            } else {
+                hourPlaying = current.id
+                queue(current, songs)
+                failures = 0
+                // out of silence, but not a long one
+                send(.wait(Double.random(in: 10...45, using: &rng)))
+            }
+        }
+        // a one-off whose window has closed is done
+        let over = alarms.filter { $0.whileHere && $0.weekdays.isEmpty && $0.next(after: now) == nil && $0.window(containing: now) == nil }
+        if !over.isEmpty {
+            alarms.removeAll { alarm in over.contains { $0.id == alarm.id } }
+            alarmsChanged()
+        }
+        setHold(hourPlaying == nil || status == .idle ? nil : presence())
+    }
+
+    /// The next hour takes over from the one playing: its collection is next, and a silence already under way can only
+    /// get shorter.
+    private func follow(_ hour: Alarm, now: Date) {
+        hourPlaying = hour.id
+        hourBegun[hour.id] = hour.window(containing: now)?.start
+        queue(hour, songs(for: hour))
+        if case .resting(let elapsed, let gap) = machine.phase {
+            send(.gap(elapsed + min(gap - elapsed, Double.random(in: gapRange(beforeNext: upNext.first), using: &rng))))
+            refreshNextTrack()
+            publish()
+        }
+    }
+
+    /// The hour's collection, shuffled, as what plays next; the piece just heard goes last.
+    private func queue(_ hour: Alarm, _ songs: [Song]) {
+        var order = songs.shuffled(using: &rng)
+        if let last = file?.url.path, let i = order.firstIndex(where: { $0.id == last }) {
+            order.append(order.remove(at: i))
+        }
+        upNext = order.map { QueueEntry(path: $0.id, source: hour.source) }
+        let playlist = playlists.contains { $0.id == hour.source } ? hour.source : nil
+        origin = Origin(key: Origin.key(of: songs, source: playlist), shuffled: true)
+    }
+
+    /// An hour that's played through its collection goes round again.
+    private func refillHour() -> Bool {
+        guard let hour = alarms.first(where: { $0.id == hourPlaying }) else { return false }
+        let songs = songs(for: hour)
+        guard !songs.isEmpty else { return false }
+        queue(hour, songs)
+        return true
+    }
+
+    /// Something played by hand or by an alarm takes over from the hour.
+    private func releaseHour() {
+        hourPlaying = nil
+        setHold(nil)
+        if hourEnding {
+            hourEnding = false
+            cancelSleep()
+        }
+    }
+
+    private func setHold(_ new: Hold?) {
+        guard new != hold else { return }
+        hold = new
+        send(.hold(new != nil))
+        refreshNextTrack()
+        keepAwake(wantsAwake)
+        publish()
+    }
+
+    /// When the silence ends; none while it's held.
+    private func refreshNextTrack() {
+        nextTrackAt = hold == nil ? machine.restRemaining.map { Date(timeIntervalSinceNow: $0) } : nil
+    }
+
+    /// The engine is paused during gaps, so nothing else stops idle sleep there; a held silence lets the Mac sleep.
+    private var wantsAwake: Bool {
+        keepsMacAwake && (status == .playing || status == .resting) && hold == nil
     }
 
     /// What brings a file to the target loudness, as a multiplier; tracks not analyzed yet play at a provisional −6 dB.
@@ -492,6 +626,8 @@ public final class Controller {
         var restLeft: Double?
         var source: String?
         var upNext: [Entry]
+        /// The hour this was playing for, if any.
+        var hour: UUID?
     }
 
     /// Brings the clock up to now and saves, for when the app quits.
@@ -517,6 +653,7 @@ public final class Controller {
             return
         }
         state.upNext = upNext.map { ResumeState.Entry(path: $0.path, source: $0.source) }
+        state.hour = hourPlaying
         do {
             try JSONEncoder().encode(state).write(to: url, options: .atomic)
         } catch {
@@ -536,6 +673,11 @@ public final class Controller {
             return
         }
         upNext = state.upNext.map { QueueEntry(path: $0.path, source: $0.source) }
+        // still the hour's while its window is open; past it, the next check ends it like any closing window
+        if let id = state.hour, let window = alarms.first(where: { $0.id == id })?.window(containing: .now) {
+            hourPlaying = id
+            hourBegun[id] = window.start
+        }
         useAlbumSettings(for: state.source)
         self.file = file
         current = catalog.songsByID[state.path]
@@ -770,7 +912,7 @@ public final class Controller {
 
     /// The next path to play, putting its source's gaps in place, or nil when the shuffler should pick.
     func dequeue() -> String? {
-        guard !upNext.isEmpty else {
+        guard !upNext.isEmpty || refillHour() else {
             useAlbumSettings(for: nil)
             origin = nil
             return nil
@@ -1001,8 +1143,9 @@ public final class Controller {
         let new = machine.status
         guard new != status else { return }
         status = new
-        nextTrackAt = machine.restRemaining.map { Date(timeIntervalSinceNow: $0) }
-        keepAwake(keepsMacAwake && (new == .playing || new == .resting))
+        if new == .idle { hourEnding = false }
+        refreshNextTrack()
+        keepAwake(wantsAwake)
         refreshSleep()
         publish()
         saveResume()

@@ -1,6 +1,7 @@
 import Foundation
 
-/// Starts an album or playlist at a time of day: once on a given day, or on chosen weekdays.
+/// Starts an album or playlist at a time of day: once on a given day, or on chosen weekdays. Or, `whileHere`, plays it
+/// from that time for `minutes` only while you're at the Mac.
 public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID()
     /// An album id or a playlist's file path.
@@ -20,6 +21,8 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     public var volume: Double?
     /// How long it plays before easing down to a stop, through the sleep timer; nil plays on.
     public var minutes: Int?
+    /// Plays a piece now and then from its time for `minutes`, while you're at the Mac, instead of starting by itself.
+    public var whileHere = false
 
     public init(source: String, name: String, hour: Int, minute: Int, weekdays: Set<Int> = [], day: Date? = nil, shuffled: Bool = false) {
         self.source = source
@@ -32,7 +35,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes
+        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere
     }
 
     // alarms.json from before alarms could be turned off has no `on`
@@ -49,13 +52,17 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         on = try c.decodeIfPresent(Bool.self, forKey: .on) ?? true
         volume = try c.decodeIfPresent(Double.self, forKey: .volume)
         minutes = try c.decodeIfPresent(Int.self, forKey: .minutes)
+        whileHere = try c.decodeIfPresent(Bool.self, forKey: .whileHere) ?? false
     }
 
     /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.
     public mutating func scheduleOnce(after now: Date = .now, calendar: Calendar = .current) {
         guard weekdays.isEmpty else { return }
         day = now
-        if next(after: now, calendar: calendar) == nil { day = calendar.date(byAdding: .day, value: 1, to: now) }
+        // one that plays while you're there and is already under way is for now
+        if next(after: now, calendar: calendar) == nil, !(whileHere && window(containing: now, calendar: calendar) != nil) {
+            day = calendar.date(byAdding: .day, value: 1, to: now)
+        }
     }
 
     /// Every time it goes off after `now` and before `end`, soonest first.
@@ -67,6 +74,22 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
             from = at
         }
         return times
+    }
+
+    /// The stretch that `now` falls in, from its time for its minutes, on a day it's set for; one that began
+    /// yesterday evening can still be running.
+    public func window(containing now: Date, calendar: Calendar = .current) -> DateInterval? {
+        guard let minutes else { return nil }
+        for back in 0...1 {
+            guard let base = calendar.date(byAdding: .day, value: -back, to: now),
+                  let start = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: base) else { continue }
+            let setFor = weekdays.isEmpty ? day.map { calendar.isDate($0, inSameDayAs: start) } ?? false
+                                          : weekdays.contains(calendar.component(.weekday, from: start))
+            if setFor, start <= now, now < start + Double(minutes) * 60 {
+                return DateInterval(start: start, duration: Double(minutes) * 60)
+            }
+        }
+        return nil
     }
 
     /// The next time it goes off after `now`, or nil for a one-off that's past.
