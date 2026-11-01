@@ -1,0 +1,33 @@
+{
+  "name": "Catppuccin Mocha",
+  "side": "dark",
+  "source": "https://github.com/catppuccin/palette/blob/main/palette.json",
+  "bg": "#1e1e2e",
+  "raised": "#181825",
+  "hover": "#313244",
+  "border": "#45475a",
+  "decor": "#585b70",
+  "text": "#cdd6f4",
+  "accents": [
+    "#f5e0dc",
+    "#f2cdcd",
+    "#f5c2e7",
+    "#cba6f7",
+    "#f38ba8",
+    "#eba0ac",
+    "#fab387",
+    "#f9e2af",
+    "#a6e3a1",
+    "#94e2d5",
+    "#89dceb",
+    "#74c7ec",
+    "#89b4fa",
+    "#b4befe"
+  ],
+  "primary": "#fab387",
+  "onPrimary": "#11111b",
+  "faint": "#a6adc8",
+  "muted": "#bac2de",
+  "icon": "#9399b2",
+  "disabled": "#6c7086"
+}

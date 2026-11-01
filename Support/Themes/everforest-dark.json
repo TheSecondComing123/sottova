@@ -1,0 +1,24 @@
+{
+  "name": "Everforest",
+  "side": "dark",
+  "source": "https://github.com/sainnhe/everforest/blob/master/autoload/everforest.vim",
+  "bg": "#2d353b",
+  "raised": "#232a2e",
+  "hover": "#343f44",
+  "border": "#3d484d",
+  "decor": "#56635f",
+  "text": "#d3c6aa",
+  "accents": [
+    "#e67e80",
+    "#e69875",
+    "#dbbc7f",
+    "#a7c080",
+    "#83c092",
+    "#7fbbb3",
+    "#d699b6"
+  ],
+  "primary": "#a7c080",
+  "onPrimary": "#232a2e",
+  "faint": "#a0aba1",
+  "muted": "#b2b4a4"
+}

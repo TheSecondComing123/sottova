@@ -1,0 +1,23 @@
+{
+  "name": "Kanagawa Lotus",
+  "side": "light",
+  "source": "https://github.com/rebelot/kanagawa.nvim/blob/master/lua/kanagawa/colors.lua",
+  "bg": "#f2ecbc",
+  "raised": "#e7dba0",
+  "hover": "#e5ddb0",
+  "border": "#dcd5ac",
+  "decor": "#a09cac",
+  "text": "#43436c",
+  "accents": [
+    "#c84053",
+    "#77713f",
+    "#597b75",
+    "#4d699b",
+    "#624c83",
+    "#b35b79"
+  ],
+  "primary": "#624c83",
+  "onPrimary": "#f2ecbc",
+  "faint": "#545464",
+  "muted": "#545464"
+}

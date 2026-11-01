@@ -1,0 +1,26 @@
+{
+  "name": "Gruvbox",
+  "side": "dark",
+  "source": "https://github.com/morhetz/gruvbox/blob/master/colors/gruvbox.vim",
+  "bg": "#282828",
+  "raised": "#1d2021",
+  "hover": "#3c3836",
+  "border": "#504945",
+  "decor": "#665c54",
+  "text": "#ebdbb2",
+  "accents": [
+    "#fb4934",
+    "#b8bb26",
+    "#fabd2f",
+    "#83a598",
+    "#d3869b",
+    "#8ec07c",
+    "#fe8019"
+  ],
+  "primary": "#fabd2f",
+  "onPrimary": "#1d2021",
+  "faint": "#a89984",
+  "muted": "#bdae93",
+  "sidebar": "#32302f",
+  "disabled": "#7c6f64"
+}

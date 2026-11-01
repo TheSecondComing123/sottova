@@ -1,0 +1,23 @@
+{
+  "name": "Rose Pine",
+  "side": "dark",
+  "source": "https://rosepinetheme.com/palette/ingredients/",
+  "bg": "#191724",
+  "raised": "#1f1d2e",
+  "hover": "#26233a",
+  "border": "#403d52",
+  "decor": "#524f67",
+  "text": "#e0def4",
+  "accents": [
+    "#eb6f92",
+    "#f6c177",
+    "#ebbcba",
+    "#31748f",
+    "#9ccfd8",
+    "#c4a7e7"
+  ],
+  "primary": "#f6c177",
+  "onPrimary": "#191724",
+  "faint": "#908caa",
+  "muted": "#9d99b6"
+}

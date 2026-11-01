@@ -1,0 +1,31 @@
+{
+  "name": "Catppuccin Macchiato",
+  "side": "dark",
+  "source": "https://github.com/catppuccin/palette/blob/main/palette.json",
+  "bg": "#24273a",
+  "raised": "#1e2030",
+  "hover": "#363a4f",
+  "border": "#494d64",
+  "decor": "#5b6078",
+  "text": "#cad3f5",
+  "accents": [
+    "#f4dbd6",
+    "#f0c6c6",
+    "#f5bde6",
+    "#c6a0f6",
+    "#ed8796",
+    "#ee99a0",
+    "#f5a97f",
+    "#eed49f",
+    "#a6da95",
+    "#8bd5ca",
+    "#91d7e3",
+    "#7dc4e4",
+    "#8aadf4",
+    "#b7bdf8"
+  ],
+  "primary": "#f5a97f",
+  "onPrimary": "#181926",
+  "faint": "#a5adcb",
+  "muted": "#b8c0e0"
+}

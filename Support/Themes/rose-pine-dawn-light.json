@@ -1,0 +1,21 @@
+{
+  "name": "Rose Pine Dawn",
+  "side": "light",
+  "source": "https://rosepinetheme.com/palette/ingredients/",
+  "bg": "#faf4ed",
+  "raised": "#fffaf3",
+  "hover": "#f2e9e1",
+  "border": "#dfdad9",
+  "decor": "#cecacd",
+  "text": "#464261",
+  "accents": [
+    "#b4637a",
+    "#286983",
+    "#56949f",
+    "#907aa9"
+  ],
+  "primary": "#286983",
+  "onPrimary": "#faf4ed",
+  "faint": "#6a6684",
+  "muted": "#5d5978"
+}

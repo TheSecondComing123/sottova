@@ -1,0 +1,23 @@
+{
+  "name": "Rose Pine Moon",
+  "side": "dark",
+  "source": "https://rosepinetheme.com/palette/ingredients/",
+  "bg": "#232136",
+  "raised": "#2a273f",
+  "hover": "#393552",
+  "border": "#44415a",
+  "decor": "#56526e",
+  "text": "#e0def4",
+  "accents": [
+    "#eb6f92",
+    "#f6c177",
+    "#ea9a97",
+    "#3e8fb0",
+    "#9ccfd8",
+    "#c4a7e7"
+  ],
+  "primary": "#f6c177",
+  "onPrimary": "#232136",
+  "faint": "#a29eba",
+  "muted": "#b8b4ce"
+}

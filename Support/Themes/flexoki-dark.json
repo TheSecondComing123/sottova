@@ -1,0 +1,25 @@
+{
+  "name": "Flexoki",
+  "side": "dark",
+  "source": "https://stephango.com/flexoki",
+  "bg": "#100f0f",
+  "raised": "#1c1b1a",
+  "hover": "#282726",
+  "border": "#343331",
+  "decor": "#575653",
+  "text": "#cecdc3",
+  "accents": [
+    "#d14d41",
+    "#da702c",
+    "#d0a215",
+    "#879a39",
+    "#3aa99f",
+    "#4385be",
+    "#8b7ec8",
+    "#ce5d97"
+  ],
+  "primary": "#da702c",
+  "onPrimary": "#100f0f",
+  "faint": "#b7b5ac",
+  "muted": "#b7b5ac"
+}

@@ -1,0 +1,25 @@
+{
+  "name": "Tokyo Night",
+  "side": "dark",
+  "source": "https://github.com/folke/tokyonight.nvim/blob/main/lua/tokyonight/colors/night.lua",
+  "bg": "#1a1b26",
+  "raised": "#16161e",
+  "hover": "#292e42",
+  "border": "#3b4261",
+  "decor": "#545c7e",
+  "text": "#c0caf5",
+  "accents": [
+    "#f7768e",
+    "#ff9e64",
+    "#e0af68",
+    "#9ece6a",
+    "#73daca",
+    "#7dcfff",
+    "#7aa2f7",
+    "#bb9af7"
+  ],
+  "primary": "#7aa2f7",
+  "onPrimary": "#16161e",
+  "faint": "#a9b1d6",
+  "muted": "#a9b1d6"
+}

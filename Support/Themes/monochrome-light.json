@@ -1,0 +1,21 @@
+{
+  "name": "Monochrome",
+  "side": "light",
+  "source": "built in",
+  "bg": "#f5f5f5",
+  "raised": "#ffffff",
+  "hover": "#eaeaea",
+  "border": "#e0e0e0",
+  "decor": "#a5a5a5",
+  "text": "#0a0a0a",
+  "accents": [],
+  "primary": "#0a0a0a",
+  "onPrimary": "#f5f5f5",
+  "faint": "#696969",
+  "muted": "#525252",
+  "covers": [
+    "#ffffff",
+    "#f0f0f0",
+    "#e6e6e6"
+  ]
+}
