@@ -734,7 +734,7 @@ public final class Controller {
         }
         // paused counts as not playing: often it's only how a relaunch or a restart left things
         // not before there's a catalog, which it needs to find its songs
-        if hourPlaying == nil, let current, let window = open, status == .idle || status == .paused,
+        if hourPlaying == nil, let current, let window = open, status == .idle || status == .paused && !alarmTrying,
            current.lastFired != window.start, !catalog.songsByID.isEmpty {
             let songs = rowSongs(begin(current, at: window.start))
             if songs.isEmpty {

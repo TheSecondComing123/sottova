@@ -1013,4 +1013,47 @@ struct AlarmRunTests {
         let again = try await relaunched(storage)
         #expect(again.status == .playing)
     }
+
+    /// A row whose window is open now.
+    private func openNow(_ album: Album) -> Alarm {
+        let ago = Date.now - 60
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: ago)
+        var hour = Alarm(source: album.id, name: "Hour", hour: parts.hour!, minute: parts.minute!, weekdays: Set(1...7))
+        hour.whileHere = true
+        hour.minutes = 30
+        return hour
+    }
+
+    @Test func anHourDoesntTakeOverFromAnAlarmStillTrying() async throws {
+        let (c, album, engine) = try await controller()
+        c.presence = { _ in nil }
+        try await tryingToGoOn(album, c, engine, due: .now)
+        let row = try #require(c.alarms.first)
+        c.addAlarm(openNow(album))
+        c.checkHours()
+        #expect(c.status == .paused)
+        c.startEngine = { try $0.start() }
+        for _ in 0..<400 where c.status != .playing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(c.status == .playing)
+        #expect(c.machine.rise != nil)
+        #expect(c.alarms.first { $0.id == row.id } != nil)
+    }
+
+    /// Its alarm has given up: paused is free again, as it is for anything else.
+    @Test func anHourStartsOverAnAlarmThatGaveUp() async throws {
+        let (c, album, _) = try await controller()
+        c.presence = { _ in nil }
+        c.retryWait = .milliseconds(1)
+        c.play(album.songs)
+        c.toggle()
+        let row = alarm(album)
+        c.addAlarm(row)
+        failing(c)
+        c.fire(row.id, due: .now)
+        for _ in 0..<1000 where c.problem?.contains("ten minutes") != true { try await Task.sleep(for: .milliseconds(10)) }
+        c.startEngine = { try $0.start() }
+        c.addAlarm(openNow(album))
+        c.checkHours()
+        #expect(c.status == .resting)
+    }
 }
