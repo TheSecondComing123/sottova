@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shoots one window of the isolated copy, then quits it. Nothing it runs can reach real data, wakes or sound.
-# Usage: scripts/harness.sh <scratch-path> <state> <out.png> [-palette gruvbox] [-shotRoute alarms] [-shotWidth 855]
+# Usage: scripts/harness.sh <scratch-path> <state> <out.png> [-palette gruvbox] [-shotRoute alarms] [-shotWidth 855] [-shotAppearance light]
 # States: empty idle playing paused fading rising silence live. EXTRA_SWIFT=-DNEWLOOK builds the new look.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -18,6 +18,7 @@ cp "$scratch/debug/Sottova" "$app/Contents/MacOS/SottovaShot"
 cp Support/Info.plist "$plist"
 cp Support/AppIcon.icns "$app/Contents/Resources/"
 cp -R Support/Icons "$app/Contents/Resources/"
+cp -R Support/Themes "$app/Contents/Resources/"
 $buddy -c "Delete :CFBundleURLTypes" -c "Set :CFBundleExecutable SottovaShot" -c "Set :CFBundleName SottovaShot" \
     -c "Set :CFBundleIdentifier com.alanbagel.sottova.shot" "$plist"
 codesign -f -s - "$app" 2>/dev/null

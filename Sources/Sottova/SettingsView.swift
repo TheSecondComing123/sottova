@@ -573,6 +573,11 @@ private struct ThemePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PageTitle(title: "Theme", detail: "light or dark still follows the system")
+            #if NEWLOOK
+            ForEach(Theme.themes.rejected, id: \.file) { rejected in
+                Text("\(rejected.file) was skipped: \(rejected.why).").role(.small).foregroundStyle(Theme.faint).padding(.bottom, 8)
+            }
+            #endif
             // a plain grid, not a lazy one: lazy cells arrive a pass after the page, so it showed up empty first
             Grid(horizontalSpacing: 16, verticalSpacing: 16) {
                 ForEach(Array(stride(from: 0, to: Palette.all.count, by: 2)), id: \.self) { start in

@@ -6,7 +6,11 @@ import SottovaCore
 /// with text tokens raised to pass WCAG AA at 11–13 pt, on a hovered row too.
 enum Theme {
     /// Read every time a color draws; the scenes re-key on the palette's id, so a change rebuilds them and shows at once.
+    #if NEWLOOK
+    nonisolated(unsafe) static var palette = slotPalette()
+    #else
     nonisolated(unsafe) static var palette = Palette.named(UserDefaults.standard.string(forKey: "palette"))
+    #endif
 
     static let background = token(\.background)
     static let raised = token(\.raised)
@@ -55,7 +59,11 @@ enum Theme {
     }
 
     static func select(_ id: String) {
+        #if NEWLOOK
+        palette = slotPalette(id)
+        #else
         palette = Palette.named(id)
+        #endif
     }
 
     static let quick = curve(0.2)

@@ -80,6 +80,9 @@ struct SottovaApp: App {
                 .toolbar(removing: .title)
                 .toolbarBackground(.hidden, for: .windowToolbar)
                 .containerBackground(Theme.background, for: .window)
+                #if NEWLOOK
+                .onAppear(perform: Theme.reloadThemes)
+                #endif
         }
         .windowResizability(.contentSize)
     }

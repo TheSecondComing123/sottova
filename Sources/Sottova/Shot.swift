@@ -12,6 +12,7 @@ struct ShotReady: ViewModifier {
     func body(content: Content) -> some View {
         content.task {
             let defaults = UserDefaults.standard
+            if defaults.string(forKey: "shotAppearance") == "light" { NSApp.appearance = NSAppearance(named: .aqua) }
             try? await controller.shotEnter(defaults.string(forKey: "shotState") ?? "idle",
                                             covers: defaults.string(forKey: "shotCovers").map { URL(filePath: $0) })
             let routes: [String: Route] = ["home": .home, "songs": .songs, "collections": .collections, "artists": .artists, "alarms": .alarms, "shelf": .shelf]
