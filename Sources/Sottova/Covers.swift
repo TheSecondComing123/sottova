@@ -98,9 +98,9 @@ struct CoverPicker: View {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
-                .buttonStyle(QuietButton())
+                .buttonStyle(SecondaryStyle())
                 Button(saving ? "Saving…" : "Use cover", action: save)
-                    .buttonStyle(InvertedButton())
+                    .buttonStyle(PrimaryStyle())
                     // while typing a search, return searches
                     .keyboardShortcut(typing ? nil : .defaultAction)
                     .disabled((picked == nil && file == nil) || saving)

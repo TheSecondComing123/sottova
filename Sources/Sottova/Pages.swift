@@ -34,37 +34,6 @@ struct PageScroll<Content: View>: View {
     }
 }
 
-/// What's left on the old names until the switch renames them: `.btn.def`, the single next action.
-struct InvertedButton: ButtonStyle {
-    @Environment(\.isEnabled) private var enabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .role(.body)
-            .foregroundStyle(enabled ? Theme.onPrimary : Theme.disabled)
-            .padding(.horizontal, 11)
-            .frame(height: 24)
-            .background(enabled ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
-            .contentShape(.rect)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-    }
-}
-
-/// `.btn`.
-struct QuietButton: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .role(.body)
-            .foregroundStyle(Theme.text)
-            .padding(.horizontal, 11)
-            .frame(height: 24)
-            .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
-            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
-            .contentShape(.rect)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-    }
-}
-
 /// A list page with nothing in it yet: what will appear, and the one way to get it there.
 struct EmptyLibrary: View {
     let what: String
@@ -87,10 +56,10 @@ struct EmptyLibrary: View {
             if controller.pendingAnalysis == 0 {
                 HStack(spacing: 12) {
                     Button("Add a music folder", action: controller.chooseFolders)
-                        .buttonStyle(InvertedButton())
+                        .buttonStyle(PrimaryStyle())
                     // no music yet: something to hear in a minute or two, legally
                     Button("Get free music") { router.go(to: .shelf) }
-                        .buttonStyle(QuietButton())
+                        .buttonStyle(SecondaryStyle())
                 }
             }
         }

@@ -148,3 +148,12 @@ struct SilenceSheet: View {
         }
     }
 }
+
+/// A preset to make, or the one it changes.
+struct PresetEdit: Identifiable {
+    let id = UUID()
+    var preset: SottovaCore.Settings
+    var replacing: String?
+    /// Silence for one collection rather than a preset: its name, and where it goes.
+    var collection: (name: String, apply: (SottovaCore.Settings) -> Void)?
+}

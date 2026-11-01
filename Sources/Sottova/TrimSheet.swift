@@ -57,14 +57,14 @@ struct TrimSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(QuietButton())
+                    .buttonStyle(SecondaryStyle())
                 Button("Save") {
                     // a whole file isn't a trim; an end at the file's end is kept open, in case the file is replaced
                     let whole = start < 0.05 && end > length - 0.05
                     controller.setTrim(whole ? nil : Trim(start: start, end: end > length - 0.05 ? nil : end), for: song.id)
                     dismiss()
                 }
-                .buttonStyle(InvertedButton())
+                .buttonStyle(PrimaryStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(length == 0)
             }

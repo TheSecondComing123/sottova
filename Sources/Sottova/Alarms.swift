@@ -201,13 +201,13 @@ struct AlarmSheet: View {
             HStack(spacing: 12) {
                 if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
-                        .buttonStyle(QuietButton())
+                        .buttonStyle(SecondaryStyle())
                         .help(alarm.whileHere ? "a few seconds at its volume" : "a few seconds at the volume it rises to")
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(QuietButton())
+                    .buttonStyle(SecondaryStyle())
                 let setting = "Set"
                 Button(editing ? "Save" : kind == .whileHere ? "Set hours" : setting) {
                     guard let alarm else { return }
@@ -220,7 +220,7 @@ struct AlarmSheet: View {
                         SystemWake.shared.schedule(for: controller.alarms)
                     }
                 }
-                .buttonStyle(InvertedButton())
+                .buttonStyle(PrimaryStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(alarm == nil)
             }
@@ -266,7 +266,7 @@ struct AlarmSheet: View {
             .disabled(on?.wrappedValue == false)
             Spacer(minLength: 0)
             if let on {
-                Button { on.wrappedValue.toggle() } label: { SwitchKnob(on: on.wrappedValue) }
+                Button { on.wrappedValue.toggle() } label: { CheckBox(on: on.wrappedValue) }
                     .buttonStyle(PressStyle())
                     .help(on.wrappedValue ? "play on instead" : "stop at a set time, easing down over the last three minutes")
                     .accessibilityRepresentation { Toggle("Stops", isOn: on) }
@@ -423,7 +423,7 @@ private struct KnobToggle: ToggleStyle {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
                 Spacer(minLength: 16)
-                SwitchKnob(on: configuration.isOn)
+                CheckBox(on: configuration.isOn)
             }
             .contentShape(.rect)
         }

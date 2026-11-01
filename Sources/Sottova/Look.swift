@@ -234,19 +234,108 @@ struct ThemeCheckbox: ToggleStyle {
             HStack(spacing: 16) {
                 configuration.label
                 Spacer(minLength: 0)
-                ZStack {
-                    if configuration.isOn {
-                        RoundedRectangle(cornerRadius: 3.5).fill(Theme.muted)
-                        Ph.check.icon(.bold, size: 10).foregroundStyle(Theme.background)
-                    } else {
-                        RoundedRectangle(cornerRadius: 3.5).strokeBorder(Theme.frame, lineWidth: 1)
-                    }
-                }
-                .frame(width: 14, height: 14)
+                CheckBox(on: configuration.isOn)
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
+    }
+}
+
+/// `.check`'s box, from the mock.
+struct CheckBox: View {
+    let on: Bool
+
+    var body: some View {
+        ZStack {
+            if on {
+                RoundedRectangle(cornerRadius: 3.5).fill(Theme.muted)
+                Ph.check.icon(.bold, size: 10).foregroundStyle(Theme.background)
+            } else {
+                RoundedRectangle(cornerRadius: 3.5).strokeBorder(Theme.frame, lineWidth: 1)
+            }
+        }
+        .frame(width: 14, height: 14)
+    }
+}
+
+/// `.btn.def` as a style, for buttons with their own label and shortcut.
+struct PrimaryStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .role(.body)
+            .foregroundStyle(enabled ? Theme.onPrimary : Theme.disabled)
+            .padding(.horizontal, 11)
+            .frame(height: 24)
+            .background(enabled ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
+            .contentShape(.rect)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
+/// `.btn` as a style.
+struct SecondaryStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .role(.body)
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 11)
+            .frame(height: 24)
+            .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
+            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
+            .contentShape(.rect)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
+/// − value + in one bordered strip, for whole numbers.
+struct ValueStepper: View {
+    var label: String?
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let unit: String
+    var step: Double = 1
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if let label {
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .padding(.leading, 12)
+                    .padding(.trailing, 8)
+            }
+            step(.minus, by: -step)
+            Text("\(Int(value)) \(unit)")
+                .font(.system(size: 13, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(Theme.text)
+                .frame(minWidth: 64)
+                .contentTransition(.numericText(value: value))
+            step(.plus, by: step)
+        }
+        .frame(height: 32)
+        .background(Theme.raised, in: .rect(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+        .accessibilityRepresentation {
+            Stepper("\(label ?? "") \(Int(value)) \(unit)", value: $value, in: range, step: step)
+        }
+    }
+
+    private func step(_ icon: Ph, by delta: Double) -> some View {
+        Button {
+            withAnimation(Theme.quick) { value = min(max(value + delta, range.lowerBound), range.upperBound) }
+        } label: {
+            icon.icon(.bold, size: 12)
+                .foregroundStyle(Theme.muted)
+                .frame(width: 32, height: 32)
+                .hoverable(radius: 8)
+        }
+        .buttonRepeatBehavior(.enabled)
+        .buttonStyle(PressStyle())
+        .disabled(delta < 0 ? value <= range.lowerBound : value >= range.upperBound)
     }
 }
