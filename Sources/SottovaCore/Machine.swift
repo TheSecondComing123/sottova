@@ -14,6 +14,8 @@ public struct Track: Equatable, Sendable {
     var skipping = false
     /// Where the last seek landed: from there the sound comes back up from silence, never starting loud.
     var seekedAt: Double?
+    /// What the screen showed when a skip started the fall, so it carries on from there.
+    var visualFrom: Visual?
 
     /// A seek's own fade-in: short, so trying a few spots isn't seconds of quiet each time.
     static let seekFade = 1.5
@@ -352,6 +354,7 @@ struct Machine: Sendable {
             return hasAudio ? [.resumePlayback] : []
 
         case (.skip, .track(var track)) where !track.skipping:
+            track.visualFrom = track.visual(at: track.elapsed)
             track.outFrom = track.gain(settings.curve)
             track.outStart = track.elapsed
             track.outLength = min(1, track.duration - track.elapsed)

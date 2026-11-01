@@ -1,7 +1,7 @@
 #!/bin/bash
 # Shoots one window of the isolated copy, then quits it. Nothing it runs can reach real data, wakes or sound.
 # Usage: scripts/harness.sh <scratch-path> <state> <out.png> [-palette gruvbox] [-shotRoute alarms] [-shotWidth 855] [-shotAppearance light]
-# States: empty idle playing paused fading rising silence live. EXTRA_SWIFT=-DNEWLOOK builds the new look.
+# States: the list in Controller.shotEnter. EXTRA_SWIFT=-DNEWLOOK builds the new look.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -11,10 +11,12 @@ app="$scratch/SottovaShot.app"
 plist="$app/Contents/Info.plist"
 buddy=/usr/libexec/PlistBuddy
 
-swift build --scratch-path "$scratch" -Xswiftc -DSHOT ${EXTRA_SWIFT:+-Xswiftc $EXTRA_SWIFT} >&2
+# CONFIG=release for measuring
+config=${CONFIG:-debug}
+swift build -c "$config" --scratch-path "$scratch" -Xswiftc -DSHOT ${EXTRA_SWIFT:+-Xswiftc $EXTRA_SWIFT} >&2
 rm -rf "${app:?}"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp "$scratch/debug/Sottova" "$app/Contents/MacOS/SottovaShot"
+cp "$scratch/$config/Sottova" "$app/Contents/MacOS/SottovaShot"
 cp Support/Info.plist "$plist"
 cp Support/AppIcon.icns "$app/Contents/Resources/"
 cp -R Support/Icons "$app/Contents/Resources/"
@@ -32,6 +34,7 @@ world() {
 storage=$(mktemp -d "${TMPDIR:-/private/tmp}/sottova-shot.XXXXXX")
 stop() {
     pkill -x SottovaShot || true
+    [[ -n "${TICKS:-}" && -f "$storage/ticks" ]] && cp "$storage/ticks" "$TICKS"
     rm -rf "${storage:?}"
 }
 trap stop EXIT
@@ -58,7 +61,11 @@ done
 [[ -s "$storage/ready" ]] || { echo "no window after 30 s" >&2; exit 1; }
 check
 screencapture -x -o -l "$(cat "$storage/ready")" "$out"
-pkill -x SottovaShot
+# KEEP=1: leave it up to be watched, still checked, until you quit it or press ctrl-c
+if [[ -n "${KEEP:-}" ]]; then
+    while pgrep -qx SottovaShot; do check; sleep 2; done
+fi
+pkill -x SottovaShot || true
 for _ in {1..40}; do pgrep -qx SottovaShot || break; sleep 0.25; done
 check
 if pgrep -qx SottovaShot; then echo "the copy won't quit" >&2; exit 1; fi

@@ -13,6 +13,22 @@ public enum ShotEnv {
         return root
     }()
 
+    /// What the screens take the time to be; the machine runs on the real clock.
+    nonisolated(unsafe) public static var now: Date?
+
+    nonisolated(unsafe) private static var worstTick = Duration.zero
+    nonisolated(unsafe) private static var fastTicks = 0
+
+    /// The longest wait between ticks while a gain moves, kept in a file for the CPU measure.
+    static func noteTick(_ gap: Duration, fast: Bool) {
+        guard fast else { return }
+        worstTick = max(worstTick, gap)
+        fastTicks += 1
+        if fastTicks % 100 == 0 {
+            try? Data("\(fastTicks) ticks, worst \(worstTick)\n".utf8).write(to: root.appending(path: "ticks"))
+        }
+    }
+
     public static var storage: URL { folder("Application Support") }
     public static var music: URL { folder("Music") }
     public static var artwork: URL { folder("Artwork") }

@@ -254,6 +254,9 @@ public final class Controller {
     private func catchUp() {
         guard let lastTick else { return }
         let now = ContinuousClock.now
+        #if SHOT
+        ShotEnv.noteTick(now - lastTick, fast: tickInterval <= .milliseconds(10))
+        #endif
         self.lastTick = now
         advance((now - lastTick) / .seconds(1))
     }
@@ -261,6 +264,7 @@ public final class Controller {
     /// A skip or pause mid-hold must not wait for the slow tick: bring the clock up to now, act, then restart the clock.
     private func command(_ event: Machine.Event) {
         catchUp()
+        if case .skip = event { skips += 1 }
         send(event)
         if ticker != nil {
             startTicker()
@@ -1573,6 +1577,9 @@ public final class Controller {
     /// Bumped on every seek, so views drawing the unobserved `track` know to start over.
     public private(set) var seeks = 0
 
+    /// Bumped on every skip: a skip changes the unobserved `track`'s fade, with status and song as they were.
+    public private(set) var skips = 0
+
     /// Jumps within the playing piece; the sound comes back up from silence over a second and a half.
     public func seek(to seconds: Double) {
         command(.seek(to: seconds))
@@ -2198,6 +2205,11 @@ public final class Controller {
 /// Seeds fake data and puts the real machine in a state. Time only moves by `advance`, so without `live` a picture of a
 /// fade holds still; there's no Now Playing and no scan.
 extension Controller {
+    public var shotNow: Date? {
+        get { ShotEnv.now }
+        set { ShotEnv.now = newValue }
+    }
+
     public static func shot() -> Controller {
         let engine = AVAudioEngine()
         do {
@@ -2209,35 +2221,98 @@ extension Controller {
     }
 
     public func shotEnter(_ state: String, covers: URL?) async throws {
-        guard ["empty", "idle", "playing", "paused", "fading", "rising", "silence", "live"].contains(state) else { fatalError("no such state: \(state)") }
+        guard ["empty", "idle", "playing", "paused", "fading", "rising", "silence", "live", "arriving", "pausedSilence", "noCover", "longTitle", "easing", "away", "call", "busy", "media", "noAudio", "reading", "missed", "dayDone", "nothingYet", "nothingDay", "preview", "liveSilence"].contains(state) else { fatalError("no such state: \(state)") }
         keepsMacAwake = false
         loadTrims()
         loadAlarms()
         if state == "empty" { return }
         try await seed(covers: covers)
         apply(Settings.presets.first { $0.name == "Sparse" }!)
+        let overworld = catalog.albums.first { $0.title == "Overworld" }!
+        let row = alarms.first { $0.name == "Overworld" }!.id
+        shotNow = Self.shotMonday(hour: 16)
         switch state {
-        case "playing", "paused", "fading", "silence", "live":
-            play(catalog.albums.first { $0.title == "Overworld" }!.songs)
+        case "playing", "paused", "fading", "silence", "live", "arriving", "pausedSilence", "away", "call", "busy", "media", "noAudio", "preview":
+            play(overworld.songs, source: overworld.id)
+            // the live ticker checks hours against the real clock, which would end this row
+            if state != "live" && state != "preview" { hourPlaying = row }
             let track = track!
             switch state {
-            case "fading": advance(track.outStart + track.outLength * 0.4)
-            case "silence":
+            case "fading": advance(track.outStart + track.fallLength * 0.5)
+            case "silence", "pausedSilence", "away", "call", "busy", "media", "noAudio":
                 advance(track.outStart)
                 while status != .resting { advance(0.05) }
                 advance(1)
+            case "arriving": advance(track.riseLength * 0.4)
             default: advance(track.fadeIn + 60)
             }
-            if state == "paused" { toggle() }
+            if state == "paused" || state == "pausedSilence" { toggle() }
+            switch state {
+            case "away": hold = .away
+            case "call": hold = .call
+            case "busy": hold = .busy
+            case "media": hold = .media
+            case "noAudio": retrying = "shot"
+            default: break
+            }
             if state == "live" {
+                lastTick = .now
+                startTicker()
+            }
+            if state == "preview" {
+                // the real fall, silence and rise in under a minute, through the real machine and clock
+                var quick = settings
+                (quick.gapMin, quick.gapMax) = (12, 12)
+                settings = quick
+                advance(track.outStart - 6 - track.elapsed)
                 lastTick = .now
                 startTicker()
             }
         case "rising":
             fire(alarms.first { $0.name == "Lauds" }!.id, due: .now)
-            advance(track!.fadeIn * 0.4)
+            advance(track!.fadeIn + 10)
+            shotNow = Self.shotMonday(hour: 7, minute: 3)
+        case "noCover":
+            let shellac = catalog.albums.first { $0.title == "Shellac" }!
+            play(shellac.songs, source: shellac.id)
+            advance(track!.fadeIn + 60)
+        case "longTitle":
+            let chopin = catalog.albums.first { $0.title == "Perfect Chopin" }!
+            play(chopin.songs, from: 2, source: chopin.id)
+            advance(track!.fadeIn + 60)
+        case "easing":
+            let compline = catalog.albums.first { $0.title == "Compline" }!
+            play(compline.songs, source: compline.id)
+            advance(track!.fadeIn + 60)
+            sleep(minutes: 1)
+            advance(30)
+        case "reading":
+            catalog = Catalog()
+            library.entries.keys.sorted().prefix(9).forEach { library.entries[$0]?.loudness = nil }
+            tracks = library.playable.map { URL(filePath: $0) }
+            pendingAnalysis = library.pending.count
+        case "missed":
+            changeAlarm(alarms.first { $0.name == "Lauds" }!.id) { $0.missed = Alarm.Missed(at: Self.shotMonday(hour: 7, minute: 2), why: .off) }
+            shotNow = Self.shotMonday(hour: 9)
+        case "nothingDay": alarms.map(\.id).forEach(removeAlarm)
+        case "liveSilence":
+            var long = settings
+            (long.gapMin, long.gapMax) = (3600, 3600)
+            settings = long
+            play(overworld.songs, source: overworld.id)
+            advance(track!.outStart)
+            while status != .resting { advance(0.05) }
+            lastTick = .now
+            startTicker()
+        case "nothingYet": shotNow = Self.shotMonday(hour: 9)
+        case "dayDone": shotNow = Self.shotMonday(hour: 22)
         default: break
         }
+    }
+
+    /// A Monday, so every seeded row is on.
+    private static func shotMonday(hour: Int, minute: Int = 0) -> Date {
+        Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 2, hour: hour, minute: minute))!
     }
 
     private func seed(covers: URL?) async throws {
@@ -2246,14 +2321,15 @@ extension Controller {
             ("Overworld", "Komiku", "overworld", ["The road we use to travel when we were kids", "A forest for you and me", "green world"]),
             ("Compline", "Various", "compline", ["Dusk", "Nunc dimittis", "Salve Regina"]),
             ("Counterpoint", "Kimiko Ishizaka", "counterpoint", ["Contrapunctus 1", "Contrapunctus 2"]),
-            ("Perfect Chopin", "Musopen", "perfectchopin", ["Nocturne in E-flat", "Ballade No. 1"]),
+            ("Perfect Chopin", "Musopen", "perfectchopin", ["Nocturne in E-flat", "Ballade No. 1", "Piano Sonata No. 2 in B-flat minor, Op. 35 \u{201C}Funeral March\u{201D}: III. Marche funèbre, Lento, live from the Warsaw Philharmonic"]),
             ("Shellac", "Various", nil, ["Blue Skies", "Paper Moon"]),
         ]
         // the lowest rate a file can have: 15 pieces of 3 to 5 minutes come to about 45 MB
         let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 8_000, channels: 1, interleaved: false)!
         let saved: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 8_000, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16]
         for set in sets {
-            let cover = set.cover.flatMap { name in covers.flatMap { try? Data(contentsOf: $0.appending(path: "\(name).jpg")) } }.flatMap { artwork?.save($0) }
+            let art = set.album == "Overworld" ? UserDefaults.standard.string(forKey: "shotArt") ?? set.cover : set.cover
+            let cover = art.flatMap { name in covers.flatMap { try? Data(contentsOf: $0.appending(path: "\(name).jpg")) } }.flatMap { artwork?.save($0) }
             let folder = ShotEnv.music.appending(path: set.album)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             for (i, title) in set.titles.enumerated() {

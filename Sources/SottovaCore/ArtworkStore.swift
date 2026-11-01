@@ -5,6 +5,12 @@ import UniformTypeIdentifiers
 
 /// Cover art on disk as JPEGs named by content hash, so every track on an album shares one file.
 public final class ArtworkStore: Sendable {
+    #if NEWLOOK
+    // Now's cover is 400 pt
+    private static let savedPixels = 800
+    #else
+    private static let savedPixels = 600
+    #endif
     private let directory: URL
     // NSCache is thread-safe but isn't marked Sendable
     private nonisolated(unsafe) let cache = NSCache<NSString, CGImage>()
@@ -26,7 +32,7 @@ public final class ArtworkStore: Sendable {
         let url = file(for: key)
         if FileManager.default.fileExists(atPath: url.path) { return key }
         guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
-              let image = thumbnail(source, maxPixel: 600)
+              let image = thumbnail(source, maxPixel: Self.savedPixels)
         else { return nil }
         let jpeg = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(jpeg, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
