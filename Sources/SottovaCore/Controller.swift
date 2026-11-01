@@ -2264,7 +2264,7 @@ extension Controller {
                 var quick = settings
                 (quick.gapMin, quick.gapMax) = (12, 12)
                 settings = quick
-                advance(track.outStart - 6 - track.elapsed)
+                advance(self.track!.outStart - 15 - self.track!.elapsed)
                 lastTick = .now
                 startTicker()
             }

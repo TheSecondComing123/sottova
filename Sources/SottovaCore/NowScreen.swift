@@ -41,7 +41,7 @@ public struct NowScreen: Equatable, Sendable {
 
 extension Controller {
     /// `silent`: the screen's own fall has ended, which comes before the audio's. Polled, like the state it reads.
-    public func nowScreen(now: Date = .now, silent: Bool = false, wakeScheduled: Bool = false) -> NowScreen {
+    public func nowScreen(now: Date = .now, silent: Bool = false) -> NowScreen {
         if catalog.albums.isEmpty {
             if pendingAnalysis > 0, let folder = folders.first {
                 let done = max(0, tracks.count - pendingAnalysis)
@@ -53,7 +53,7 @@ extension Controller {
             return NowScreen(kind: .silence, title: "No sound output", sub: "Sottova can't start the audio device. It keeps trying.", action: .openSound)
         }
         guard status != .idle else {
-            let quiet = dayPlan(now: now).quiet(wakeScheduled: wakeScheduled)
+            let quiet = dayPlan(now: now).quiet()
             return NowScreen(kind: .quiet, title: quiet.headline, sub: quiet.line, action: alarms.contains(where: \.on) ? .play : .openDay)
         }
         if silent || inSilence || status == .resting {

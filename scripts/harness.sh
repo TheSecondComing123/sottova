@@ -50,8 +50,8 @@ before=$(world)
 defaults delete com.alanbagel.sottova.shot 2>/dev/null || true
 
 covers=(); [[ -d notes/design/covers ]] && covers=(-shotCovers "$PWD/notes/design/covers")
-# -g: never takes focus from whatever the owner is doing
-open -g -n --env SOTTOVA_SHOT_STORAGE="$storage" "$app" --args -shotState "$state" ${covers[@]+"${covers[@]}"} "$@"
+# -g: never takes focus from whatever the owner is doing. App Nap stops a silent app in the background from ticking
+open -g -n --env SOTTOVA_SHOT_STORAGE="$storage" "$app" --args -NSAppSleepDisabled YES -shotState "$state" ${covers[@]+"${covers[@]}"} "$@"
 for _ in {1..120}; do
     [[ -s "$storage/ready" ]] && break
     pgrep -qx SottovaShot || { sleep 0.5; pgrep -qx SottovaShot || { echo "the copy exited" >&2; exit 1; }; }

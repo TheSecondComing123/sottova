@@ -107,7 +107,7 @@ struct NowPage: View {
         }
     }
 
-    /// Runs again whenever something observed changes. Reads the unobserved track on its own clock: every frame while
+    /// Runs again whenever something observed changes. Reads the unobserved track on its own clock: 30 times a second while
     /// a cover moves, once a second in a hold for the time left, and hardly at all in a settled silence.
     private func follow() async {
         await showArt()
@@ -141,14 +141,14 @@ struct NowPage: View {
             }
             guard visible else { return }
             let holding = status == .playing && still.isFinite
-            let wait = still == 0 && status != .paused ? 1.0 / 60 : holding ? min(still, 1) : 30
+            // `elapsed` is up to half a second stale in a hold, so the fall's first frame has to be looked for
+            let wait = status != .paused && still < 1 ? 1.0 / 30 : holding ? 1 : 30
             try? await Task.sleep(for: .seconds(wait))
         }
     }
 
     private func words(silent: Bool) {
-        let wake = SystemWake.shared.missing(for: controller.alarms).isEmpty
-        let next = controller.nowScreen(now: clock, silent: silent, wakeScheduled: wake)
+        let next = controller.nowScreen(now: clock, silent: silent)
         guard next != motion.screen else { return }
         if motion.screen.kind == .firstRun {
             withAnimation(Theme.curve(0.3)) { motion.screen = next }

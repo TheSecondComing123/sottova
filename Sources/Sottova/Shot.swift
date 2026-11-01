@@ -23,6 +23,15 @@ struct ShotReady: ViewModifier {
             let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
             let window = NSApp.windows.first { $0.title == "Sottova" }
             window?.setContentSize(NSSize(width: width, height: 800))
+            // a covered window stops drawing, by design, so it can't be measured: on top in every space, but nearly
+            // clear and letting clicks through, so whoever's at the Mac isn't interrupted
+            if defaults.bool(forKey: "shotFront") {
+                window?.level = .floating
+                window?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+                window?.ignoresMouseEvents = true
+                window?.alphaValue = 0.02
+                window?.orderFrontRegardless()
+            }
             try? await Task.sleep(for: .seconds(1))
             try? Data(String(window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
         }
