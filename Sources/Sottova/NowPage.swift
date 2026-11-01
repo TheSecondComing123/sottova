@@ -102,7 +102,7 @@ struct NowPage: View {
         case .skip: controller.skip()
         case .play: controller.play()
         case .openDay: navigate(.alarms)
-        case .openSound: NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Sound-Settings.extension")!)
+        case .openSound: NSWorkspace.shared.open(.soundSettings)
         }
     }
 

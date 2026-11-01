@@ -132,7 +132,7 @@ enum Ph: String {
             .accessibilityHidden(true)
     }
 
-    @MainActor private func image(_ weight: IconWeight) -> NSImage {
+    @MainActor func image(_ weight: IconWeight) -> NSImage {
         let name = "\(rawValue)-\(weight.rawValue)"
         if let cached = Self.images[name] { return cached }
         guard let url = Bundle.main.url(forResource: name, withExtension: "svg", subdirectory: "Icons"),

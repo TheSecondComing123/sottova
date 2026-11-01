@@ -71,6 +71,11 @@ struct ShotReady: ViewModifier {
             if let at = defaults.string(forKey: "shotMenuAt")?.split(separator: ",").compactMap({ Double($0) }), let window, let height = window.contentView?.bounds.height {
                 return shotMenu(at: NSPoint(x: at[0], y: height - at[1]), in: window)
             }
+            if defaults.bool(forKey: "shotStatusMenu"), let window {
+                shotMenuReady()
+                _ = AppDelegate.statusMenu?.item.menu?.popUp(positioning: nil, at: NSPoint(x: window.frame.midX, y: window.frame.midY), in: nil)
+                return
+            }
             #endif
             // a sheet is its own window: asking for one takes the picture of it alone
             try? Data(String((defaults.bool(forKey: "shotSheet") ? window?.attachedSheet?.windowNumber : nil) ?? window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))

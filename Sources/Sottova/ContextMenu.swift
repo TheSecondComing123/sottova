@@ -11,6 +11,8 @@ struct MenuEntry {
     }
 
     var title = ""
+    /// On the menu's right, dimmer.
+    var detail = ""
     var checked = false
     /// Off: shown dimmed and can't be chosen, so the menu keeps its shape.
     var enabled = true
@@ -50,7 +52,12 @@ extension NSMenu {
     @MainActor convenience init(_ entries: [MenuEntry]) {
         self.init()
         autoenablesItems = false
+        add(entries)
+    }
+
+    @MainActor func add(_ entries: [MenuEntry]) {
         for entry in entries {
+            let before = numberOfItems
             switch entry.kind {
             case .divider:
                 addItem(.separator())
@@ -67,7 +74,19 @@ extension NSMenu {
                 item.isEnabled = entry.enabled
                 addItem(item)
             }
+            if !entry.detail.isEmpty, numberOfItems > before { items[before].attributedTitle = entry.titleWithDetail }
         }
+    }
+}
+
+extension MenuEntry {
+    /// A right tab is how a menu lines up a column of its own.
+    fileprivate var titleWithDetail: NSAttributedString {
+        let style = NSMutableParagraphStyle()
+        style.tabStops = [NSTextTab(textAlignment: .right, location: 250)]
+        let text = NSMutableAttributedString(string: title + "\t", attributes: [.font: NSFont.menuFont(ofSize: 13), .paragraphStyle: style])
+        text.append(NSAttributedString(string: detail, attributes: [.font: NSFont.menuFont(ofSize: 13), .paragraphStyle: style, .foregroundColor: NSColor.secondaryLabelColor]))
+        return text
     }
 }
 
@@ -168,13 +187,19 @@ func shotMenu(at point: NSPoint, in window: NSWindow) {
     guard let view = window.contentView.flatMap(catcher),
           let event = NSEvent.mouseEvent(with: .rightMouseDown, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
                                          context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { return }
+    shotMenuReady()
+    view.open?(event, view)
+}
+
+/// Tracking a menu blocks, so this is set up before one opens.
+@MainActor
+func shotMenuReady() {
     let timer = Timer(timeInterval: 0.6, repeats: false) { _ in
         let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[CFString: Any]] ?? []
         let menu = windows.first { $0[kCGWindowOwnerPID] as? pid_t == getpid() && $0[kCGWindowLayer] as? Int ?? 0 > 0 }
         try? Data(String(menu?[kCGWindowNumber] as? Int ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
     }
     RunLoop.main.add(timer, forMode: .common)
-    view.open?(event, view)
 }
 #endif
 

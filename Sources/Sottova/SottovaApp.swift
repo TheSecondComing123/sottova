@@ -28,6 +28,11 @@ struct SottovaApp: App {
         #endif
         let controller = controller
         AppDelegate.controller = controller
+        #if NEWLOOK
+        let router = Router()
+        _router = State(initialValue: router)
+        AppDelegate.router = router
+        #endif
         Artwork.store = controller.artwork
         // M1 kept a single folder path in defaults
         if let path = UserDefaults.standard.string(forKey: "folder") {
@@ -81,6 +86,7 @@ struct SottovaApp: App {
         .handlesExternalEvents(matching: [])
         .commands { SottovaCommands(controller: controller, router: router) }
 
+        #if !NEWLOOK
         MenuBarExtra {
             Panel(controller: controller)
                 .id(palette)
@@ -89,6 +95,7 @@ struct SottovaApp: App {
             Image(systemName: controller.status.symbol)
         }
         .menuBarExtraStyle(.window)
+        #endif
 
         Settings {
             SettingsView(controller: controller)
@@ -154,6 +161,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Work from anywhere, with or without a window open, unlike SwiftUI's environment actions.
     @MainActor static var showMain: () -> Void = {}
     @MainActor static var showSettings: () -> Void = {}
+    @MainActor static var router: Router?
+    @MainActor static var statusMenu: StatusMenu?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            if let controller = Self.controller, let router = Self.router { Self.statusMenu = StatusMenu(controller: controller, router: router) }
+        }
+    }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ application: NSApplication) -> Bool { false }
 
