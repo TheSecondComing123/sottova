@@ -84,28 +84,6 @@ struct Artwork: View {
     }
 }
 
-/// The cover blurred into a wash behind a page header, so the page's only color still comes from the art.
-/// A 64 pt decode, blurred at that size and then scaled up: the same look as blurring the big layer, at a fraction of the pixels.
-struct ArtWash: View {
-    let key: String
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        GeometryReader { geo in
-            let side = max(geo.size.width, geo.size.height)
-            Artwork(key: key, size: 64, radius: 0)
-                .blur(radius: 60 * 64 / side, opaque: true)
-                .scaleEffect(side / 64, anchor: .topLeading)
-                .frame(width: side, height: side, alignment: .topLeading)
-                .opacity(colorScheme == .dark ? 0.45 : 0.3)
-                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                .clipped()
-        }
-        .mask(LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom))
-        .allowsHitTesting(false)
-    }
-}
-
 /// A cover set from type alone, low and to the left like a record sleeve with nothing to show but its name.
 private struct TypeCover: View {
     let title: String
