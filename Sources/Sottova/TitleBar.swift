@@ -146,6 +146,11 @@ struct Hairline: View {
     @State private var width: CGFloat = 0
     @State private var pointer: CGFloat?
     @State private var dragging = false
+    @State private var fill = HairlineFill()
+
+    private struct Key: Equatable {
+        let status: PlaybackStatus, seeks, skips: Int, visible: Bool, width: CGFloat
+    }
 
     private static let top: CGFloat = 48
 
@@ -154,19 +159,11 @@ struct Hairline: View {
     }
 
     var body: some View {
-        // paused, nothing ticks: a seek or a skip has to redraw it
-        let _ = (controller.seeks, controller.skips)
-        let status = controller.status
         ZStack(alignment: .topLeading) {
             Rectangle().fill(Theme.hairline).frame(height: 1).offset(y: 51 - Self.top)
-            TimelineView(.periodic(from: .now, by: status == .playing && visible ? 0.25 : 60)) { _ in
-                let (fill, level) = reading(status)
-                UnevenRoundedRectangle(bottomTrailingRadius: 1, topTrailingRadius: 1)
-                    .fill(status == .paused ? Theme.faint : Theme.primary)
-                    .frame(width: width * fill, height: 2)
-                    .opacity(level)
-                    .offset(y: 50 - Self.top)
-            }
+            FillHost(view: fill)
+                .frame(height: 2)
+                .offset(y: 50 - Self.top)
             Scrubber(changed: { fraction in
                 guard seekable != nil else { return }
                 dragging = true
@@ -200,6 +197,16 @@ struct Hairline: View {
         .offset(y: Self.top)
         .frame(maxHeight: .infinity, alignment: .top)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        // a layer on its own clock: through SwiftUI, four updates a second cost 12% of a core in a hold
+        .task(id: Key(status: controller.status, seeks: controller.seeks, skips: controller.skips, visible: visible, width: width)) {
+            while !Task.isCancelled {
+                let status = controller.status
+                let (share, level) = reading(status)
+                fill.show(width: width * share, level: level, paused: status == .paused)
+                guard status == .playing, visible else { return }
+                try? await Task.sleep(for: .seconds(0.25))
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("position")
         .accessibilityValue(Format.time(seekable?.elapsed ?? 0))
@@ -214,6 +221,47 @@ struct Hairline: View {
         let seen = track.visual(at: track.elapsed)
         let level = status == .resting || (controller.inSilence && !seen.silent) ? Track.Visual.resting.hairline : seen.hairline
         return (min(track.elapsed / track.duration, 1), level)
+    }
+}
+
+private struct FillHost: NSViewRepresentable {
+    let view: HairlineFill
+    func makeNSView(context: Context) -> HairlineFill { view }
+    func updateNSView(_ view: HairlineFill, context: Context) {}
+}
+
+final class HairlineFill: NSView {
+    private let bar = CALayer()
+    private var paused = false
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        bar.cornerRadius = 1
+        bar.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+        layer?.addSublayer(bar)
+    }
+
+    required init?(coder: NSCoder) { fatalError("built in code") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func show(width: CGFloat, level: Double, paused: Bool) {
+        self.paused = paused
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        bar.frame = CGRect(x: 0, y: 0, width: width, height: 2)
+        bar.opacity = Float(level)
+        color()
+        CATransaction.commit()
+    }
+
+    override func viewDidChangeEffectiveAppearance() { color() }
+
+    private func color() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            bar.backgroundColor = NSColor(paused ? Theme.faint : Theme.primary).cgColor
+        }
     }
 }
 

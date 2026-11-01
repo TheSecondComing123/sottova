@@ -221,7 +221,7 @@ private struct SilenceFoot: View {
             preset.crossfade = false
             router.presetEdit = PresetEdit(preset: preset)
         })
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.bounds.height + 2 + menu.size.height), in: anchor)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.bounds.height - 3 + menu.size.height), in: anchor)
     }
 
     /// The name, and its range in a right-aligned column.
