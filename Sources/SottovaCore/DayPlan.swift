@@ -244,10 +244,18 @@ extension DayPlan {
             }
             return [Piece("Waiting, \(why). Then "), Piece(alarm.shuffled ? "shuffled" : "in order", .order), Piece(", at the Mac.")]
         }
-        if let missed = missedToday(alarm) { return [Piece(missed + " "), Piece("Play it now", .playNow)] }
-        if cantWake { return [Piece("The Mac won't wake for this. "), Piece("Wake it", .wake)] }
+        if let missed = missedToday(alarm) {
+            let wake = cantWake ? [Piece(". The Mac won't wake for the next one. "), Piece("Wake it", .wake)] : []
+            return [Piece(missed + " "), Piece("Play it now", .playNow)] + wake
+        }
+        if cantWake { return wakeLine(alarm: alarm, nextPart: nextPart, cantWake: true) }
         if let note = row.overlapNote { return [Piece(note)] }
         return sentence(alarm, nextPart: nextPart)
+    }
+
+    /// A row with no place on today's rail still says if the Mac can't wake for it.
+    public func wakeLine(alarm: Alarm, nextPart: String?, cantWake: Bool) -> [Piece] {
+        cantWake ? [Piece("The Mac won't wake for this. "), Piece("Wake it", .wake)] : sentence(alarm, nextPart: nextPart)
     }
 
     /// Off today or any other day, it says the same.

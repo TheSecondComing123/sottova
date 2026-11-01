@@ -703,7 +703,10 @@ public final class Controller {
     /// A row missed earlier, from what it would have played and at its volume. Not its firing: its time has gone, so
     /// nothing rises, and the part it's on stays next.
     public func playNow(_ alarm: Alarm) {
-        let songs = rowSongs(alarm)
+        // not rowSongs: the time this is for never played, so yesterday's spent part doesn't count
+        var unspent = alarm
+        unspent.partSpent = nil
+        let songs = rowSongs(unspent)
         guard !songs.isEmpty else { return }
         play(alarm.shuffled ? songs.shuffled() : songs, source: playlists.contains { $0.id == alarm.source } ? alarm.source : nil, shuffled: alarm.shuffled)
         useRowVolume(alarm.volume)

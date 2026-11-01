@@ -60,6 +60,16 @@ struct AlarmRunTests {
         #expect(c.partChoices(for: row).next == 0)
     }
 
+    @Test func playingAMissedRowNowPlaysThePartItSaysIsNext() async throws {
+        let (c, album, _) = try await controller(songs: 2)
+        var row = alarm(album)
+        let yesterday = Date.now - 86_400
+        (row.rotates, row.parts, row.nextPart, row.lastFired, row.partSpent) = (true, 2, 1, yesterday, yesterday)
+        c.addAlarm(row)
+        c.playNow(row)
+        #expect(c.current?.title == "t1")
+    }
+
     @Test func anAlarmStopsWhenItsMusicEndsInsteadOfShufflingEverything() async throws {
         let (c, album, _) = try await controller()
         let row = alarm(album)

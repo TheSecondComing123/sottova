@@ -31,7 +31,10 @@ struct DayPage: View {
                     Spacer(minLength: 16)
                     ThemeButton(title: "New", icon: .plus, iconWeight: .line) { router.alarm = .new(nil) }
                 }
-                .padding(.bottom, 25)
+                .padding(.bottom, wake.failure == nil ? 25 : 8)
+                if let failure = wake.failure {
+                    Text(failure).role(.small).foregroundStyle(Theme.text).padding(.bottom, 1)
+                }
                 rail(plan)
                 others(plan, now: now)
                 what(plan, now: now)
@@ -77,7 +80,8 @@ struct DayPage: View {
             if let y = rail.now {
                 Circle().fill(Theme.primary).frame(width: 6, height: 6).offset(x: 69.5, y: y - 3)
             }
-            ForEach(Array(rail.labels.enumerated()), id: \.offset) { _, label in
+            // by what it's for, not its place: a popover open on a time must stay with that row as the now label comes and goes
+            ForEach(rail.labels, id: \.key) { label in
                 RailTime(label: label, alarm: controller.alarms.first { $0.id == label.row })
                     // an 18 pt line sits its small type higher than the mock's
                     .offset(y: label.y - 9 + (label.kind == .row || label.kind == .now ? 1 : 2))
@@ -102,7 +106,7 @@ struct DayPage: View {
                 DayRow(alarm: mark.alarm, pieces: plan.line(for: row, nextPart: nextPart(mark.alarm), rising: rising,
                                                             waiting: sounding == mark.id ? waiting : nil, cantWake: unwoken == mark.id))
                     .offset(y: mark.top)
-                    .padding(.leading, 84)
+                    .padding(.leading, 83)
             }
             if let (hour, name) = drop {
                 dropRow(plan: plan, hour: hour, name: name)
@@ -157,7 +161,7 @@ struct DayPage: View {
                 HStack(alignment: .top, spacing: 24) {
                     RailTime(label: DayPlan.Rail.Label(text: DayPlan.startText(alarm), y: 0, kind: alarm.on ? .row : .off, row: alarm.id), alarm: alarm)
                         .padding(.top, 2)
-                    DayRow(alarm: alarm, pieces: plan.sentence(alarm, nextPart: nextPart(alarm)))
+                    DayRow(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id))
                 }
                 .frame(minHeight: DayPlan.Rail.rowHeight, alignment: .topLeading)
             }
@@ -194,6 +198,10 @@ struct DayPage: View {
 
 /// A time down the rail. A row's start, and an end it was given, are clickable: a native typed field in a popover,
 /// applied when it closes so a half-typed time can't fire anything.
+private extension DayPlan.Rail.Label {
+    var key: String { row.map { "\($0) \(kind)" } ?? "\(kind) \(text) \(y)" }
+}
+
 private struct RailTime: View {
     let label: DayPlan.Rail.Label
     let alarm: Alarm?
@@ -233,11 +241,13 @@ private struct TimeField: View {
     let end: Bool
     @Environment(Controller.self) private var controller
     @State private var time: Date
+    private let opened: Date
 
     init(alarm: Alarm, end: Bool) {
         (self.alarm, self.end) = (alarm, end)
         let start = Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: .now) ?? .now
-        _time = State(initialValue: end ? start + Double(alarm.minutes ?? 60) * 60 : start)
+        opened = end ? start + Double(alarm.minutes ?? 60) * 60 : start
+        _time = State(initialValue: opened)
     }
 
     var body: some View {
@@ -250,7 +260,7 @@ private struct TimeField: View {
     private func apply() {
         let clock = Calendar.current.dateComponents([.hour, .minute], from: time)
         let (hour, minute) = (clock.hour ?? alarm.hour, clock.minute ?? alarm.minute)
-        guard end || hour != alarm.hour || minute != alarm.minute else { return }
+        guard time != opened else { return }
         controller.changeAlarm(alarm.id) { row in
             if end {
                 let span = (hour * 60 + minute - row.hour * 60 - row.minute + 1440) % 1440
@@ -278,7 +288,7 @@ private struct DayRow: View {
                 .toggleStyle(Tick())
                 .frame(width: 14, height: 14)
                 .padding(.top, 4)
-                .frame(width: 22, alignment: .topLeading)
+                .frame(width: 23, alignment: .topLeading)
             VStack(alignment: .leading, spacing: 1) {
                 Button { navigate(route) } label: {
                     Text(alarm.name).role(.row).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
@@ -400,6 +410,7 @@ private struct WordMenu<Content: View>: View {
         } label: {
             Text(text)
                 .role(.body)
+                .foregroundStyle(hovering ? AnyShapeStyle(Theme.text) : AnyShapeStyle(.foreground))
                 .background { RoundedRectangle(cornerRadius: 4).fill(hovering ? Theme.selection : .clear).padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: -4)) }
         }
         .menuStyle(.button)

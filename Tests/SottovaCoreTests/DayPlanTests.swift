@@ -242,6 +242,10 @@ struct DayPlanTests {
         #expect(text(day.line(for: row, nextPart: nil, rising: true)) == "Rising to 25%. Weekdays, shuffled.")
         #expect(text(day.line(for: day.rows[1], nextPart: nil, waiting: .call)) == "Waiting, you're on a call. Then in order, at the Mac.")
         #expect(text(day.line(for: day.rows[1], nextPart: nil, cantWake: true)) == "The Mac won't wake for this. Wake it")
+        // a miss today mustn't hide that the next one can't wake either
+        #expect(text(day.line(for: row, nextPart: nil, cantWake: true)) == "Missed at 7:02. The Mac was off. Play it now. The Mac won't wake for the next one. Wake it")
+        #expect(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: true)) == "The Mac won't wake for this. Wake it")
+        #expect(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: false)) == "While you're at the Mac, in order.")
     }
 
     @Test func theRailIsToScale() {
