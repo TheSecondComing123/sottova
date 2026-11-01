@@ -46,7 +46,6 @@ struct TitleBar: View {
             .lineLimit(1)
             .padding(.leading, 96)
             .padding(.trailing, narrow ? 110 : 190)
-            .padding(.bottom, 2)
             .allowsHitTesting(false)
         }
     }
@@ -68,6 +67,13 @@ private struct BarIcon: View {
     }
 }
 
+/// .plain dims a disabled label on top of the theme's disabled color.
+private struct BarPress: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.scaleEffect(configuration.isPressed ? 0.96 : 1)
+    }
+}
+
 private struct BarButton: View {
     let icon: Ph
     var strong = false
@@ -77,7 +83,7 @@ private struct BarButton: View {
 
     var body: some View {
         Button(action: action) { BarIcon(icon: icon, strong: strong, on: on) }
-            .buttonStyle(.plain)
+            .buttonStyle(BarPress())
             .help(help)
             .accessibilityLabel(help)
     }
@@ -107,7 +113,7 @@ private struct Moon: View {
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
-        .buttonStyle(.plain)
+        .buttonStyle(BarPress())
         .fixedSize()
         .help("sleep timer")
         .accessibilityLabel("sleep timer")
@@ -152,7 +158,8 @@ struct Hairline: View {
         let status: PlaybackStatus, seeks, skips: Int, visible: Bool, width: CGFloat
     }
 
-    private static let top: CGFloat = 48
+    // to 54, only 2 pt into the page: rows scrolled under it stay clickable
+    private static let top: CGFloat = 44
 
     private var seekable: Track? {
         controller.status == .playing || controller.status == .paused ? controller.track : nil
@@ -176,7 +183,7 @@ struct Hairline: View {
             }, hovered: { fraction in
                 if !dragging { pointer = fraction.map { $0 * width } }
             })
-            .frame(height: 12)
+            .frame(height: 10)
             if let track = seekable, let pointer {
                 Text(Format.time(track.duration * pointer / max(width, 1)))
                     .role(.label)
@@ -188,12 +195,12 @@ struct Hairline: View {
                     .fixedSize()
                     .alignmentGuide(.leading) { $0.width / 2 - min(max(pointer, $0.width / 2 + 4), width - $0.width / 2 - 4) }
                     // under the line: above it is the window's edge and the buttons
-                    .offset(y: 14)
+                    .offset(y: 18)
                     .allowsHitTesting(false)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .frame(height: 12, alignment: .topLeading)
+        .frame(height: 10, alignment: .topLeading)
         .offset(y: Self.top)
         .frame(maxHeight: .infinity, alignment: .top)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }

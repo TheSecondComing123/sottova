@@ -254,7 +254,10 @@ struct MainWindow: View {
         guard !Self.watching else { return }
         Self.watching = true
         _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.keyCode == 53, router.showsQueue, router.presetEdit == nil, !(event.window?.firstResponder is NSText) else { return event }
+            #if NEWLOOK
+            guard router.presetEdit == nil else { return event }
+            #endif
+            guard event.keyCode == 53, router.showsQueue, !(event.window?.firstResponder is NSText) else { return event }
             toggleQueue()
             return nil
         }

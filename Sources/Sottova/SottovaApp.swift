@@ -24,7 +24,8 @@ struct SottovaApp: App {
     init() {
         #if NEWLOOK
         // a launch with saved state, even an old build's, presents only what was saved: no keepalive, so nothing reopens
-        UserDefaults.standard.register(defaults: ["ApplePersistenceIgnoreState": true])
+        // and text as thin as the mock's; the system's smoothing thickens light on dark
+        UserDefaults.standard.register(defaults: ["ApplePersistenceIgnoreState": true, "AppleFontSmoothing": 0])
         #endif
         let controller = controller
         AppDelegate.controller = controller
@@ -119,6 +120,8 @@ struct SottovaApp: App {
             .defaultLaunchBehavior(.presented)
             .restorationBehavior(.disabled)
             .commandsRemoved()
+            // a sottova:// link mustn't bring it forward: then the Dock would see a window and open nothing
+            .handlesExternalEvents(matching: [])
         #endif
     }
 }
