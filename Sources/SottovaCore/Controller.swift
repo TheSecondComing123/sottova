@@ -414,6 +414,8 @@ public final class Controller {
     /// The main window's, so Edit › Undo brings back what was removed.
     @ObservationIgnored public weak var undo: UndoManager?
     @ObservationIgnored private var alarmTimer: DispatchSourceTimer?
+    /// What that timer is for.
+    @ObservationIgnored private var armed: (id: Alarm.ID, at: Date)?
     /// Held while an alarm is set: an idle menu-bar app gets App Nap, which may hold its timers back.
     @ObservationIgnored private var alarmActivity: NSObjectProtocol?
     @ObservationIgnored private var activityOptions: ProcessInfo.ActivityOptions?
@@ -505,10 +507,10 @@ public final class Controller {
 
     /// One timer for the soonest alarm, on the wall clock: it still fires on time after the Mac has slept, and
     /// `.strict` keeps App Nap from sliding it while the app sits idle in the menu bar.
-    private func armAlarm() {
+    func armAlarm(now: Date = .now) {
         alarmTimer?.cancel()
         alarmTimer = nil
-        let next = nextAlarm()
+        let next = nextAlarm(after: now)
         // an alarm keeps the app awake to its timer and the Mac from sleeping when idle (the screen still turns off);
         // an hour only needs its checks on time, since it plays only while you're there
         let wanted: ProcessInfo.ActivityOptions? = next != nil ? .userInitiated
@@ -518,11 +520,21 @@ public final class Controller {
             alarmActivity = wanted.map { ProcessInfo.processInfo.beginActivity(options: $0, reason: next != nil ? "an alarm is set" : "an hour is set") }
             activityOptions = wanted
         }
-        guard let (alarm, at) = next else { return }
+        // a timer whose time has passed and hasn't run, as after a wake when the clock's notice comes first, still runs:
+        // only that one, or a row saved for a minute ago would go off as it's saved
+        let late = armed.flatMap { armed in
+            armed.at <= now && alarms.contains { $0.id == armed.id && $0.on && !$0.whileHere && $0.lastFired != armed.at && $0.next(after: armed.at - 1) == armed.at } ? armed : nil
+        }
+        armed = late ?? next.map { ($0.alarm.id, $0.at) }
+        guard let (id, at) = armed else { return }
         let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
-        timer.schedule(wallDeadline: .now() + max(at.timeIntervalSinceNow, 0), leeway: .milliseconds(100))
+        timer.schedule(wallDeadline: .now() + max(at.timeIntervalSince(now), 0), leeway: .milliseconds(100))
         timer.setEventHandler { [weak self] in
-            MainActor.assumeIsolated { self?.fire(alarm.id, due: at) }
+            MainActor.assumeIsolated {
+                // not armed again by what fire does: it can leave the alarm unspent for catch-up
+                self?.armed = nil
+                self?.fire(id, due: at)
+            }
         }
         timer.resume()
         alarmTimer = timer

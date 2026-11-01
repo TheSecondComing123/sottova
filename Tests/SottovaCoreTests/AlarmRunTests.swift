@@ -1056,4 +1056,41 @@ struct AlarmRunTests {
         c.checkHours()
         #expect(c.status == .resting)
     }
+
+    /// Asleep past its time, then the clock's notice comes before the timer.
+    @Test func reArmingDoesntStepOverATimerThatsDue() async throws {
+        let (c, album, _) = try await controller()
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: .now + 180)
+        let row = Alarm(source: album.id, name: "Lauds", hour: parts.hour!, minute: parts.minute!, weekdays: Set(1...7))
+        c.addAlarm(row)
+        let due = try #require(row.next(after: .now))
+        c.armAlarm(now: due + 60)
+        for _ in 0..<200 where c.status == .idle { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(c.status == .playing)
+        #expect(c.alarms.first?.lastFired == due)
+    }
+
+    /// Only a timer that was set: a row saved for a minute ago is for next time, and arming again doesn't wake it.
+    @Test func reArmingLeavesARowSetForAMomentAgo() async throws {
+        let (c, album, _) = try await controller()
+        c.addAlarm(justPassed(album).0)
+        c.armAlarm()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(c.status == .idle)
+    }
+
+    /// Moved or turned off since its timer was set, that timer isn't its time anymore.
+    @Test func reArmingLeavesATimeThatsBeenEditedAway() async throws {
+        let (c, album, _) = try await controller()
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: .now + 180)
+        var row = Alarm(source: album.id, name: "Lauds", hour: parts.hour!, minute: parts.minute!, weekdays: Set(1...7))
+        c.addAlarm(row)
+        let due = try #require(row.next(after: .now))
+        row.on = false
+        c.updateAlarm(row)
+        c.armAlarm(now: due + 60)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(c.status == .idle)
+        #expect(c.alarms.first?.lastFired == nil)
+    }
 }
