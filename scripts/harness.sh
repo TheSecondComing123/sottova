@@ -1,0 +1,64 @@
+#!/bin/bash
+# Shoots one window of the isolated copy, then quits it. Nothing it runs can reach real data, wakes or sound.
+# Usage: scripts/harness.sh <scratch-path> <state> <out.png> [-palette gruvbox] [-shotRoute alarms] [-shotWidth 855]
+# States: empty idle playing paused fading rising silence live. EXTRA_SWIFT=-DNEWLOOK builds the new look.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+scratch=$1 state=$2 out=$3
+shift 3
+app="$scratch/SottovaShot.app"
+plist="$app/Contents/Info.plist"
+buddy=/usr/libexec/PlistBuddy
+
+swift build --scratch-path "$scratch" -Xswiftc -DSHOT ${EXTRA_SWIFT:+-Xswiftc $EXTRA_SWIFT} >&2
+rm -rf "${app:?}"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+cp "$scratch/debug/Sottova" "$app/Contents/MacOS/SottovaShot"
+cp Support/Info.plist "$plist"
+cp Support/AppIcon.icns "$app/Contents/Resources/"
+cp -R Support/Icons "$app/Contents/Resources/"
+$buddy -c "Delete :CFBundleURLTypes" -c "Set :CFBundleExecutable SottovaShot" -c "Set :CFBundleName SottovaShot" \
+    -c "Set :CFBundleIdentifier com.alanbagel.sottova.shot" "$plist"
+codesign -f -s - "$app" 2>/dev/null
+
+world() {
+    pmset -g sched
+    stat -f '%m' "$HOME/Library/Application Support/Sottova/alarms.json"
+    stat -f '%m' "$HOME/Music"
+    pgrep -x Sottova || true
+}
+storage=$(mktemp -d "${TMPDIR:-/private/tmp}/sottova-shot.XXXXXX")
+stop() {
+    pkill -x SottovaShot || true
+    rm -rf "${storage:?}"
+}
+trap stop EXIT
+check() {
+    if [[ "$(world)" != "$before" ]]; then
+        echo "the real world changed while the copy ran: stopping it" >&2
+        diff <(echo "$before") <(world) >&2 || true
+        exit 1
+    fi
+}
+if pgrep -qx SottovaShot; then echo "a copy is already running" >&2; exit 1; fi
+before=$(world)
+defaults delete com.alanbagel.sottova.shot 2>/dev/null || true
+
+covers=(); [[ -d notes/design/covers ]] && covers=(-shotCovers "$PWD/notes/design/covers")
+# -g: never takes focus from whatever the owner is doing
+open -g -n --env SOTTOVA_SHOT_STORAGE="$storage" "$app" --args -shotState "$state" ${covers[@]+"${covers[@]}"} "$@"
+for _ in {1..120}; do
+    [[ -s "$storage/ready" ]] && break
+    pgrep -qx SottovaShot || { sleep 0.5; pgrep -qx SottovaShot || { echo "the copy exited" >&2; exit 1; }; }
+    check
+    sleep 0.25
+done
+[[ -s "$storage/ready" ]] || { echo "no window after 30 s" >&2; exit 1; }
+check
+screencapture -x -o -l "$(cat "$storage/ready")" "$out"
+pkill -x SottovaShot
+for _ in {1..40}; do pgrep -qx SottovaShot || break; sleep 0.25; done
+check
+if pgrep -qx SottovaShot; then echo "the copy won't quit" >&2; exit 1; fi
+echo "$out"

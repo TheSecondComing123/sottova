@@ -129,6 +129,7 @@ struct TrimSheet: View {
             pausedQueue = true
         }
         previewStop?.cancel()
+        #if !SHOT
         guard let player = preview ?? (try? AVAudioPlayer(contentsOf: URL(filePath: song.id))) else { return }
         player.volume = Float(controller.volume)
         player.currentTime = time
@@ -143,6 +144,7 @@ struct TrimSheet: View {
             }
             player.pause()
         }
+        #endif
     }
 
     private func load() async {

@@ -2095,3 +2095,91 @@ public final class Controller {
         }
     }
 }
+
+#if SHOT
+/// Seeds fake data and puts the real machine in a state. Time only moves by `advance`, so without `live` a picture of a
+/// fade holds still; there's no Now Playing and no scan.
+extension Controller {
+    public static func shot() -> Controller {
+        let engine = AVAudioEngine()
+        do {
+            try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!, maximumFrameCount: 480)
+        } catch {
+            fatalError("no offline engine, so no sound-proof copy: \(error)")
+        }
+        return Controller(engine: engine, storage: ShotEnv.storage, playlistFolder: ShotEnv.music.appending(path: "Sottova Playlists"), artworkFolder: ShotEnv.artwork)
+    }
+
+    public func shotEnter(_ state: String, covers: URL?) async throws {
+        guard ["empty", "idle", "playing", "paused", "fading", "rising", "silence", "live"].contains(state) else { fatalError("no such state: \(state)") }
+        keepsMacAwake = false
+        loadTrims()
+        loadAlarms()
+        if state == "empty" { return }
+        try await seed(covers: covers)
+        apply(Settings.presets.first { $0.name == "Sparse" }!)
+        switch state {
+        case "playing", "paused", "fading", "silence", "live":
+            play(catalog.albums.first { $0.title == "Overworld" }!.songs)
+            let track = track!
+            switch state {
+            case "fading": advance(track.outStart + track.outLength * 0.4)
+            case "silence":
+                advance(track.outStart)
+                while status != .resting { advance(0.05) }
+                advance(1)
+            default: advance(track.fadeIn + 60)
+            }
+            if state == "paused" { toggle() }
+            if state == "live" {
+                lastTick = .now
+                startTicker()
+            }
+        case "rising":
+            fire(alarms.first { $0.name == "Lauds" }!.id, due: .now)
+            advance(track!.fadeIn * 0.4)
+        default: break
+        }
+    }
+
+    private func seed(covers: URL?) async throws {
+        let sets: [(album: String, artist: String, cover: String?, titles: [String])] = [
+            ("Lauds", "Various", "lauds", ["Strings", "Morning Hymn", "Benedictus"]),
+            ("Overworld", "Komiku", "overworld", ["The road we use to travel when we were kids", "A forest for you and me", "green world"]),
+            ("Compline", "Various", "compline", ["Dusk", "Nunc dimittis", "Salve Regina"]),
+            ("Counterpoint", "Kimiko Ishizaka", "counterpoint", ["Contrapunctus 1", "Contrapunctus 2"]),
+            ("Perfect Chopin", "Musopen", "perfectchopin", ["Nocturne in E-flat", "Ballade No. 1"]),
+            ("Shellac", "Various", nil, ["Blue Skies", "Paper Moon"]),
+        ]
+        // the lowest rate a file can have: 15 pieces of 3 to 5 minutes come to about 45 MB
+        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 8_000, channels: 1, interleaved: false)!
+        let saved: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 8_000, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16]
+        for set in sets {
+            let cover = set.cover.flatMap { name in covers.flatMap { try? Data(contentsOf: $0.appending(path: "\(name).jpg")) } }.flatMap { artwork?.save($0) }
+            let folder = ShotEnv.music.appending(path: set.album)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            for (i, title) in set.titles.enumerated() {
+                let url = folder.appending(path: "\(i + 1).caf")
+                let duration = 190 + 47 * i
+                let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(duration * 8_000))!
+                buffer.frameLength = buffer.frameCapacity
+                buffer.floatChannelData![0].update(repeating: 0, count: Int(buffer.frameLength))
+                try AVAudioFile(forWriting: url, settings: saved).write(from: buffer)
+                library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10),
+                    meta: TrackMeta(title: title, artist: set.artist, album: set.album, albumArtist: set.artist, trackNumber: i + 1, duration: Double(duration), artwork: cover))
+            }
+        }
+        folders = [ShotEnv.music]
+        refreshTracks()
+        while catalog.albums.count < sets.count { try await Task.sleep(for: .milliseconds(10)) }
+        let id = { (title: String) in self.catalog.albums.first { $0.title == title }!.id }
+        var lauds = Alarm(source: id("Lauds"), name: "Lauds", hour: 7, minute: 2, weekdays: [2, 3, 4, 5, 6], shuffled: true)
+        lauds.volume = 0.25
+        var overworld = Alarm(source: id("Overworld"), name: "Overworld", hour: 15, minute: 0, weekdays: Set(1...7), shuffled: true)
+        (overworld.whileHere, overworld.minutes) = (true, 240)
+        var compline = Alarm(source: id("Compline"), name: "Compline", hour: 20, minute: 0, weekdays: Set(1...7))
+        (compline.volume, compline.minutes) = (0.15, 60)
+        [lauds, overworld, compline].forEach(addAlarm)
+    }
+}
+#endif

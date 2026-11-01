@@ -773,6 +773,7 @@ final class SystemWake {
         // the loose rule keeps wakes topped up, so nothing may be missing; saving an alarm still swaps it out
         let loose = !trusted && FileManager.default.fileExists(atPath: Self.looseRule)
         guard !dates.isEmpty || (loose && asking) else { return }
+        #if !SHOT
         if !trusted, asking {
             // written and checked under a name with a dot, which sudo skips, so a bad rule never takes effect; the
             // loose first rule goes once the new one is in
@@ -787,6 +788,7 @@ final class SystemWake {
                 return
             }
         }
+        #endif
         let failed = dates.filter { !Self.pmset($0) }
         failure = failed.isEmpty ? nil : "couldn't schedule \(failed.count) of the wakes: the system said no"
         refresh()
@@ -797,12 +799,16 @@ final class SystemWake {
     static let datePattern = "[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9] [0-9][0-9]?[0-9][0-9]?[0-9][0-9]"
 
     private static func pmset(_ date: Date) -> Bool {
+        #if SHOT
+        return true
+        #else
         let sudo = Process()
         sudo.executableURL = URL(filePath: "/usr/bin/sudo")
         sudo.arguments = ["-n", "/usr/bin/pmset", "schedule", "wakeorpoweron", format.string(from: date)]
         guard (try? sudo.run()) != nil else { return false }
         sudo.waitUntilExit()
         return sudo.terminationStatus == 0
+        #endif
     }
 }
 
@@ -822,6 +828,7 @@ final class AlarmPreview {
     }
 
     private func play(_ alarm: Alarm, controller: Controller) {
+        #if !SHOT
         halt()
         let songs = controller.playlists.first { $0.id == alarm.source }.map(controller.songs(of:)) ?? controller.catalog.albumsByID[alarm.source]?.songs ?? []
         guard let song = alarm.shuffled ? songs.randomElement() : songs.first,
@@ -846,6 +853,7 @@ final class AlarmPreview {
             guard !Task.isCancelled else { return }
             stop()
         }
+        #endif
     }
 
     func stop() {

@@ -27,7 +27,11 @@ public struct ShelfSet: Identifiable, Sendable {
 /// nothing is fetched until the user asks, and the only host is archive.org.
 @Observable @MainActor
 public final class Shelf {
+    #if SHOT
+    public static let folder = ShotEnv.music.appending(path: "Sottova Library")
+    #else
     public static let folder = URL.musicDirectory.appending(path: "Sottova Library")
+    #endif
 
     public static let sets: [ShelfSet] = [
         ShelfSet(id: "OpenGoldbergVariations", title: "Open Goldberg Variations", creator: "Kimiko Ishizaka", kind: .classical,

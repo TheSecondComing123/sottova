@@ -5,7 +5,11 @@ import SottovaCore
 @main
 struct SottovaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    #if SHOT
+    private let controller = Controller.shot()
+    #else
     private let controller = Controller(playlistFolder: .musicDirectory.appending(path: "Sottova Playlists"))
+    #endif
     /// Theme.palette is set before this changes, so re-keying the scenes below redraws them in the new colors.
     @AppStorage("palette") private var palette = Palette.monochrome.id
     @State private var router = Router()
@@ -19,7 +23,9 @@ struct SottovaApp: App {
             controller.addFolders([URL(filePath: path)])
             UserDefaults.standard.removeObject(forKey: "folder")
         }
+        #if !SHOT
         controller.run()
+        #endif
         SystemWake.shared.renew(for: controller.alarms)
         // a Mac that never sleeps never gets a wake from sleep to top these up on
         Timer.scheduledTimer(withTimeInterval: 6 * 60 * 60, repeats: true) { _ in
@@ -43,6 +49,9 @@ struct SottovaApp: App {
                 .id(palette)
                 .environment(controller)
                 .environment(router)
+                #if SHOT
+                .modifier(ShotReady(controller: controller, router: router))
+                #endif
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 800)
