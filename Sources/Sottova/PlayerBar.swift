@@ -8,6 +8,7 @@ struct PlayerBar: View {
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var running: Bool {
         controller.status == .playing || controller.status == .resting
@@ -42,7 +43,7 @@ struct PlayerBar: View {
                     Ph.queue.icon(showsQueue ? .bold : .duotone, size: 16)
                         .foregroundStyle(showsQueue ? Theme.text : Theme.muted)
                         // a nudge each time Play next lands, which otherwise shows only in a closed queue
-                        .keyframeAnimator(initialValue: 1.0, trigger: controller.queuedNext) { icon, scale in
+                        .keyframeAnimator(initialValue: 1.0, trigger: reduceMotion ? 0 : controller.queuedNext) { icon, scale in
                             icon.scaleEffect(scale)
                         } keyframes: { _ in
                             SpringKeyframe(1.3, duration: 0.12, spring: .snappy)

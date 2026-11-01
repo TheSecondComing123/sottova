@@ -10,6 +10,7 @@ struct Timeline: View {
     var compact = false
     /// The menu-bar panel's window stays alive while closed; animating it then cost about 10% CPU.
     var visible = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let resting = controller.status == .resting
@@ -17,7 +18,7 @@ struct Timeline: View {
         // the hero and the bar share one rate, so a gap redraws the window 15 times a second, not 45
         // the bar's gap is still, so only the hero's breathing dots need frames
         TimelineView(.animation(minimumInterval: resting ? 1 / 15 : 0.5,
-                                paused: !visible || controller.status == .idle || controller.status == .paused || (compact && resting))) { context in
+                                paused: !visible || controller.status == .idle || controller.status == .paused || (resting && (compact || reduceMotion)))) { context in
             Canvas { gc, size in
                 draw(in: gc, size: size, time: context.date.timeIntervalSinceReferenceDate)
             }
@@ -44,7 +45,7 @@ struct Timeline: View {
         if let track = controller.track {
             envelope(track, in: gc, width: trackWidth, height: height, resting: resting)
         }
-        dots(in: gc, around: trackWidth + size.width * 0.09, y: height + 0.5, time: time, breathing: resting)
+        dots(in: gc, around: trackWidth + size.width * 0.09, y: height + 0.5, time: time, breathing: resting && !reduceMotion)
         nextFadeIn(in: gc, from: size.width * 0.9, width: size.width * 0.1, height: height)
     }
 

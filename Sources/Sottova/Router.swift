@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SottovaCore
 
@@ -86,7 +87,8 @@ final class Router {
 
     func toggleQueue() {
         // in on a spring with no overshoot, a 340 pt edge mustn't wobble; out on the quick curve
-        withAnimation(showsQueue ? Theme.quick : .spring(duration: 0.3, bounce: 0)) { showsQueue.toggle() }
+        let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        withAnimation(reduce ? nil : showsQueue ? Theme.quick : .spring(duration: 0.3, bounce: 0)) { showsQueue.toggle() }
     }
 }
 
