@@ -43,7 +43,7 @@ extension Controller {
     var headline: String {
         switch status {
         case .idle: "sottova"
-        case .resting: "resting"
+        case .resting: "silence"
         case .playing, .paused: title ?? "starting"
         }
     }
@@ -65,9 +65,9 @@ extension Controller {
             case nil: break
             }
             let left = nextTrackAt?.timeIntervalSince(now) ?? 0
-            if left < 60 { return "next track in a moment" }
-            if left < 300 { return "next track in a few minutes" }
-            return "next track in a while"
+            if left < 60 { return "next song in a moment" }
+            if left < 300 { return "next song in a few minutes" }
+            return "next song in a while"
         }
     }
 

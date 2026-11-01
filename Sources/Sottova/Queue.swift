@@ -104,7 +104,7 @@ struct QueuePanel: View {
         if controller.status == .resting {
             // like the rest of the app, the gap doesn't say how long it has left
             VStack(alignment: .leading, spacing: 2) {
-                Text("resting")
+                Text("silence")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.muted)
                 TimelineView(.periodic(from: .now, by: 15)) { context in

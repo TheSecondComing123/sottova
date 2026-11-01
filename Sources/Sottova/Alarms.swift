@@ -782,12 +782,12 @@ final class SystemWake {
             if let error {
                 // -128 is Cancel in the password prompt: not a failure, the page still says the Mac won't wake
                 failure = error[NSAppleScript.errorNumber] as? Int == -128 ? nil
-                    : "couldn't let sottova wake the mac: \(error[NSAppleScript.errorMessage] as? String ?? "sudoers rule failed")"
+                    : "couldn't let sottova wake the mac: \(error[NSAppleScript.errorMessage] as? String ?? "the system said no")"
                 return
             }
         }
         let failed = dates.filter { !Self.pmset($0) }
-        failure = failed.isEmpty ? nil : "couldn't schedule \(failed.count) of the wakes: pmset said no"
+        failure = failed.isEmpty ? nil : "couldn't schedule \(failed.count) of the wakes: the system said no"
         refresh()
     }
 

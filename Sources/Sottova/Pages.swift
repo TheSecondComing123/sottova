@@ -212,7 +212,7 @@ private struct Hero: View {
         switch controller.status {
         // idle, the headline is how you'll listen; the library's size is a detail
         case .idle: controller.tracks.isEmpty ? "Your music, with room to breathe" : controller.settings.name
-        case .resting: "Resting"
+        case .resting: "Silence"
         case .playing, .paused: controller.current?.work ?? controller.title ?? "Starting"
         }
     }
@@ -603,7 +603,7 @@ private struct AlbumGaps: View {
                     GridRow {
                         ForEach(start..<min(start + 3, cells), id: \.self) { cell in
                             if cell == 0 {
-                                card(named("Yours", yours), active: own == nil, accent: nil) { gaps = nil }
+                                card(named("Your setting", yours), active: own == nil, accent: nil) { gaps = nil }
                             } else {
                                 preset(cell - 1, own)
                             }
@@ -622,7 +622,7 @@ private struct AlbumGaps: View {
             }
 
             if own?.name == "Custom" {
-                caption("Silence between tracks")
+                caption("Silence between songs")
                 GapRange(low: field(\.gapMin), high: field(\.gapMax))
                     .padding(.horizontal, 12)
                 caption("Fades")

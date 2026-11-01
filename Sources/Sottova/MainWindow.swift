@@ -392,8 +392,7 @@ private struct Sidebar: View {
         }
         .buttonStyle(PressStyle(scale: 0.98))
         .animation(Theme.quick, value: active)
-        // the range is on the row already; only crossfade's overlap needs saying
-        .help(custom ? "save as a preset" : preset.crossfade ? Format.gaps(preset) : "")
+        .help(custom ? "save as a preset" : Format.gaps(preset))
         .sottovaMenu {
             guard named else { return [] }
             return [

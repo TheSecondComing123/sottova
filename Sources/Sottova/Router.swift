@@ -114,24 +114,24 @@ struct SottovaCommands: Commands {
             }
             .keyboardShortcut("l")
             .disabled(controller.status == .idle || controller.current == nil)
-            Button(router.showsQueue ? "Hide Queue" : "Show Queue") {
+            Button(router.showsQueue ? "Hide queue" : "Show queue") {
                 openWindow(id: "main")
                 router.toggleQueue()
             }
             .keyboardShortcut("u", modifiers: [.command, .option])
             Divider()
             // ⌘↑ and ⌘↓ move a text field's cursor, so they step aside while typing
-            Button("Volume Up") { controller.volume = min(controller.volume + 0.1, 1) }
+            Button("Volume up") { controller.volume = min(controller.volume + 0.1, 1) }
                 .keyboardShortcut(.upArrow)
                 .disabled(router.typing)
-            Button("Volume Down") { controller.volume = max(controller.volume - 0.1, 0) }
+            Button("Volume down") { controller.volume = max(controller.volume - 0.1, 0) }
                 .keyboardShortcut(.downArrow)
                 .disabled(router.typing)
             Menu("Sleep") { SleepChoices(controller: controller) }
                 .disabled(controller.status == .idle)
         }
         CommandGroup(after: .newItem) {
-            Button("Add Folder…") { controller.chooseFolders() }
+            Button("Add folder…") { controller.chooseFolders() }
                 .keyboardShortcut("o")
         }
         CommandMenu("Go") {

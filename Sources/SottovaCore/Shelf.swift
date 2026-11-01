@@ -145,10 +145,10 @@ public final class Shelf {
         let (temp, response) = try await session.download(for: Self.request(url))
         do {
             try Self.check(response)
-            guard response.mimeType != "text/html" else { throw Failure(detail: "archive.org sent a web page instead of \(url.lastPathComponent)") }
+            guard response.mimeType != "text/html" else { throw Failure(detail: "archive.org sent a web page instead of the file") }
             let got = try temp.resourceValues(forKeys: [.fileSizeKey]).fileSize
             if let want = size.flatMap(Int.init), got != want {
-                throw Failure(detail: "\(url.lastPathComponent) came to \(got ?? 0) bytes, not \(want)")
+                throw Failure(detail: "a file came through cut short")
             }
         } catch {
             try? FileManager.default.removeItem(at: temp)

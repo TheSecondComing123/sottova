@@ -296,7 +296,7 @@ public final class Controller {
         }
         if settings.name == name { settings.name = "Custom" }
         undo?.registerUndo(withTarget: self) { $0.customPresets.insert(preset, at: min(i, $0.customPresets.count)) }
-        undo?.setActionName("Delete Preset")
+        undo?.setActionName("Delete preset")
     }
 
     /// The albums, collections and saved settings that play with this preset.
@@ -462,7 +462,7 @@ public final class Controller {
     private func sayEmptyRows() {
         guard alarmsLoaded, scanned, catalogBuilt, pendingAnalysis == 0 else { return }
         let names = alarms.filter { $0.on && songs(for: $0).isEmpty }.map(\.name)
-        let said = names.isEmpty ? nil : "\(names.joined(separator: ", ")) \(names.count == 1 ? "has" : "have") nothing to play: the collection is gone, out of reach or renamed outside Sottova"
+        let said = names.isEmpty ? nil : "\(names.joined(separator: ", ")) \(names.count == 1 ? "has" : "have") nothing to play: the collection is gone, out of reach or renamed outside sottova"
         guard said != emptyRowsProblem else { return }
         if problem == emptyRowsProblem { problem = nil }
         emptyRowsProblem = said
@@ -1114,7 +1114,7 @@ public final class Controller {
             }
             controller.undo?.registerUndo(withTarget: controller) { $0.removeFromPlaylist(id, at: IndexSet(removed.map(\.0))) }
         }
-        undo?.setActionName("Remove from Collection")
+        undo?.setActionName("Remove from collection")
     }
 
     /// A part of the collection starts at this song, or stops starting there.
@@ -1281,7 +1281,7 @@ public final class Controller {
     /// Only when it changes: our own writes come back through the watcher and mustn't bring back what's been dismissed.
     private func sayPlaylistTrouble(unreadable: [String]) {
         var trouble = unreadable.map { "couldn't read \($0), so it isn't listed. the file is left as it is" }
-        trouble += playlists.filter { $0.unreadGaps != nil }.map { "couldn't read the gaps in \($0.name), so it plays with yours. the line stays in the file" }
+        trouble += playlists.filter { $0.unreadGaps != nil }.map { "couldn't read the gaps in \($0.name), so it plays with yours. the file is left as it is" }
         let said = trouble.isEmpty ? nil : trouble.joined(separator: "; ")
         guard said != playlistProblem else { return }
         if problem == playlistProblem { problem = nil }
@@ -1329,7 +1329,7 @@ public final class Controller {
             controller.upNext = queued
             controller.undo?.registerUndo(withTarget: controller) { $0.clearQueue() }
         }
-        undo?.setActionName("Clear Queue")
+        undo?.setActionName("Clear queue")
     }
 
     /// Songs from one album play with that album's gaps, wherever they were queued from.
@@ -1898,7 +1898,7 @@ public final class Controller {
             // while an album plays with its own gaps, the user's settings are what a restart should come back to
             try encoder.encode(ProfileFile(settings: yourSettings, albums: albumSettings, presets: customPresets)).write(to: url, options: .atomic)
         } catch {
-            problem = "couldn't save the profile: \(error.localizedDescription)"
+            problem = "couldn't save your settings: \(error.localizedDescription)"
         }
     }
 
@@ -2024,7 +2024,7 @@ public final class Controller {
         do {
             try record.append(to: url)
         } catch {
-            problem = "couldn't write the play log: \(error.localizedDescription)"
+            problem = "couldn't save your play history: \(error.localizedDescription)"
         }
     }
 

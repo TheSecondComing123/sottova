@@ -288,7 +288,7 @@ enum Format {
     static func sleep(_ timer: Controller.SleepTimer, resting: Bool, at now: Date, sentence: Bool = false) -> String {
         let left: Double
         switch timer {
-        case .afterCurrent: return resting ? "after the next piece" : "after this piece"
+        case .afterCurrent: return resting ? "after the next song" : "after this song"
         case .paused(let seconds): left = seconds
         case .at(let date): left = date.timeIntervalSince(now)
         }

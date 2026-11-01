@@ -158,7 +158,7 @@ struct SleepChoices: View {
                 .disabled(true)
             Divider()
         }
-        Toggle(resting ? "After the next piece" : "After this piece", isOn: Binding(
+        Toggle(resting ? "After the next song" : "After this song", isOn: Binding(
             get: { timer == .afterCurrent },
             set: { $0 ? controller.sleepAfterCurrent() : controller.cancelSleep() }))
         Divider()

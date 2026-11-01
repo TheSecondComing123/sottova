@@ -133,7 +133,7 @@ private struct PlaybackPage: View {
             PageTitle(title: "Playback")
             ScoreDiagram(settings: s)
 
-            Heading(title: "Mode")
+            Heading(title: "Preset")
             // three to a row: five in one squeezed the names into two lines
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
                 ForEach(controller.allPresets, id: \.name) { preset in
@@ -143,7 +143,7 @@ private struct PlaybackPage: View {
             }
 
             if !s.crossfade {
-                Heading(title: "Silence between tracks", value: Format.range(s))
+                Heading(title: "Silence between songs", value: Format.range(s))
                 GapRange(low: $controller.settings.gapMin, high: $controller.settings.gapMax)
             }
 
@@ -166,7 +166,7 @@ private struct PlaybackPage: View {
             .padding(.top, 12)
 
             Heading(title: "Overlap")
-            SwitchRow(title: "Crossfade instead of resting", detail: "tracks overlap with no silence between them", isOn: $controller.settings.crossfade)
+            SwitchRow(title: "Crossfade instead of silence", detail: "songs overlap with no silence between them", isOn: $controller.settings.crossfade)
             if s.crossfade {
                 ValueStepper(label: "Crossfade", value: $controller.settings.crossfadeSec, range: 1...10, unit: "s")
                     .padding(.top, 12)
@@ -181,7 +181,7 @@ private struct PlaybackPage: View {
                     }
                 }
             }
-            Text("starts with the next piece")
+            Text("starts with the next song")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Theme.faint)
                 .padding(.top, 8)
@@ -192,7 +192,7 @@ private struct PlaybackPage: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
                 ValueStepper(value: Binding(get: { Double(controller.settings.avoidLastN) }, set: { controller.settings.avoidLastN = Int($0) }),
-                             range: 0...50, unit: "tracks")
+                             range: 0...50, unit: "songs")
             }
         }
         .animation(Theme.quick, value: s.crossfade)
@@ -763,8 +763,8 @@ private struct GeneralPage: View {
                     .foregroundStyle(Theme.text)
                     .padding(.horizontal, 12)
             }
-            SwitchRow(title: "Keep the Mac awake during gaps",
-                      detail: "the audio engine pauses between tracks, so without this the mac can go to sleep in the middle of a silence",
+            SwitchRow(title: "Keep the mac awake during gaps",
+                      detail: "sound stops between songs, so without this the mac can go to sleep in the middle of a silence",
                       isOn: $controller.keepsMacAwake)
             SwitchRow(title: "Accept sottova:// links",
                       detail: "play, pause, toggle, skip and preset/minecraft, from Raycast, Shortcuts or a script. status.json in Application Support/Sottova follows every change.",
@@ -799,7 +799,7 @@ private struct CalendarChoices: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Heading(title: "Calendar")
-            Text("a row on your day set to \"not while my calendar is busy\" waits, or skips the day, while one of these has something on")
+            Text("anything on your day set to \"not while my calendar is busy\" waits, or skips the day, while one of these has something on")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -901,7 +901,7 @@ struct PresetSheet: View {
             ScoreDiagram(settings: draft, height: 112)
 
             if !draft.crossfade {
-                caption("Silence between tracks")
+                caption("Silence between songs")
                 GapRange(low: $draft.gapMin, high: $draft.gapMax)
                     .padding(.horizontal, 12)
             }
