@@ -13,6 +13,7 @@ struct QueuePanel: View {
                 Text("Queue")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 IconButton(icon: .x, weight: .bold, help: "close", size: 24, action: close)
             }
@@ -96,6 +97,7 @@ struct QueuePanel: View {
         Text(text)
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(Theme.faint)
+            .accessibilityAddTraits(.isHeader)
             .row()
     }
 

@@ -118,8 +118,10 @@ enum Ph: String {
 
     /// Drawn as a template image, so it takes foregroundStyle like text; the duotone layer keeps its 20% alpha,
     /// so the icon stays two grays of whatever color it's given.
+    /// Hidden from VoiceOver, which can't name it: a control that's only an icon carries its own label.
     @MainActor func icon(_ weight: IconWeight = .duotone, size: CGFloat) -> some View {
         Image(nsImage: image(weight)).renderingMode(.template).resizable().frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 
     @MainActor private func image(_ weight: IconWeight) -> NSImage {

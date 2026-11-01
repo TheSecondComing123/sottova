@@ -25,6 +25,7 @@ struct TrimSheet: View {
                 Text("Trim \(song.title)")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Theme.text)
+                    .accessibilityAddTraits(.isHeader)
                     .lineLimit(1)
                 Text(song.artist)
                     .font(.system(size: 13))

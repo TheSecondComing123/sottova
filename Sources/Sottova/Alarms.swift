@@ -148,6 +148,7 @@ struct AlarmSheet: View {
                                     : name.map { "Start \($0) at…" } ?? "New alarm")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
             if picking {
                 Menu {
                     // one list, yours first
@@ -540,7 +541,7 @@ private struct AlarmRow: View {
             .help(alarm.whileHere ? "change the hours or days" : "change the time or days")
 
             let hearing = preview.playing == alarm.id
-            IconButton(icon: hearing ? .pause : .play, help: hearing ? "stop" : "hear how it starts") { preview.toggle(alarm, controller: controller) }
+            IconButton(icon: hearing ? .pause : .play, help: hearing ? "stop \(alarm.name)" : "hear how \(alarm.name) starts") { preview.toggle(alarm, controller: controller) }
                 .opacity(!alarm.whileHere && (hovering || hearing) ? 1 : 0)
                 .disabled(alarm.whileHere)
                 .animation(Theme.quick, value: hovering)
@@ -551,11 +552,11 @@ private struct AlarmRow: View {
             .buttonStyle(PressStyle())
             .help(alarm.on ? "turn off" : "turn on")
             .accessibilityRepresentation {
-                Toggle("on", isOn: Binding(get: { alarm.on }, set: { _ in toggle() }))
+                Toggle("\(alarm.name) at \(AlarmLine.time(alarm))", isOn: Binding(get: { alarm.on }, set: { _ in toggle() }))
             }
 
             // only under the pointer: one click deletes, and it sat right beside the switch
-            IconButton(icon: .x, weight: .bold, help: "delete") { controller.removeAlarm(alarm.id) }
+            IconButton(icon: .x, weight: .bold, help: "delete \(alarm.name)") { controller.removeAlarm(alarm.id) }
                 .padding(.trailing, 4)
                 .opacity(hovering ? 1 : 0)
                 .animation(Theme.quick, value: hovering)

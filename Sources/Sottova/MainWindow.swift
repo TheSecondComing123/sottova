@@ -229,6 +229,7 @@ private struct Sidebar: View {
                         Text("Listening")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.faint)
+                            .accessibilityAddTraits(.isHeader)
                         Spacer()
                         IconButton(icon: .plus, weight: .bold, help: "new preset", size: 24) {
                             var preset = controller.settings
@@ -256,6 +257,7 @@ private struct Sidebar: View {
                         Text("Yours")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.faint)
+                            .accessibilityAddTraits(.isHeader)
                         Spacer()
                         IconButton(icon: .plus, weight: .bold, help: "new collection", size: 24) {
                             guard let id = controller.newPlaylist() else { return }
@@ -344,6 +346,7 @@ private struct Sidebar: View {
             .hoverable(radius: 8)
         }
         .buttonStyle(PressStyle(scale: 0.98))
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .animation(reduceMotion ? Theme.quick : Theme.settle, value: section)
     }
 
@@ -391,6 +394,7 @@ private struct Sidebar: View {
             .hoverable(radius: 8)
         }
         .buttonStyle(PressStyle(scale: 0.98))
+        .accessibilityAddTraits(active ? .isSelected : [])
         .animation(Theme.quick, value: active)
         .help(custom ? "save as a preset" : Format.gaps(preset))
         .sottovaMenu {
@@ -513,6 +517,7 @@ private struct PlaylistRow: View {
             .hoverable(radius: 8)
         }
         .buttonStyle(PressStyle(scale: 0.98))
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .dropDestination(for: URL.self) { urls, _ in
             let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
             guard !songs.isEmpty else { return false }

@@ -42,6 +42,7 @@ struct SettingsView: View {
                         .hoverable(radius: 8)
                     }
                     .buttonStyle(PressStyle(scale: 0.98))
+                    .accessibilityAddTraits(page == item ? .isSelected : [])
                 }
                 Spacer()
             }
@@ -88,6 +89,7 @@ private struct PageTitle: View {
                 .font(.system(size: 22, weight: .bold))
                 .tracking(-0.4)
                 .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
             if let detail {
                 Text(detail)
                     .font(.system(size: 13))
@@ -108,6 +110,7 @@ private struct Heading: View {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
             if let value {
                 Text(value)

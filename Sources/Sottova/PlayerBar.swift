@@ -209,6 +209,7 @@ struct SleepButton: View {
         .animation(Theme.quick, value: timer)
         .help("sleep timer")
         .accessibilityLabel("sleep timer")
+        .accessibilityValue(timer.map { Format.sleep($0, resting: resting, at: .now) } ?? "off")
     }
 }
 

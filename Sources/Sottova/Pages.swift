@@ -273,6 +273,7 @@ private struct HeroTitle: View, Equatable {
             .tracking(-size * 0.022)
             .lineLimit(size < 36 ? 2 : 1)
             .foregroundStyle(Theme.text)
+            .accessibilityAddTraits(.isHeader)
     }
 
     /// The largest of 48 and 36 pt whose bold cut fits `width` on one line, else 28 on two. Measured here rather than
@@ -431,6 +432,7 @@ struct SongsPage: View {
                             .font(.system(size: 48, weight: .bold))
                             .tracking(-1.2)
                             .foregroundStyle(Theme.text)
+                            .accessibilityAddTraits(.isHeader)
                         HStack(spacing: 8) {
                             Text((needle.isEmpty ? Format.count(all.count, "song") : "\(songs.count) of \(all.count) songs")
                                  + " · \(Format.length(songs.reduce(0) { $0 + $1.duration })) ·")
@@ -586,6 +588,7 @@ private struct AlbumGaps: View {
             Text("Gaps for \(title)")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
                 .lineLimit(1)
             Text("only for this one; everything else keeps yours")
                 .font(.system(size: 13))
@@ -787,6 +790,7 @@ struct PlaylistPage: View {
                 .tracking(-1.2)
                 .foregroundStyle(Theme.text)
                 .focused($typing)
+                .accessibilityLabel("collection name")
                 .onSubmit { commitRename() }
                 .onExitCommand { endRename() }
                 .onChange(of: typing) { _, focused in
@@ -799,6 +803,7 @@ struct PlaylistPage: View {
                 .tracking(-1.2)
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
                 .onTapGesture(count: 2) { startRename(playlist) }
                 .help("double-click to rename")
         }
@@ -1033,6 +1038,7 @@ struct AlbumPage: View {
                             .tracking(-1.2)
                             .foregroundStyle(Theme.text)
                             .lineLimit(2)
+                            .accessibilityAddTraits(.isHeader)
                         HStack(spacing: 0) {
                             LinkText(text: album.artist) { navigate(.artist(album.artist)) }
                                 .font(.system(size: 13, weight: .semibold))
@@ -1160,6 +1166,7 @@ struct ComposerPage: View {
                         .tracking(-1.2)
                         .foregroundStyle(Theme.text)
                         .lineLimit(2)
+                        .accessibilityAddTraits(.isHeader)
                     Text([Format.count(works.count, "work"), Format.count(songs.count, "recording"),
                           Format.length(songs.reduce(0) { $0 + $1.duration })].joined(separator: " · "))
                         .font(.system(size: 13))
@@ -1219,6 +1226,7 @@ struct ArtistPage: View {
                             .tracking(-1.2)
                             .foregroundStyle(Theme.text)
                             .lineLimit(2)
+                            .accessibilityAddTraits(.isHeader)
                         HStack(spacing: 0) {
                             Text("\(Format.count(collections.count, "collection")) · \(Format.count(songs.count, "song"))")
                                 .foregroundStyle(Theme.muted)

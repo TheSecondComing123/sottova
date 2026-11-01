@@ -73,6 +73,8 @@ struct Panel: View {
                 .menuIndicator(.hidden)
                 .buttonStyle(.plain)
                 .fixedSize()
+                .help("more")
+                .accessibilityLabel("more")
             }
 
             gapSection

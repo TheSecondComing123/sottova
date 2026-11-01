@@ -144,6 +144,7 @@ private struct Marker: View {
             }
             .buttonStyle(PressStyle())
             .help(isCurrent ? (running ? "pause" : "play") : "play from here")
+            .accessibilityLabel(isCurrent ? (running ? "pause" : "play") : "play from here")
         } else if isCurrent {
             // still, on purpose: the animated .variableColor effect redrew at display rate and cost about 20% CPU
             Ph.waveform.icon(.bold, size: 15)
@@ -168,6 +169,7 @@ private struct Title: View {
             .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
             .foregroundStyle(Theme.text)
             .lineLimit(1)
+            .accessibilityValue(isCurrent ? "playing" : "")
     }
 }
 
@@ -185,13 +187,13 @@ struct NowPlayingTitle: View {
             if playing {
                 Ph.waveform.icon(.bold, size: 12)
                     .foregroundStyle(Theme.accent(for: key))
-                    .accessibilityLabel("playing")
             }
             Text(text)
                 .lineLimit(lines)
         }
         .font(.system(size: 13, weight: .semibold))
         .foregroundStyle(Theme.text)
+        .accessibilityValue(playing ? "playing" : "")
     }
 }
 
@@ -398,6 +400,7 @@ struct SectionTitle: View {
                 .font(.system(size: 22, weight: .bold))
                 .tracking(-0.4)
                 .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
             if let action {
                 LinkText(text: action.label, action: action.run)
@@ -421,6 +424,7 @@ struct PageHeader: View {
                     .font(.system(size: 48, weight: .bold))
                     .tracking(-1.2)
                     .foregroundStyle(Theme.text)
+                    .accessibilityAddTraits(.isHeader)
                 Text(detail)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)

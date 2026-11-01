@@ -42,6 +42,7 @@ struct CoverPicker: View {
             Text("Choose a cover for \(name)")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
 
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -176,6 +177,7 @@ struct CoverPicker: View {
                 .frame(width: 136, height: 136)
                 .clipShape(.rect(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(picked == painting ? Theme.text : .clear, lineWidth: 2))
+                .accessibilityHidden(true)
                 Text(painting.title)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.text)
@@ -189,6 +191,7 @@ struct CoverPicker: View {
         }
         .buttonStyle(PressStyle(scale: 0.98))
         .help(painting.credit)
+        .accessibilityAddTraits(picked == painting ? .isSelected : [])
     }
 
     private func search() {
