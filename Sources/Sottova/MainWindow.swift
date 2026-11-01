@@ -6,9 +6,8 @@ struct MainWindow: View {
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @State private var visible = true
-    @State private var mouseButtons: Any?
-    @State private var escapeKey: Any?
-    @State private var swipes: Any?
+    /// A theme change rebuilds this view, which would add them all again; they only need the router, which stays.
+    @MainActor private static var watching = false
     @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
@@ -160,18 +159,15 @@ struct MainWindow: View {
 
     /// The back and forward buttons on a mouse, and Esc for the queue when nothing is being typed.
     private func watchMouseButtons() {
-        if escapeKey == nil {
-            escapeKey = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                guard event.keyCode == 53, router.showsQueue, !(event.window?.firstResponder is NSText) else { return event }
-                toggleQueue()
-                return nil
-            }
+        guard !Self.watching else { return }
+        Self.watching = true
+        _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 53, router.showsQueue, !(event.window?.firstResponder is NSText) else { return event }
+            toggleQueue()
+            return nil
         }
-        if swipes == nil {
-            swipes = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: swipe)
-        }
-        guard mouseButtons == nil else { return }
-        mouseButtons = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { event in
+        _ = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: swipe)
+        _ = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { event in
             switch event.buttonNumber {
             case 3: router.goBack()
             case 4: router.goForward()
