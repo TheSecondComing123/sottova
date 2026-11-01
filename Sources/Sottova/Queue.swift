@@ -18,7 +18,7 @@ struct QueuePanel: View {
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, 14)
-                .padding(.bottom, 6)
+                .padding(.bottom, 5)
             if controller.upNext.isEmpty {
                 Text("Nothing queued. Drop songs here, or right-click one and pick Play next.")
                     .role(.body)
@@ -52,7 +52,7 @@ struct QueuePanel: View {
                     .role(.body)
                     .foregroundStyle(Theme.faint)
                     .padding(.horizontal, 14)
-                    .padding(.top, 4)
+                    .padding(.top, 9)
                     .padding(.bottom, 2)
             }
         }
@@ -60,7 +60,7 @@ struct QueuePanel: View {
         .padding(.bottom, 8)
         .frame(width: 320)
         .background(Theme.popover, in: .rect(cornerRadius: Radius.large))
-        .overlay(RoundedRectangle(cornerRadius: Radius.large).strokeBorder(.black.opacity(0.5), lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: Radius.large).stroke(.black.opacity(0.5), lineWidth: 0.5).padding(-0.25))
         .shadow(color: .black.opacity(0.5), radius: 20, y: 14)
     }
     #else
