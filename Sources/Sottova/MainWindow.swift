@@ -11,19 +11,36 @@ struct MainWindow: View {
     @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
+    #if NEWLOOK
+    @State private var narrow = false
+    private var onNow: Bool { router.route == .home && router.query.isEmpty }
+    #endif
 
     var body: some View {
         HStack(spacing: 0) {
+            #if NEWLOOK
+            Sidebar(section: router.route.section) { root in
+                router.go(to: root)
+            }
+            .frame(width: narrow ? 176 : 216)
+            .background(Theme.sidebar)
+            .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
+            #else
             Sidebar(section: router.route.section) { root in
                 router.go(to: root)
             }
             .frame(width: 228)
 
             Rectangle().fill(Theme.border).frame(width: 1)
+            #endif
 
             VStack(spacing: 0) {
                 // under the toolbar
+                #if NEWLOOK
+                Color.clear.frame(height: 52)
+                #else
                 Color.clear.frame(height: 60)
+                #endif
                 page
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // the page makes room for the queue, so no column hides under it; padding, not safe-area padding, or
@@ -40,22 +57,45 @@ struct MainWindow: View {
                     }
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
+                #if NEWLOOK
+                // no floating bar on Now; the title bar takes over everywhere in Run 5
+                if !onNow {
+                    PlayerBar(showsQueue: router.showsQueue, toggleQueue: toggleQueue)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                }
+                #else
                 PlayerBar(showsQueue: router.showsQueue, toggleQueue: toggleQueue)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
+                #endif
             }
         }
         .background(Theme.background)
         .ignoresSafeArea(.container, edges: .top)
         // in the toolbar, so the title bar is 52 pt with the traffic lights on this line, and clicks reach them
         .toolbar {
+            #if NEWLOOK
+            if !onNow {
+                ToolbarItem(placement: .navigation) { NavArrows() }
+                    .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .principal) { SearchField() }
+                    .sharedBackgroundVisibility(.hidden)
+            }
+            #else
             ToolbarItem(placement: .navigation) { NavArrows() }
                 .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .principal) { SearchField() }
                 .sharedBackgroundVisibility(.hidden)
+            #endif
         }
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        #if NEWLOOK
+        .frame(minWidth: 855, minHeight: 640)
+        .onGeometryChange(for: Bool.self) { $0.size.width < 1040 } action: { narrow = $0 }
+        #else
         .frame(minWidth: 980, minHeight: 640)
+        #endif
         .background(WindowVisibility(visible: $visible))
         .environment(\.windowVisible, visible)
         .environment(\.renaming, $renaming)
@@ -68,11 +108,19 @@ struct MainWindow: View {
             }
         })
         // drop music folders anywhere on the window
+        #if NEWLOOK
+        .dropDestination(for: URL.self, action: { urls, _ in
+            let folders = urls.filter(\.hasDirectoryPath)
+            controller.addFolders(folders)
+            return !folders.isEmpty
+        }, isTargeted: { router.droppingMusic = $0 })
+        #else
         .dropDestination(for: URL.self) { urls, _ in
             let folders = urls.filter(\.hasDirectoryPath)
             controller.addFolders(folders)
             return !folders.isEmpty
         }
+        #endif
         .onAppear(perform: watchMouseButtons)
         .onAppear { controller.undo = undoManager }
         .onChange(of: undoManager) { controller.undo = undoManager }
@@ -104,7 +152,11 @@ struct MainWindow: View {
                 SearchPage(query: router.query)
             } else {
                 switch router.route {
+                #if NEWLOOK
+                case .home: NowPage()
+                #else
                 case .home: HomePage()
+                #endif
                 case .songs: SongsPage()
                 case .collections: CollectionsPage()
                 case .artists: ArtistsPage()
@@ -188,8 +240,14 @@ private struct Sidebar: View {
     @Environment(\.renaming) private var renaming
     @Namespace private var pill
 
+    #if NEWLOOK
+    private static let homeName = "Now"
+    #else
+    private static let homeName = "Home"
+    #endif
+
     private let items: [(Route, String, Ph)] = [
-        (.home, "Home", .house),
+        (.home, Self.homeName, .house),
         (.songs, "Songs", .musicNote),
         (.collections, "Collections", .stack),
         (.artists, "Artists", .microphoneStage),

@@ -7,6 +7,10 @@ import SottovaCore
 @Observable @MainActor
 final class Router {
     private(set) var route = Route.home
+    #if NEWLOOK
+    /// Something's being dragged over the window, for the first run's frame.
+    var droppingMusic = false
+    #endif
     /// Where each page in the history was scrolled to, so Back lands where you were.
     private(set) var back: [(route: Route, offset: CGFloat)] = []
     private(set) var forward: [(route: Route, offset: CGFloat)] = []

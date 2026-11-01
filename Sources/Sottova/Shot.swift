@@ -17,6 +17,9 @@ struct ShotReady: ViewModifier {
                                             covers: defaults.string(forKey: "shotCovers").map { URL(filePath: $0) })
             let routes: [String: Route] = ["home": .home, "songs": .songs, "collections": .collections, "artists": .artists, "alarms": .alarms, "shelf": .shelf]
             router.go(to: routes[defaults.string(forKey: "shotRoute") ?? "home"]!)
+            #if NEWLOOK
+            router.droppingMusic = defaults.bool(forKey: "shotDragging")
+            #endif
             let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
             let window = NSApp.windows.first { $0.title == "Sottova" }
             window?.setContentSize(NSSize(width: width, height: 800))
