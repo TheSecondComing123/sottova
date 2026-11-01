@@ -150,6 +150,7 @@ struct MainWindow: View {
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
         #if NEWLOOK
+        .disabled(router.presetEdit != nil)
         // not a system sheet: Tahoe's sits mid-window with 26 pt corners and dims the page twice as far as the mock
         .overlay {
             if let edit = router.presetEdit {
@@ -256,7 +257,7 @@ struct MainWindow: View {
         guard !Self.watching else { return }
         Self.watching = true
         _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.keyCode == 53, router.showsQueue, !(event.window?.firstResponder is NSText) else { return event }
+            guard event.keyCode == 53, router.showsQueue, router.presetEdit == nil, !(event.window?.firstResponder is NSText) else { return event }
             toggleQueue()
             return nil
         }
@@ -562,7 +563,9 @@ private struct SearchField: View {
                 .focused($searching)
                 .onExitCommand { router.query = ""; searching = false }
                 .onChange(of: searching) { _, focused in router.typing = focused }
+                #if !NEWLOOK
                 .onChange(of: router.searchRequests) { searching = true }
+                #endif
                 // AppKit hands a new window's focus to its first text field; here that would swallow Space
                 .onAppear { DispatchQueue.main.async { searching = false } }
             if !router.query.isEmpty {

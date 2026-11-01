@@ -95,7 +95,7 @@ final class Router {
     func search() {
         #if NEWLOOK
         // the filter on Songs is the search; asking from elsewhere goes there, so it never waits to take focus later
-        if route != .songs { go(to: .songs) }
+        if route != .songs || !query.isEmpty { go(to: .songs) }
         #endif
         searchRequests += 1
     }
@@ -152,6 +152,17 @@ struct SottovaCommands: Commands {
                 .keyboardShortcut("o")
         }
         CommandMenu("Go") {
+            #if NEWLOOK
+            goItems.disabled(router.presetEdit != nil)
+            #else
+            goItems
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private var goItems: some View {
+        Group {
             Button("Back") { router.goBack() }
                 .keyboardShortcut("[")
                 .disabled(router.back.isEmpty)

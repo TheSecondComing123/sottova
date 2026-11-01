@@ -92,7 +92,11 @@ struct SilenceSheet: View {
             router.typing = field != nil
             tidy()
         }
-        .onDisappear { router.typing = false }
+        .onDisappear {
+            router.typing = false
+            // the window closed under it
+            router.presetEdit = nil
+        }
     }
 
     private func row<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
