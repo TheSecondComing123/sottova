@@ -20,6 +20,7 @@ struct MainWindow: View {
             #if NEWLOOK
             Sidebar(section: router.route.section)
                 .frame(width: narrow ? 176 : 216)
+                .overlay(alignment: .top) { TitleDrag().frame(height: 44) }
                 .background(Theme.sidebar)
                 .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
             #else

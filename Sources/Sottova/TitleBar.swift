@@ -32,6 +32,7 @@ struct TitleBar: View {
             .padding(.trailing, 20)
         }
         .frame(height: 52)
+        .background(TitleDrag())
     }
 
     /// Off Now, what's sounding. Silence says nothing up here.
@@ -48,6 +49,16 @@ struct TitleBar: View {
             .padding(.trailing, narrow ? 110 : 190)
             .allowsHitTesting(false)
         }
+    }
+}
+
+/// The blank parts of the title bar's band, which move and zoom the window as a title bar does.
+struct TitleDrag: View {
+    var body: some View {
+        Color.clear
+            .contentShape(.rect)
+            .gesture(WindowDragGesture())
+            .simultaneousGesture(TapGesture(count: 2).onEnded { NSApp.keyWindow?.performZoom(nil) })
     }
 }
 
