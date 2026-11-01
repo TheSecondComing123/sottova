@@ -75,6 +75,12 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         partSpent = try c.decodeIfPresent(Date.self, forKey: .partSpent)
     }
 
+    /// What you can set yourself, from `other`. Its id and what the app keeps about when it last went off stay.
+    public mutating func setUserFields(from other: Alarm) {
+        (source, name, hour, minute, weekdays, day) = (other.source, other.name, other.hour, other.minute, other.weekdays, other.day)
+        (shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts) = (other.shuffled, other.on, other.volume, other.minutes, other.whileHere, other.heedsCalendar, other.rotates, other.parts)
+    }
+
     /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.
     public mutating func scheduleOnce(after now: Date = .now, calendar: Calendar = .current) {
         guard weekdays.isEmpty else { return }

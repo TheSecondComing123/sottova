@@ -31,6 +31,12 @@ struct SottovaApp: App {
         Timer.scheduledTimer(withTimeInterval: 6 * 60 * 60, repeats: true) { _ in
             MainActor.assumeIsolated { SystemWake.shared.renew(for: controller.alarms) }
         }
+        // undoing an edit can bring back a time with no wake yet
+        for name in [Notification.Name.NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange] {
+            _ = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { SystemWake.shared.renew(for: controller.alarms) }
+            }
+        }
         let center = NSWorkspace.shared.notificationCenter
         _ = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { controller.systemWillSleep() }

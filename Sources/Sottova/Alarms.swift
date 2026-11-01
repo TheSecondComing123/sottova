@@ -209,7 +209,7 @@ struct AlarmSheet: View {
                     .buttonStyle(QuietButton())
                 Button(editing ? "Save" : kind == .whileHere ? "Set hours" : "Set alarm") {
                     guard let alarm else { return }
-                    if editing { controller.updateAlarm(alarm) } else { controller.addAlarm(alarm) }
+                    if editing { controller.changeAlarm(alarm.id) { $0.setUserFields(from: alarm) } } else { controller.addAlarm(alarm) }
                     dismiss()
                     if alarm.heedsCalendar {
                         Task { await Presence.askForCalendars() }
@@ -575,12 +575,9 @@ private struct AlarmRow: View {
     }
 
     private func toggle() {
-        var changed = alarm
-        changed.on.toggle()
-        // a one-off turned back on goes off at its next time, not on a day that's gone
-        if changed.on { changed.scheduleOnce() }
-        controller.updateAlarm(changed)
-        if changed.on, !changed.whileHere { SystemWake.shared.schedule(for: controller.alarms) }
+        let on = !alarm.on
+        controller.changeAlarm(alarm.id) { $0.on = on }
+        if on, !alarm.whileHere { SystemWake.shared.schedule(for: controller.alarms) }
     }
 }
 
@@ -626,9 +623,7 @@ struct AlarmLine: View {
                     Text(Self.describe(alarm))
                         .foregroundStyle(Theme.muted)
                     LinkText(text: "turn off") {
-                        var off = alarm
-                        off.on = false
-                        controller.updateAlarm(off)
+                        controller.changeAlarm(alarm.id) { $0.on = false }
                     }
                         .foregroundStyle(Theme.text)
                 }

@@ -1087,7 +1087,7 @@ struct AlarmRunTests {
         c.addAlarm(row)
         let due = try #require(row.next(after: .now))
         row.on = false
-        c.updateAlarm(row)
+        c.changeAlarm(row.id) { $0 = row }
         c.armAlarm(now: due + 60)
         try await Task.sleep(for: .milliseconds(50))
         #expect(c.status == .idle)

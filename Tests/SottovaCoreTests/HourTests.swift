@@ -258,7 +258,7 @@ struct HourTests {
         let (c, album) = try await controller(songs: 3)
         var alarm = open(c, album)
         alarm.shuffled = false
-        c.updateAlarm(alarm)
+        c.changeAlarm(alarm.id) { $0 = alarm }
         c.checkHours()
         #expect(c.upNext.map(\.path) == album.songs.map(\.id))
         #expect(c.origin?.shuffled == false)
@@ -268,12 +268,12 @@ struct HourTests {
         let (c, album) = try await controller()
         var alarm = open(c, album)
         alarm.heedsCalendar = false
-        c.updateAlarm(alarm)
+        c.changeAlarm(alarm.id) { $0 = alarm }
         c.presence = { $0 ? .busy : nil }
         c.checkHours()
         #expect(c.hold == nil)
         alarm.heedsCalendar = true
-        c.updateAlarm(alarm)
+        c.changeAlarm(alarm.id) { $0 = alarm }
         c.checkHours()
         #expect(c.hold == .busy)
     }
@@ -288,7 +288,7 @@ struct HourTests {
         c.sleep(minutes: 1)
         c.systemWillSleep()
         alarm.heedsCalendar = true
-        c.updateAlarm(alarm)
+        c.changeAlarm(alarm.id) { $0 = alarm }
         c.fire(alarm.id, due: .now)
         #expect(c.status == .idle)
         #expect(c.problem?.contains("calendar") == true)
@@ -352,7 +352,7 @@ struct HourTests {
         var row = open(c, album)
         row.rotates = true
         row.parts = 2
-        c.updateAlarm(row)
+        c.changeAlarm(row.id) { $0 = row }
         return row
     }
 
@@ -451,7 +451,7 @@ struct HourTests {
         row.source = id
         row.rotates = true
         row.nextPart = 2
-        c.updateAlarm(row)
+        c.changeAlarm(row.id) { $0 = row }
         #expect(c.parts(for: row).map(\.count) == [1, 0, 1])
         #expect(c.nextPartName(for: row) == "part 3")
         c.checkHours()

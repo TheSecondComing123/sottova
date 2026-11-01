@@ -216,4 +216,26 @@ struct AlarmOrderTests {
                                                                                             skipped: false, gapAfterSec: 0)], using: &rng)
         #expect(order.map(\.id) == ["/Lauds/1.flac"])
     }
+
+    /// Otherwise the next launch drops it for being past.
+    @Test @MainActor func anEditedOneOffGetsATimeStillAhead() {
+        let c = Controller(storage: nil)
+        var once = Alarm(source: "a", name: "A", hour: 7, minute: 2, day: .now + 86_400)
+        c.addAlarm(once)
+        once.day = .now - 3 * 86_400
+        c.changeAlarm(once.id) { $0 = once }
+        #expect(c.alarms[0].next(after: .now) != nil)
+    }
+
+    @Test func anEditKeepsWhatTheAppKeepsAboutTheRow() {
+        var row = Alarm(source: "a", name: "A", hour: 7, minute: 2, weekdays: [2])
+        (row.lastFired, row.partSpent, row.nextPart) = (.now, .now, 2)
+        var edited = Alarm(source: "b", name: "B", hour: 8, minute: 3, weekdays: [3])
+        (edited.volume, edited.rotates, edited.on) = (0.2, true, false)
+        let kept = (row.id, row.lastFired, row.partSpent, row.nextPart)
+        row.setUserFields(from: edited)
+        #expect((row.source, row.name, row.hour, row.minute, row.weekdays) == ("b", "B", 8, 3, [3]))
+        #expect(row.volume == 0.2 && row.rotates && !row.on)
+        #expect(row.id == kept.0 && row.lastFired == kept.1 && row.partSpent == kept.2 && row.nextPart == kept.3)
+    }
 }

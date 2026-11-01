@@ -156,7 +156,7 @@ struct RotationTests {
         c.calendarBusy = { true }
         var minding = try #require(c.alarms.first)
         minding.heedsCalendar = true
-        c.updateAlarm(minding)
+        c.changeAlarm(minding.id) { $0 = minding }
         c.fire(alarm.id, due: .now)
         #expect(c.alarms.first?.nextPart == 1)
         c.calendarBusy = { false }
