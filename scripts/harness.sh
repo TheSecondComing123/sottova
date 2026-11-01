@@ -18,11 +18,9 @@ rm -rf "${app:?}"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$scratch/$config/Sottova" "$app/Contents/MacOS/SottovaShot"
 cp Support/Info.plist "$plist"
-cp Support/AppIcon.icns "$app/Contents/Resources/"
+cp Support/AppIcon.icns Support/Assets.car "$app/Contents/Resources/"
 cp -R Support/Icons "$app/Contents/Resources/"
 cp -R Support/Themes "$app/Contents/Resources/"
-cp Support/Assets.car "$app/Contents/Resources/"
-$buddy -c "Add :CFBundleIconName string Sottova" "$plist"
 $buddy -c "Delete :CFBundleURLTypes" -c "Set :CFBundleExecutable SottovaShot" -c "Set :CFBundleName SottovaShot" \
     -c "Set :CFBundleIdentifier com.alanbagel.sottova.shot" "$plist"
 codesign -f -s - "$app" 2>/dev/null

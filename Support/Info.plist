@@ -6,6 +6,8 @@
 	<string>Sottova</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>Sottova</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.alanbagel.sottova</string>
 	<key>CFBundleName</key>
