@@ -144,7 +144,11 @@ public struct DayPlan: Sendable {
 
     /// Under a collection in the grid: "7:02 weekdays", "3 to 7 PM". Nil if it has no row on.
     public func shortHours(of source: String) -> String? {
-        firstRow(of: source).map { $0.minutes == nil ? "\(clockTime($0)) \(days($0).lowercased())" : span($0) }
+        firstRow(of: source).map { row in
+            // 7:02 alone reads as morning; anything else says which
+            let noon = twelveHour && (row.hour >= 12 || row.minute == 0) ? row.hour < 12 ? " AM" : " PM" : ""
+            return row.minutes == nil ? "\(clockTime(row))\(noon) \(days(row).lowercased())" : span(row)
+        }
     }
 
     /// On a collection's page: "Every day, 8 to 9 PM, at 15%". Nil if it has no row on.

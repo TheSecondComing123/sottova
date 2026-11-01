@@ -150,7 +150,23 @@ struct MainWindow: View {
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
         #if NEWLOOK
-        .sheet(item: Binding(get: { router.presetEdit }, set: { router.presetEdit = $0 })) { SilenceSheet(edit: $0) }
+        // not a system sheet: Tahoe's sits mid-window with 26 pt corners and dims the page twice as far as the mock
+        .overlay {
+            if let edit = router.presetEdit {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.28)
+                        .contentShape(.rect)
+                        .onTapGesture {}
+                    SilenceSheet(edit: edit)
+                        .padding(.top, 52)
+                        .frame(maxWidth: .infinity)
+                        .padding(.leading, narrow ? 176 : 216)
+                }
+                .ignoresSafeArea()
+                .transition(.opacity)
+            }
+        }
+        .animation(Theme.quick, value: router.presetEdit?.id)
         #else
         .sheet(item: Binding(get: { router.presetEdit }, set: { router.presetEdit = $0 })) { PresetSheet(edit: $0) }
         #endif

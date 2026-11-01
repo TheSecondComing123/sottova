@@ -434,11 +434,16 @@ extension MenuEntry {
         if gaps == "Custom" {
             choices.append(.item("Custom", checked: true, enabled: false) {})
         }
+        var goToArtist: [MenuEntry] = [.item("Go to artist") { navigate(.artist(album.artist)) }]
+        #if NEWLOOK
+        // a name opens Songs filtered, and no song is tagged with Catalog's word for a compilation
+        if album.artist == "Various Artists" { goToArtist = [] }
+        #endif
         return [
             .item("Play") { controller.play(album.songs) },
             .item("Play next") { controller.playNext(album.songs) },
             .addToCollection(album.songs, name: album.title, controller: controller),
-            .item("Go to artist") { navigate(.artist(album.artist)) },
+        ] + goToArtist + [
             .divider,
             .item("Choose cover…") { router.coverFor = .album(album.id) },
             .item("Start at…") { router.alarm = .new(.album(album.id)) },

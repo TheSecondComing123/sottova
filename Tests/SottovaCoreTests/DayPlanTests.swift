@@ -202,6 +202,8 @@ struct DayPlanTests {
         #expect(day.hours(of: "compline") == "Every day, 8 to 9 PM, at 15%")
         #expect(day.hours(of: "lauds") == "Weekdays, 7:02 AM, at 25%")
         #expect(day.hours(of: "noon") == "Weekends, 11:30 AM to 1 PM")
+        let eight = Alarm(source: "eight", name: "Eight", hour: 20, minute: 0, weekdays: Set(1...7))
+        #expect(plan([eight]).shortHours(of: "eight") == "8 PM every day")
         #expect(day.hours(of: "off") == nil)
         #expect(day.shortHours(of: "nothing") == nil)
     }

@@ -11,7 +11,7 @@ struct TypedDurationTests {
         #expect(TypedDuration.parse(text, unit: unit) == seconds)
     }
 
-    @Test(arguments: ["", "  ", "soon", "5 parsecs", "-5", "5 s 2 min", "1:75", "min", "nan", "inf"])
+    @Test(arguments: ["", "  ", "soon", "5 parsecs", "-5", "5 s 2 min", "1:75", "min", "nan", "inf", "1000000000000000000000", "25 h"])
     func refuses(text: String) {
         #expect(TypedDuration.parse(text, unit: 60) == nil)
     }

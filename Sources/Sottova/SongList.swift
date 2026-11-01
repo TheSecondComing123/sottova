@@ -147,7 +147,7 @@ struct SongList: View {
                 let songs: [Song] = reversed ? sorted.reversed() : sorted
                 PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: margin)) {
                     HStack(spacing: 16) {
-                        HStack(alignment: .lastTextBaseline, spacing: 16) {
+                        HStack(alignment: .top, spacing: 18) {
                             Text("Songs")
                                 .role(.title)
                                 .foregroundStyle(Theme.text)
@@ -155,6 +155,7 @@ struct SongList: View {
                             Text(count(of: songs.count, in: all.count, filtered: !needle.isEmpty))
                                 .role(.body)
                                 .foregroundStyle(Theme.faint)
+                                .padding(.top, 16)
                         }
                         Spacer(minLength: 0)
                         TextField("Filter", text: $router.songFilter)

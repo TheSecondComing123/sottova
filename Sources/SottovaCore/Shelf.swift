@@ -105,9 +105,13 @@ public final class Shelf {
         } catch {
             progress[set.id] = nil
             if !Task.isCancelled {
-                failed[set.id] = "Didn't finish. " + (error is URLError ? "The connection dropped." : "\(error.localizedDescription.prefix(1).uppercased())\(error.localizedDescription.dropFirst()).")
+                failed[set.id] = "Didn't finish. " + (error is URLError ? "The connection dropped." : Self.sentence(error.localizedDescription))
             }
         }
+    }
+
+    private static func sentence(_ text: String) -> String {
+        text.prefix(1).uppercased() + text.dropFirst() + (text.hasSuffix(".") ? "" : ".")
     }
 
     #if SHOT

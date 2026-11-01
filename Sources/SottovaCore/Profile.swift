@@ -112,6 +112,10 @@ extension Settings {
 /// A length typed into a preset: "5 min", "90 s", "1:30", "1 min 30 s". A bare number takes `unit`, in seconds.
 public enum TypedDuration {
     public static func parse(_ text: String, unit: Double) -> Double? {
+        read(text, unit: unit).flatMap { $0 <= 86_400 ? $0 : nil }
+    }
+
+    private static func read(_ text: String, unit: Double) -> Double? {
         let text = text.trimmingCharacters(in: .whitespaces).lowercased()
         guard !text.isEmpty else { return nil }
         if let match = text.wholeMatch(of: /(\d+):([0-5]\d)/) { return Double(match.1)! * 60 + Double(match.2)! }

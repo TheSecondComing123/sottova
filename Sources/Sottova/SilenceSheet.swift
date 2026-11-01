@@ -8,7 +8,6 @@ struct SilenceSheet: View {
     let edit: PresetEdit
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
-    @Environment(\.dismiss) private var dismiss
     @State private var draft: SottovaCore.Settings
     @State private var shortest: String
     @State private var longest: String
@@ -29,11 +28,13 @@ struct SilenceSheet: View {
     /// seconds in a fade, which is what those fields already say.
     private var saved: SottovaCore.Settings? {
         guard !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let low = TypedDuration.parse(shortest, unit: 60), let high = TypedDuration.parse(longest, unit: 60),
               let fade = TypedDuration.parse(fadeIn, unit: 1) else { return nil }
         var preset = draft
-        (preset.gapMin, preset.gapMax) = (min(low, high), max(low, high))
         preset.fadeIn = min(fade, 20)
+        // overlapping, the gaps' fields are off and keep what they had
+        if draft.crossfade { return preset }
+        guard let low = TypedDuration.parse(shortest, unit: 60), let high = TypedDuration.parse(longest, unit: 60) else { return nil }
+        (preset.gapMin, preset.gapMax) = (min(low, high), max(low, high))
         return preset
     }
 
@@ -64,27 +65,28 @@ struct SilenceSheet: View {
                 if let name = edit.replacing {
                     ThemeButton(title: "Delete") {
                         controller.deletePreset(name)
-                        dismiss()
+                        router.presetEdit = nil
                     }
                 }
                 Spacer(minLength: 0)
-                ThemeButton(title: "Cancel") { dismiss() }
+                ThemeButton(title: "Cancel") { router.presetEdit = nil }
                     .keyboardShortcut(.cancelAction)
                 ThemeButton(title: "Save", primary: true) {
                     guard let saved else { return }
                     controller.savePreset(saved, replacing: edit.replacing)
-                    dismiss()
+                    router.presetEdit = nil
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(saved == nil)
-                .opacity(saved == nil ? 0.5 : 1)
             }
             .padding(.top, 8)
         }
         .role(.body)
         .padding(20)
         .frame(width: 440)
-        .presentationBackground(Theme.sidebar)
+        .background(Theme.sidebar, in: .rect(cornerRadius: Radius.window))
+        .overlay { RoundedRectangle(cornerRadius: Radius.window).strokeBorder(.black.opacity(0.5), lineWidth: 0.5) }
+        .shadow(color: .black.opacity(0.55), radius: 25, y: 18)
         .onAppear { focus = .name }
         .onChange(of: focus) { _, field in
             router.typing = field != nil
@@ -120,7 +122,7 @@ struct SilenceSheet: View {
         }
         shortest = tidied(shortest, 60, .shortest)
         longest = tidied(longest, 60, .longest)
-        fadeIn = tidied(fadeIn, 1, .fadeIn)
+        if focus != .fadeIn, let fade = TypedDuration.parse(fadeIn, unit: 1) { fadeIn = TypedDuration.format(min(fade, 20)) }
     }
 
     private var overlap: some View {
