@@ -878,4 +878,57 @@ struct AlarmRunTests {
         #expect(c.problem?.contains("1 song") == true)
         #expect(c.problem?.contains("out of reach") == true)
     }
+
+    private func published(_ storage: URL) throws -> String? {
+        let info = try JSONSerialization.jsonObject(with: Data(contentsOf: storage.appending(path: "status.json"))) as? [String: Any]
+        return info?["status"] as? String
+    }
+
+    /// What the alarm backup reads at 7:04: "playing" there means it stays out of the way.
+    @Test func waitingForTheDeviceIsntPublishedAsPlaying() async throws {
+        let storage = try temp()
+        let (c, album, _) = try await controller(storage: storage)
+        c.run()
+        c.retryWait = .milliseconds(200)
+        let row = alarm(album)
+        c.addAlarm(row)
+        failing(c)
+        c.fire(row.id, due: .now)
+        #expect(c.status == .playing)
+        #expect(try published(storage) == "waiting")
+        c.startEngine = { try $0.start() }
+        for _ in 0..<400 where try published(storage) == "waiting" { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(try published(storage) == "playing")
+    }
+
+    /// Between pieces the status doesn't change, so nothing else would have written it.
+    @Test func aDeviceLostBetweenPiecesIsntPublishedAsPlaying() async throws {
+        let storage = try temp()
+        let (c, album, _) = try await controller(storage: storage)
+        c.run()
+        c.retryWait = .milliseconds(200)
+        c.play(album.songs)
+        #expect(try published(storage) == "playing")
+        failing(c)
+        c.skip()
+        for _ in 0..<400 where c.machine.phase != .loading { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.machine.phase == .loading)
+        #expect(c.status == .playing)
+        #expect(try published(storage) == "waiting")
+    }
+
+    @Test func anAlarmTryingToGoOnIsPublishedAsPaused() async throws {
+        let storage = try temp()
+        let (c, album, engine) = try await controller(storage: storage)
+        c.run()
+        c.retryWait = .milliseconds(5)
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        failing(c)
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
+        for _ in 0..<50 where c.status != .paused { try await Task.sleep(for: .milliseconds(5)) }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(try published(storage) == "paused")
+    }
 }

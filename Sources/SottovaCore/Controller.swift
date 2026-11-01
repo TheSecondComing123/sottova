@@ -1782,6 +1782,8 @@ public final class Controller {
             playbackProblem = problem
         }
         retrying = path
+        // between pieces the status doesn't change, so nothing else writes this
+        if engineFailures == 1 { publish() }
         Task {
             try? await Task.sleep(for: retryWait)
             if retrying == path, case .loading = machine.phase { startNextTrack() }
@@ -1944,7 +1946,8 @@ public final class Controller {
     private func publish() {
         nowPlaying?.update(status: status, title: title, track: lastTrack)
         guard ticker != nil, let url = storage?.appending(path: "status.json") else { return }
-        var info: [String: Any] = ["status": "\(status)", "preset": settings.name]
+        // waiting for the device is playing to the UI, but it's silence, and the alarm backup believes this file
+        var info: [String: Any] = ["status": retrying != nil ? "waiting" : "\(status)", "preset": settings.name]
         if let title { info["title"] = title }
         if let nextTrackAt { info["nextTrackAt"] = ISO8601DateFormatter().string(from: nextTrackAt) }
         switch sleepTimer {
