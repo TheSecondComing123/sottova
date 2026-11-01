@@ -40,12 +40,13 @@ struct AlarmSheet: View {
     }
 
     enum Repeat: String, CaseIterable {
-        case once = "Once", weekdays = "Weekdays", daily = "Every day"
+        case once = "Once", weekdays = "Weekdays", weekends = "Weekends", daily = "Every day"
 
         var days: Set<Int> {
             switch self {
             case .once: []
             case .weekdays: [2, 3, 4, 5, 6]
+            case .weekends: [1, 7]
             case .daily: Set(1...7)
             }
         }
@@ -487,7 +488,7 @@ enum AlarmLine {
         case 7: return "every day"
         case 0:
             return alarm.next(after: .now).map(day) ?? "once"
-        default: return alarm.weekdays == [2, 3, 4, 5, 6] ? "on weekdays" : "on some days"
+        default: return alarm.weekdays == [2, 3, 4, 5, 6] ? "on weekdays" : alarm.weekdays == [1, 7] ? "on weekends" : "on some days"
         }
     }
 }
