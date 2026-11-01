@@ -73,26 +73,16 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     private func rows() -> [MenuEntry] {
-        let now = Date.now
-        return controller.dayPlan(now: now).rows.filter(\.alarm.on).map { row in
+        let plan = controller.dayPlan()
+        return plan.rows.filter(\.alarm.on).map { row in
             var entry = MenuEntry.item(row.alarm.name) { [self] in
                 AppDelegate.showMain()
                 let source = row.alarm.source
                 router.go(to: controller.playlists.contains { $0.id == source } ? .playlist(source) : .album(source))
             }
-            entry.detail = hours(row.alarm, at: now)
+            entry.detail = plan.label(of: row.alarm.source) ?? ""
             return entry
         }
-    }
-
-    // ponytail: DayPlan.label(of:) says the same on Run 7's branch; use it once that's on main
-    private func hours(_ alarm: Alarm, at now: Date) -> String {
-        let bare = Date.FormatStyle().hour(.defaultDigits(amPM: .omitted))
-        if let end = alarm.window(containing: now)?.end {
-            return "till " + end.formatted(Calendar.current.component(.minute, from: end) == 0 ? bare : bare.minute())
-        }
-        let start = Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: now) ?? now
-        return alarm.minute == 0 ? start.formatted(.dateTime.hour()) : start.formatted(bare.minute())
     }
 
     private func silence() -> MenuEntry {
