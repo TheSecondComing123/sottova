@@ -10,6 +10,7 @@ struct FreeMusicPage: View {
         PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
             Text("Free music")
                 .role(.title)
+                .offset(y: -2)
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 27)

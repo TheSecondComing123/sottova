@@ -189,6 +189,7 @@ struct AlbumCollection: View {
                             credit: (album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") }, album.artwork)) {
                 Text(album.title)
                     .role(.title)
+                    .offset(y: -2)
                     .foregroundStyle(Theme.text)
                     .lineLimit(4)
                     .accessibilityAddTraits(.isHeader)
@@ -388,6 +389,7 @@ struct YourCollection: View {
                 .textFieldStyle(.plain)
                 .focusEffectDisabled()
                 .role(.title)
+                .offset(y: -2)
                 .foregroundStyle(Theme.text)
                 .focused($typing)
                 .accessibilityLabel("collection name")
@@ -400,6 +402,7 @@ struct YourCollection: View {
         } else {
             Text(playlist.name)
                 .role(.title)
+                .offset(y: -2)
                 .foregroundStyle(Theme.text)
                 .lineLimit(4)
                 .accessibilityAddTraits(.isHeader)
@@ -548,6 +551,7 @@ struct CollectionGrid: View {
             HStack(alignment: .center) {
                 Text("Collections")
                     .role(.title)
+                    .offset(y: -2)
                     .foregroundStyle(Theme.text)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 16)

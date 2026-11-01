@@ -149,6 +149,7 @@ struct SongList: View {
                         HStack(alignment: .top, spacing: 18) {
                             Text("Songs")
                                 .role(.title)
+                                .offset(y: -2)
                                 .foregroundStyle(Theme.text)
                                 .accessibilityAddTraits(.isHeader)
                             Text(count(of: songs.count, in: all.count, filtered: !needle.isEmpty))
@@ -157,9 +158,13 @@ struct SongList: View {
                                 .padding(.top, 16)
                         }
                         Spacer(minLength: 0)
-                        TextField("Filter", text: $router.songFilter)
+                        TextField("Filter", text: $router.songFilter, prompt: Text(""))
                             .role(.body)
                             .foregroundStyle(Theme.text)
+                            // AppKit draws a prompt in its own gray, whatever color it's given
+                            .overlay(alignment: .leading) {
+                                if router.songFilter.isEmpty { Text("Filter").role(.body).foregroundStyle(Theme.faint).allowsHitTesting(false) }
+                            }
                             .focused($filtering)
                             .onExitCommand { router.songFilter = ""; filtering = false }
                             .onChange(of: filtering) { _, focused in router.typing = focused }
@@ -245,6 +250,7 @@ struct NameList: View {
         PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
             Text("Artists")
                 .role(.title)
+                .offset(y: -2)
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 19)

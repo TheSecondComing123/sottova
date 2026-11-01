@@ -320,18 +320,18 @@ private struct DayRow: View {
         case .wake:
             ThemeLink(text: piece.text) { SystemWake.shared.schedule(for: controller.alarms) }.role(.body)
         case .days?:
-            WordMenu(text: piece.text) { DayWords(alarm: alarm, change: change) }
+            WordMenu(text: piece.text, on: alarm.on) { DayWords(alarm: alarm, change: change) }
         case .order?:
-            WordMenu(text: piece.text) { OrderWords(alarm: alarm, change: change) }
+            WordMenu(text: piece.text, on: alarm.on) { OrderWords(alarm: alarm, change: change) }
         case .volume?:
-            WordMenu(text: piece.text) { VolumeWords(alarm: alarm, change: change) }
+            WordMenu(text: piece.text, on: alarm.on) { VolumeWords(alarm: alarm, change: change) }
         case .calendar?:
-            WordMenu(text: piece.text) {
+            WordMenu(text: piece.text, on: alarm.on) {
                 Toggle("Unless your calendar is busy", isOn: calendarBinding(true))
                 Toggle("Whatever your calendar says", isOn: calendarBinding(false))
             }
         case .part?:
-            WordMenu(text: piece.text) {
+            WordMenu(text: piece.text, on: alarm.on) {
                 let parts = controller.partChoices(for: alarm)
                 ForEach(Array(parts.names.enumerated()), id: \.offset) { index, name in
                     Toggle(name.prefix(1).uppercased() + name.dropFirst(), isOn: Binding(get: { parts.next == index }, set: { _ in change { $0.nextPart = index } }))
@@ -400,6 +400,7 @@ private struct TickMark: Shape {
 /// One clickable word of a row's line, opening a native menu.
 private struct WordMenu<Content: View>: View {
     let text: String
+    let on: Bool
     @ViewBuilder let content: Content
     @State private var hovering = false
 
@@ -409,7 +410,8 @@ private struct WordMenu<Content: View>: View {
         } label: {
             Text(text)
                 .role(.body)
-                .foregroundStyle(hovering ? AnyShapeStyle(Theme.text) : AnyShapeStyle(.foreground))
+                // a Menu's label doesn't inherit the row's foreground
+                .foregroundStyle(hovering ? Theme.text : on ? Theme.muted : Theme.faint)
                 .background { RoundedRectangle(cornerRadius: 4).fill(hovering ? Theme.selection : .clear).padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: -4)) }
         }
         .menuStyle(.button)
