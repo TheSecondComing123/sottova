@@ -1204,4 +1204,45 @@ struct AlarmRunTests {
         #expect(played.map(\.row) == ["Lauds", nil])
         #expect(c.playedToday(now: .now + 2 * 86_400).isEmpty)
     }
+
+    @Test func aRowThatWentOffThenBecameAOneOffIsntDeletedByTheNextAlarm() async throws {
+        let (c, album, _) = try await controller()
+        let row = alarm(album)
+        var other = alarm(album)
+        other.name = "Compline"
+        c.addAlarm(row)
+        c.addAlarm(other)
+        c.fire(row.id, due: .now)
+        c.changeAlarm(row.id) { $0.weekdays = [] }
+        c.fire(other.id, due: .now + 1)
+        #expect(c.alarms.contains { $0.id == row.id })
+    }
+
+    @Test func aDeletedOneOffBroughtBackGetsATimeStillAhead() {
+        let c = Controller(storage: nil)
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        c.undo = undo
+        let once = Alarm(source: "a", name: "A", hour: 7, minute: 2, day: .now - 86_400)
+        c.addAlarm(once)
+        undo.beginUndoGrouping()
+        c.removeAlarm(once.id)
+        undo.endUndoGrouping()
+        undo.undo()
+        #expect(c.alarms[0].next(after: .now) != nil)
+    }
+
+    @Test func aMacAsleepThroughTwoAlarmsMarksBoth() async throws {
+        guard Calendar.current.component(.hour, from: .now) >= 3 else { return }
+        let (c, album, _) = try await controller()
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: .now - 3600)
+        let first = alarm(album)
+        let later = Alarm(source: album.id, name: "Later", hour: parts.hour!, minute: parts.minute!, weekdays: Set(1...7))
+        c.addAlarm(first)
+        c.addAlarm(later)
+        c.fire(first.id, due: .now - 7200)
+        let row = try #require(c.alarms.first { $0.id == later.id })
+        #expect(row.missed?.why == .asleep)
+        #expect(row.missed?.at == later.next(after: .now - 3660))
+    }
 }

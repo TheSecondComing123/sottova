@@ -433,6 +433,8 @@ public final class Controller {
         change(&alarms[i])
         // or a one-off whose day has gone drops at the next launch
         alarms[i].scheduleOnce()
+        // firing deletes a one-off with this set, so one that was something else would go unplayed with the next alarm
+        if alarms[i].weekdays.isEmpty, !alarms[i].whileHere { alarms[i].lastFired = nil }
         alarmsChanged()
         undo?.registerUndo(withTarget: self) { $0.changeAlarm(id) { $0.setUserFields(from: old) } }
         undo?.setActionName("Change \(old.name)")
@@ -447,6 +449,8 @@ public final class Controller {
     }
 
     private func insertAlarm(_ alarm: Alarm, at i: Int) {
+        var alarm = alarm
+        alarm.scheduleOnce()
         alarms.insert(alarm, at: min(i, alarms.count))
         alarmsChanged()
         undo?.registerUndo(withTarget: self) { $0.removeAlarm(alarm.id) }
@@ -616,6 +620,14 @@ public final class Controller {
         alarms[index].lastFired = due
         let late = now.timeIntervalSince(due) > Self.alarmLateness
         alarms[index].missed = late ? Alarm.Missed(at: due, why: .asleep) : nil
+        if late {
+            // only the soonest had a timer; any others passed in the same sleep are too late to catch up
+            for i in alarms.indices where i != index {
+                if let passed = alarms[i].missedWhileGone(lastSaved: due, booted: .distantPast, now: now, lateness: Self.alarmLateness) {
+                    alarms[i].missed = Alarm.Missed(at: passed.at, why: .asleep)
+                }
+            }
+        }
         let alarm = alarms[index]
         if late {
             problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
