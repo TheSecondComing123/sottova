@@ -1266,64 +1266,6 @@ struct ArtistPage: View {
     }
 }
 
-/// Filters after a short pause in typing, against keys folded once per song.
-struct SearchPage: View {
-    let query: String
-    @Environment(Controller.self) private var controller
-    @State private var songs: [Song] = []
-    @State private var collections: [MusicCollection] = []
-    @State private var artists: [Artist] = []
-    @State private var searched = false
-
-    var body: some View {
-        Group {
-            if searched, songs.isEmpty, collections.isEmpty, artists.isEmpty {
-                Missing(text: "nothing in your library matches “\(query)”")
-            } else {
-                // the few artists and collections first, then every matching song; eight songs used to push them out of view
-                PageScroll {
-                    if !artists.isEmpty {
-                        SectionTitle(title: "Artists")
-                            .padding(.bottom, 8)
-                        Shelf(items: Array(artists.prefix(20))) { ArtistTile(artist: $0) }
-                            .padding(.bottom, 32)
-                    }
-                    if !collections.isEmpty {
-                        SectionTitle(title: "Collections")
-                            .padding(.bottom, 8)
-                        Shelf(items: Array(collections.prefix(20))) { CollectionTile(collection: $0) }
-                            .padding(.bottom, 32)
-                    }
-                    if !songs.isEmpty {
-                        let art = songs.contains { $0.artwork != nil }
-                        SectionTitle(title: "Songs")
-                            .padding(.bottom, 8)
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                                SongRow(song: song, number: index + 1, showsArt: art) { controller.play(songs, from: index) }
-                            }
-                            .environment(\.songOrder, songs.map(\.id))
-                        }
-                    }
-                }
-            }
-        }
-        .task(id: query) {
-            try? await Task.sleep(for: .milliseconds(searched ? 120 : 0))
-            guard !Task.isCancelled else { return }
-            let needle = Song.folded(query)
-            let catalog = controller.catalog
-            songs = catalog.songs.filter { $0.matches(needle) }
-            collections = controller.collections.filter { collection in
-                if case .album(let album) = collection, album.artist.localizedStandardContains(query) { return true }
-                return collection.title.localizedStandardContains(query)
-            }
-            artists = catalog.artists.filter { $0.name.localizedStandardContains(query) }
-            searched = true
-        }
-    }
-}
-
 /// A list page with nothing in it yet: what will appear, and the one way to get it there.
 struct EmptyLibrary: View {
     let what: String
@@ -1367,4 +1309,3 @@ struct Missing: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
-

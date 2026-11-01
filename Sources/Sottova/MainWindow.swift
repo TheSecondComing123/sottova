@@ -118,24 +118,20 @@ struct MainWindow: View {
     @ViewBuilder
     private var page: some View {
         Group {
-            if !router.query.isEmpty {
-                SearchPage(query: router.query)
-            } else {
-                switch router.route {
-                case .home: NowPage()
-                case .songs: SongList()
-                case .collections: CollectionGrid()
-                case .artists: NameList()
-                case .alarms: DayPage()
-                case .shelf: FreeMusicPage()
-                case .album(let id): AlbumCollection(id: id)
-                case .playlist(let id): YourCollection(id: id)
-                // navigate sends names to Songs; these only come back through history from before that
-                case .artist, .composer: SongList()
-                }
+            switch router.route {
+            case .home: NowPage()
+            case .songs: SongList()
+            case .collections: CollectionGrid()
+            case .artists: NameList()
+            case .alarms: DayPage()
+            case .shelf: FreeMusicPage()
+            case .album(let id): AlbumCollection(id: id)
+            case .playlist(let id): YourCollection(id: id)
+            // navigate sends names to Songs; these only come back through history from before that
+            case .artist, .composer: SongList()
             }
         }
-        .id(router.query.isEmpty ? AnyHashable(router.route) : AnyHashable("search"))
+        .id(router.route)
         // the old page leaves fast, so the two never sit on top of each other at full strength
         .transition(.asymmetric(insertion: .opacity, removal: .opacity.animation(Theme.curve(0.08))))
     }

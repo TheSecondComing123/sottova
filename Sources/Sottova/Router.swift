@@ -25,8 +25,7 @@ final class Router {
     @ObservationIgnored var offset: CGFloat = 0
     /// Where the next page should open: set by Back and Forward, taken once by the page.
     @ObservationIgnored var restore: CGFloat?
-    var query = ""
-    /// Bumped by ⌘F; the top bar focuses the search field when it changes.
+    /// Bumped by ⌘F; Songs focuses its filter when it changes.
     private(set) var searchRequests = 0
     /// A text field has focus: ⌘→ moves its cursor there, so playback commands step aside.
     var typing = false
@@ -63,7 +62,6 @@ final class Router {
     var trashing: String?
 
     func go(to destination: Route) {
-        query = ""
         selected = []
         if destination == .songs { songFilter = "" }
         guard destination != route else { return }
@@ -95,7 +93,7 @@ final class Router {
 
     func search() {
         // the filter on Songs is the search; asking from elsewhere goes there, so it never waits to take focus later
-        if route != .songs || !query.isEmpty { go(to: .songs) }
+        if route != .songs { go(to: .songs) }
         searchRequests += 1
     }
 
