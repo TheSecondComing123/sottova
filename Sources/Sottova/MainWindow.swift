@@ -13,18 +13,15 @@ struct MainWindow: View {
     @Environment(\.undoManager) private var undoManager
     #if NEWLOOK
     @State private var narrow = false
-    private var onNow: Bool { router.route == .home && router.query.isEmpty }
     #endif
 
     var body: some View {
         HStack(spacing: 0) {
             #if NEWLOOK
-            Sidebar(section: router.route.section) { root in
-                router.go(to: root)
-            }
-            .frame(width: narrow ? 176 : 216)
-            .background(Theme.sidebar)
-            .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
+            Sidebar(section: router.route.section)
+                .frame(width: narrow ? 176 : 216)
+                .background(Theme.sidebar)
+                .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
             #else
             Sidebar(section: router.route.section) { root in
                 router.go(to: root)
@@ -34,13 +31,24 @@ struct MainWindow: View {
             Rectangle().fill(Theme.border).frame(width: 1)
             #endif
 
+            #if NEWLOOK
+            VStack(spacing: 0) {
+                TitleBar(narrow: narrow, toggleQueue: toggleQueue)
+                page.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .overlay(alignment: .top) { Hairline() }
+            .overlay(alignment: .topTrailing) {
+                if router.showsQueue {
+                    QueuePanel(close: toggleQueue)
+                        .padding(.trailing, narrow ? 16 : 60)
+                        .padding(.top, 50)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.98, anchor: .topTrailing).combined(with: .opacity))
+                }
+            }
+            #else
             VStack(spacing: 0) {
                 // under the toolbar
-                #if NEWLOOK
-                Color.clear.frame(height: 52)
-                #else
                 Color.clear.frame(height: 60)
-                #endif
                 page
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // the page makes room for the queue, so no column hides under it; padding, not safe-area padding, or
@@ -57,31 +65,20 @@ struct MainWindow: View {
                     }
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
-                #if NEWLOOK
-                // no floating bar on Now; the title bar takes over everywhere in Run 5
-                if !onNow {
-                    PlayerBar(showsQueue: router.showsQueue, toggleQueue: toggleQueue)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
-                }
-                #else
                 PlayerBar(showsQueue: router.showsQueue, toggleQueue: toggleQueue)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
-                #endif
             }
+            #endif
         }
         .background(Theme.background)
         .ignoresSafeArea(.container, edges: .top)
         // in the toolbar, so the title bar is 52 pt with the traffic lights on this line, and clicks reach them
         .toolbar {
             #if NEWLOOK
-            if !onNow {
-                ToolbarItem(placement: .navigation) { NavArrows() }
-                    .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .principal) { SearchField() }
-                    .sharedBackgroundVisibility(.hidden)
-            }
+            // empty, it keeps the title bar 52 pt with the lights at 19, 19; the bar itself is content
+            ToolbarItem(placement: .navigation) { Color.clear.frame(width: 1, height: 1) }
+                .sharedBackgroundVisibility(.hidden)
             #else
             ToolbarItem(placement: .navigation) { NavArrows() }
                 .sharedBackgroundVisibility(.hidden)
@@ -273,6 +270,7 @@ struct MainWindow: View {
     }
 }
 
+#if !NEWLOOK
 private struct Sidebar: View {
     let section: Route
     let select: (Route) -> Void
@@ -630,3 +628,4 @@ private struct PlaylistRow: View {
         .sottovaMenu { MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming) }
     }
 }
+#endif

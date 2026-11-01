@@ -49,6 +49,9 @@ extension Theme {
     static let selection = text.opacity(0.10)
     static let stroke = text.opacity(0.12)
     static let frame = text.opacity(0.20)
+    static let knob = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(text) : .white
+    })
 
     private static func slot(_ path: KeyPath<ThemeFile, String>) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in

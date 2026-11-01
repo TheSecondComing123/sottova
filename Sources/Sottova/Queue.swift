@@ -7,6 +7,62 @@ struct QueuePanel: View {
     let close: () -> Void
     @Environment(Controller.self) private var controller
 
+    #if NEWLOOK
+    private static let rowHeight: CGFloat = 45
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Up next")
+                .role(.body)
+                .fontWeight(.semibold)
+                .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 6)
+            if controller.upNext.isEmpty {
+                Text("Nothing queued. Drop songs here, or right-click one and pick Play next.")
+                    .role(.body)
+                    .foregroundStyle(Theme.faint)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .dropDestination(for: URL.self) { urls, _ in queue(urls, at: 0) }
+            } else {
+                List {
+                    ForEach(controller.upNext) { entry in
+                        QueueRow(entry: entry).row()
+                    }
+                    .onMove { controller.moveQueued(fromOffsets: $0, toOffset: $1) }
+                    .onInsert(of: [.fileURL]) { index, providers in
+                        Task {
+                            var urls: [URL] = []
+                            for provider in providers {
+                                if let url = await Self.url(from: provider) { urls.append(url) }
+                            }
+                            _ = queue(urls, at: index)
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .animation(Theme.quick, value: controller.upNext)
+                .frame(height: min(CGFloat(controller.upNext.count) * Self.rowHeight, 500))
+                Text("Drag to change the order.")
+                    .role(.body)
+                    .foregroundStyle(Theme.faint)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .padding(.bottom, 2)
+            }
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(width: 320)
+        .background(Theme.popover, in: .rect(cornerRadius: Radius.large))
+        .shadow(color: .black.opacity(0.5), radius: 20, y: 14)
+    }
+    #else
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -79,6 +135,7 @@ struct QueuePanel: View {
         .background(Theme.raised, in: .rect(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
     }
+    #endif
 
     private func queue(_ urls: [URL], at index: Int) -> Bool {
         let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
@@ -93,6 +150,7 @@ struct QueuePanel: View {
         }
     }
 
+    #if !NEWLOOK
     private func label(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 11, weight: .medium))
@@ -127,6 +185,7 @@ struct QueuePanel: View {
                 .frame(height: 56, alignment: .leading)
         }
     }
+    #endif
 }
 
 private struct QueueRow: View {
@@ -139,7 +198,19 @@ private struct QueueRow: View {
         let song = controller.catalog.songsByID[entry.path]
         HStack(spacing: 8) {
             if let song {
+                #if NEWLOOK
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(song.title).role(.body).foregroundStyle(Theme.text)
+                    Text(song.artist).role(.small).foregroundStyle(Theme.muted)
+                }
+                .lineLimit(1)
+                Spacer(minLength: 0)
+                if !hovering {
+                    Text(Format.time(song.duration)).role(.body).monospacedDigit().foregroundStyle(Theme.faint)
+                }
+                #else
                 SongLine(song: song, art: 32, trailing: hovering ? nil : Format.time(song.duration))
+                #endif
             } else {
                 Text(URL(filePath: entry.path).deletingPathExtension().lastPathComponent)
                     .font(.system(size: 13))
@@ -153,7 +224,12 @@ private struct QueueRow: View {
                 }
             }
         }
+        #if NEWLOOK
+        .frame(height: 44)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+        #else
         .frame(height: 48)
+        #endif
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .help("drag to reorder")
@@ -168,6 +244,7 @@ private struct QueueRow: View {
     }
 }
 
+#if !NEWLOOK
 /// Art, the work over the performer, and a time on the right.
 private struct SongLine: View {
     let song: Song
@@ -197,11 +274,17 @@ private struct SongLine: View {
     }
 }
 
+#endif
+
 private extension View {
     /// A list row with nothing of the list's own look: no separator, background or inset beyond the panel's.
     func row() -> some View {
         listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
+            #if NEWLOOK
+            .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 4))
+            #else
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
+            #endif
     }
 }

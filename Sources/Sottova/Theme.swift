@@ -119,9 +119,16 @@ enum Ph: String {
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
     case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
     case folder, plus, minus, palette, moon, queue, dotsThree = "dots-three", arrowsClockwise = "arrows-clockwise"
+    #if NEWLOOK
+    case sunHorizon = "sun-horizon", musicNotes = "music-notes", trayArrowDown = "tray-arrow-down", caretUpDown = "caret-up-down"
+    case barPause = "bar-pause", barPlay = "bar-play", barSkip = "bar-skip", barMoon = "bar-moon", barQueue = "bar-queue"
+    #endif
 
     enum IconWeight: String {
         case duotone, bold, fill
+        #if NEWLOOK
+        case line
+        #endif
     }
 
     /// Drawn as a template image, so it takes foregroundStyle like text; the duotone layer keeps its 20% alpha,

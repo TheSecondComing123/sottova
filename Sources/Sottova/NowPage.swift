@@ -12,8 +12,6 @@ private final class NowMotion {
     var underLevel = 0.0
     var scale = 1.0
     var text = 1.0
-    var hairline = 0.0
-    var fill = 0.0
     var silent = false
     var screen = NowScreen(kind: .quiet, title: "")
     var foot: String?
@@ -66,7 +64,6 @@ struct NowPage: View {
             let layout = NowLayout(geo.size)
             let shown = motion.over.map { min(layout.side, CGFloat($0.width)) } ?? layout.side
             ZStack(alignment: .topLeading) {
-                NowHairline(motion: motion, width: geo.size.width, paused: controller.status == .paused)
                 NowCover(motion: motion, layout: layout, album: controller.current?.album, dragging: router.droppingMusic)
                 NowText(motion: motion, width: layout.textWidth(shown), dragging: router.droppingMusic, act: act,
                         choose: controller.chooseFolders, freeMusic: { navigate(.shelf) })
@@ -128,7 +125,7 @@ struct NowPage: View {
                 }
             }
             if status == .paused { seen = seen.paused }
-            apply(seen, fill: track.map { $0.duration > 0 ? min($0.elapsed / $0.duration, 1) : 0 } ?? 0, idle: status == .idle)
+            apply(seen)
             let now = Date.now
             if now.timeIntervalSince(lastWords) >= 1 || seen.silent != wasSilent {
                 words(silent: seen.silent)
@@ -157,14 +154,11 @@ struct NowPage: View {
         }
     }
 
-    private func apply(_ seen: Track.Visual, fill: Double, idle: Bool) {
+    private func apply(_ seen: Track.Visual) {
         if motion.cover != seen.cover { motion.cover = seen.cover }
         if motion.underLevel != seen.under { motion.underLevel = seen.under }
         if motion.scale != seen.scale { motion.scale = seen.scale }
         if motion.text != seen.text { motion.text = seen.text }
-        let line = idle ? 0 : seen.hairline
-        if motion.hairline != line { motion.hairline = line }
-        if motion.fill != fill { motion.fill = fill }
         if motion.silent != seen.silent { motion.silent = seen.silent }
     }
 
@@ -203,22 +197,6 @@ struct NowPage: View {
     @concurrent
     nonisolated private static func decode(_ store: ArtworkStore, _ key: String) async -> CGImage? {
         store.image(for: key, maxPixel: 800)
-    }
-}
-
-private struct NowHairline: View {
-    let motion: NowMotion
-    let width: CGFloat
-    let paused: Bool
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            Rectangle().fill(Theme.hairline).frame(height: 1).offset(y: -1)
-            Rectangle().fill(paused ? Theme.faint : Theme.primary)
-                .frame(width: width * motion.fill, height: 2)
-                .opacity(motion.hairline)
-                .offset(y: -2)
-        }
     }
 }
 

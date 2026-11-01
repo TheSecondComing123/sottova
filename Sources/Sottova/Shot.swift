@@ -50,6 +50,14 @@ struct ShotReady: ViewModifier {
                 if free == "downloading" { ShelfDownload.shelf.shotRow("musopen-chopin", running: 0.4) }
                 if free == "failed" { ShelfDownload.shelf.shotRow("ChrisZabriskieDirectToVideo", failure: "Didn't finish. The connection dropped.") }
             }
+            router.showsQueue = defaults.bool(forKey: "shotQueue")
+            if defaults.bool(forKey: "shotYours") {
+                for name in ["Counterpoint", "Perfect Chopin", "Shellac"] {
+                    _ = controller.newPlaylist(named: name, songs: controller.catalog.albums.first { $0.title == name }?.songs ?? [])
+                }
+                controller.volume = 0.62
+                if router.showsQueue { controller.playNext(Array(controller.catalog.songs.prefix(4))) }
+            }
             #endif
             let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
             let window = NSApp.windows.first { $0.title == "Sottova" }
