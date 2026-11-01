@@ -50,6 +50,8 @@ before=$(world)
 defaults delete com.alanbagel.sottova.shot 2>/dev/null || true
 
 # copied here because the copy reading ~/Documents itself makes macOS ask the owner again after every build
+# MINE=1 with state mine: the owner's own names, covers and rows, over silence
+[[ -n "${MINE:-}" ]] && python3 scripts/harness-mine.py "$storage"
 covers=(); [[ -d notes/design/covers ]] && ditto notes/design/covers "$storage/covers" && covers=(-shotCovers "$storage/covers")
 # -g: never takes focus from whatever the owner is doing. App Nap stops a silent app in the background from ticking
 open -g -n --env SOTTOVA_SHOT_STORAGE="$storage" "$app" --args -NSAppSleepDisabled YES -shotState "$state" ${covers[@]+"${covers[@]}"} "$@"

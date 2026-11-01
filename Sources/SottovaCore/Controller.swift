@@ -2221,11 +2221,19 @@ extension Controller {
     }
 
     public func shotEnter(_ state: String, covers: URL?) async throws {
-        guard ["empty", "idle", "playing", "paused", "fading", "rising", "silence", "live", "arriving", "pausedSilence", "noCover", "longTitle", "easing", "away", "call", "busy", "media", "noAudio", "reading", "missed", "complinePlaying", "dayDone", "nothingYet", "nothingDay", "preview", "liveSilence"].contains(state) else { fatalError("no such state: \(state)") }
+        guard ["mine", "empty", "idle", "playing", "paused", "fading", "rising", "silence", "live", "arriving", "pausedSilence", "noCover", "longTitle", "easing", "away", "call", "busy", "media", "noAudio", "reading", "missed", "complinePlaying", "dayDone", "nothingYet", "nothingDay", "preview", "liveSilence"].contains(state) else { fatalError("no such state: \(state)") }
         keepsMacAwake = false
         loadTrims()
         loadAlarms()
         if state == "empty" { return }
+        if state == "mine" {
+            folders = [ShotEnv.music]
+            refreshTracks()
+            while catalog.albums.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+            lastTick = .now
+            startTicker()
+            return
+        }
         if UserDefaults.standard.bool(forKey: "shotLibrary") {
             try await seedLibrary(covers: covers)
         } else {
