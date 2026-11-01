@@ -32,9 +32,9 @@ public struct DayPlan: Sendable {
     public let firstHour, lastHour: Int
     public let gaps: [Gap]
     private let alarms: [Alarm]
-    private let now: Date
-    private let calendar: Calendar
-    private let twelveHour: Bool
+    fileprivate let now: Date
+    fileprivate let calendar: Calendar
+    fileprivate let twelveHour: Bool
 
     /// A stretch this long between rows gets said out loud, and the next row stops being "then".
     private static let longGap: TimeInterval = 2 * 3600
@@ -176,7 +176,7 @@ public struct DayPlan: Sendable {
         return noon(row.hour) == noon(end / 60) ? "\(clockTime(row)) to \(last) \(noon(end / 60))" : "\(clockTime(row)) \(noon(row.hour)) to \(last) \(noon(end / 60))"
     }
 
-    private func days(_ row: Alarm) -> String {
+    fileprivate func days(_ row: Alarm) -> String {
         switch row.weekdays {
         case []: "Once"
         case Set(1...7): "Every day"
@@ -206,11 +206,187 @@ public struct DayPlan: Sendable {
     }
 
     /// "3", "7:02"; "15:00" on a 24-hour clock.
-    private static func time(hour: Int, minute: Int, twelveHour: Bool) -> String {
+    fileprivate static func time(hour: Int, minute: Int, twelveHour: Bool) -> String {
         let padded = minute < 10 ? "0\(minute)" : "\(minute)"
         guard twelveHour else { return "\(hour):\(padded)" }
         let shown = (hour + 11) % 12 + 1
         return minute == 0 ? "\(shown)" : "\(shown):\(padded)"
+    }
+}
+
+/// A row's line on Your day, in pieces so each word can open its own menu.
+extension DayPlan {
+    public enum Word: Sendable { case days, order, volume, calendar, part, playNow, wake }
+
+    public struct Piece: Equatable, Sendable {
+        public let text: String
+        public let word: Word?
+
+        init(_ text: String, _ word: Word? = nil) {
+            (self.text, self.word) = (text, word)
+        }
+    }
+
+    /// "Weekdays, shuffled, at 25%. Strings next." Whatever's happening to the row takes the line's place. `nextPart`
+    /// is its part's name when it rotates.
+    public func line(for row: Row, nextPart: String?, rising: Bool = false, waiting: Hold? = nil, cantWake: Bool = false) -> [Piece] {
+        let alarm = row.alarm
+        if rising {
+            let level = alarm.volume.map { "Rising to \(Self.percent($0)). " } ?? "Rising. "
+            return [Piece(level)] + sentence(alarm, nextPart: nextPart, volume: false)
+        }
+        if let waiting {
+            let why = switch waiting {
+            case .away: "you're away"
+            case .call: "you're on a call"
+            case .busy: "your calendar is busy"
+            case .media: "something else is playing"
+            }
+            return [Piece("Waiting, \(why). Then "), Piece(alarm.shuffled ? "shuffled" : "in order", .order), Piece(", at the Mac.")]
+        }
+        if let missed = missedToday(alarm) { return [Piece(missed + " "), Piece("Play it now", .playNow)] }
+        if cantWake { return [Piece("The Mac won't wake for this. "), Piece("Wake it", .wake)] }
+        if let note = row.overlapNote { return [Piece(note)] }
+        return sentence(alarm, nextPart: nextPart)
+    }
+
+    /// Off today or any other day, it says the same.
+    public func sentence(_ alarm: Alarm, nextPart: String?, volume showsVolume: Bool = true) -> [Piece] {
+        var clauses = [Piece(daysWords(alarm), .days)]
+        if alarm.shuffled {
+            clauses.append(Piece("shuffled", .order))
+        } else if !alarm.rotates {
+            clauses.append(Piece("in order", .order))
+        }
+        if showsVolume, let volume = alarm.volume {
+            clauses.append(Piece("at \(Self.percent(volume))", .volume))
+        } else if showsVolume, !alarm.whileHere {
+            clauses.append(Piece("at the speaker's volume", .volume))
+        }
+        if alarm.heedsCalendar { clauses.append(Piece("unless your calendar is busy", .calendar)) }
+        var pieces: [Piece] = []
+        for (index, clause) in clauses.enumerated() {
+            if index > 0 { pieces.append(Piece(", ")) }
+            pieces.append(clause)
+        }
+        guard alarm.rotates, let nextPart else { return pieces + [Piece(".")] }
+        return pieces + [Piece(". "), Piece(nextPart.prefix(1).uppercased() + nextPart.dropFirst() + " next", .part), Piece(".")]
+    }
+
+    private func daysWords(_ alarm: Alarm) -> String {
+        guard alarm.whileHere else { return days(alarm) }
+        return alarm.weekdays == Set(1...7) ? "While you're at the Mac" : "\(days(alarm)), while you're at the Mac"
+    }
+
+    private static func percent(_ level: Double) -> String { "\(Int((level * 100).rounded()))%" }
+
+    /// "7:02 AM" for a row with no place on today's rail.
+    public static func startText(_ alarm: Alarm, twelveHour: Bool = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? true) -> String {
+        let bare = time(hour: alarm.hour, minute: alarm.minute, twelveHour: twelveHour)
+        return twelveHour ? "\(bare) \(alarm.hour < 12 ? "AM" : "PM")" : bare
+    }
+
+    /// "7:02" in What played, where 3 alone would look like a count.
+    public func clockText(_ date: Date) -> String {
+        let clock = calendar.dateComponents([.hour, .minute], from: date)
+        let hour = clock.hour ?? 0
+        return String(format: "%d:%02d", twelveHour ? (hour + 11) % 12 + 1 : hour, clock.minute ?? 0)
+    }
+
+    /// The hour a point on the rail falls in, for a drop: a two-hour row has to fit, so never the last hour.
+    public func hour(at y: Double, hourHeight: Double = Rail.hourHeight) -> Int {
+        min(max(firstHour + Int(y / hourHeight), firstHour), max(lastHour - 2, firstHour))
+    }
+
+    /// "10 AM to noon", as a dropped row would read.
+    public func dropLabel(hour: Int) -> (start: String, span: String) {
+        let start = railTime(hour: hour, minute: 0, full: true)
+        return (start, "\(start) to \(railTime(hour: hour + 2, minute: 0, full: true))")
+    }
+
+    /// Your day to scale, in points from the rail's top. Rows keep their bars at their times; a row's words move down
+    /// when the one above needs the room.
+    public struct Rail: Sendable {
+        public static let hourHeight = 32.0
+        /// A name and its line.
+        public static let rowHeight = 40.0
+
+        public struct Mark: Identifiable, Sendable {
+            public let alarm: Alarm
+            /// The top of its words.
+            public let top: Double
+            public let bar: ClosedRange<Double>
+            /// Beside the line: it overlaps the row before.
+            public let aside: Bool
+            public var id: Alarm.ID { alarm.id }
+        }
+
+        public enum Kind: Int, Sendable { case row, now, off, end, frame }
+
+        public struct Label: Equatable, Sendable {
+            public let text: String
+            public let y: Double
+            public let kind: Kind
+            /// The row whose time this is, so it can be changed there.
+            public let row: Alarm.ID?
+
+            public init(text: String, y: Double, kind: Kind, row: Alarm.ID?) {
+                (self.text, self.y, self.kind, self.row) = (text, y, kind, row)
+            }
+        }
+
+        public let height: Double
+        public let marks: [Mark]
+        public let labels: [Label]
+        public let now: Double?
+        public let gaps: [(text: String, top: Double)]
+    }
+
+    public var rail: Rail {
+        let height = Double(lastHour - firstHour) * Rail.hourHeight
+        let y = { (date: Date) in position(of: date) * height }
+        var marks: [Rail.Mark] = []
+        for row in rows {
+            let top = max(y(row.start) - 11, (marks.last?.top ?? -.infinity) + Rail.rowHeight)
+            marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: y(row.start)...max(y(row.end), y(row.start) + 3), aside: row.overlapNote != nil))
+        }
+        var wanted: [Rail.Label] = []
+        for (mark, row) in zip(marks, rows) {
+            let clock = calendar.dateComponents([.hour, .minute], from: row.start)
+            wanted.append(Rail.Label(text: railTime(hour: clock.hour ?? 0, minute: clock.minute ?? 0, full: true), y: mark.top + 11,
+                                     kind: row.alarm.on ? .row : .off, row: row.alarm.id))
+            if row.end > row.start {
+                let end = calendar.dateComponents([.hour, .minute], from: row.end)
+                wanted.append(Rail.Label(text: railTime(hour: end.hour ?? 0, minute: end.minute ?? 0, full: end.minute == 0), y: mark.bar.upperBound,
+                                         kind: .end, row: row.alarm.minutes == nil ? nil : row.alarm.id))
+            }
+        }
+        let inDay = (firstHour...lastHour).contains(calendar.component(.hour, from: now))
+        if inDay { wanted.append(Rail.Label(text: clockText(now), y: y(now), kind: .now, row: nil)) }
+        // with nothing on the rail the hours are all it has to say
+        let bare = rows.isEmpty ? stride(from: firstHour + 3, to: lastHour, by: 3).map { $0 } : []
+        for hour in [firstHour, lastHour] + (firstHour < 12 && lastHour > 12 ? [12] : []) + bare {
+            let edge = hour == firstHour || hour == lastHour
+            wanted.append(Rail.Label(text: railTime(hour: hour, minute: 0, full: edge), y: Double(hour - firstHour) * Rail.hourHeight, kind: .frame, row: nil))
+        }
+        var labels: [Rail.Label] = []
+        for label in wanted.enumerated().sorted(by: { ($0.element.kind.rawValue, $0.offset) < ($1.element.kind.rawValue, $1.offset) }).map(\.element)
+        where !labels.contains(where: { abs($0.y - label.y) < 15 }) {
+            labels.append(label)
+        }
+        let spots = gaps.compactMap { gap -> (text: String, top: Double)? in
+            let top = (y(gap.from) + y(gap.to)) / 2 - 28
+            return marks.contains { $0.top < top + 18 && top < $0.top + Rail.rowHeight } ? nil : (gap.text, top)
+        }
+        return Rail(height: max(height, (marks.last?.top ?? 0) + Rail.rowHeight), marks: marks, labels: labels.sorted { $0.y < $1.y }, now: inDay ? y(now) : nil, gaps: spots)
+    }
+
+    /// "7:02 AM", "noon"; `full` says which half of the day, otherwise "8:11" or "3". A 24-hour clock has no halves.
+    private func railTime(hour: Int, minute: Int, full: Bool) -> String {
+        if twelveHour, minute == 0, hour % 24 == 12 { return "noon" }
+        if twelveHour, minute == 0, hour % 24 == 0 { return "midnight" }
+        let bare = Self.time(hour: hour % 24, minute: minute, twelveHour: twelveHour)
+        return twelveHour && full ? "\(bare) \(hour % 24 < 12 ? "AM" : "PM")" : bare
     }
 }
 

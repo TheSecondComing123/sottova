@@ -50,6 +50,9 @@ struct ShotReady: ViewModifier {
                 if free == "downloading" { ShelfDownload.shelf.shotRow("musopen-chopin", running: 0.4) }
                 if free == "failed" { ShelfDownload.shelf.shotRow("ChrisZabriskieDirectToVideo", failure: "Didn't finish. The connection dropped.") }
             }
+            if let hour = defaults.object(forKey: "shotDropHour") as? Int ?? Int(defaults.string(forKey: "shotDropHour") ?? "") {
+                router.shotDrop = (hour, defaults.string(forKey: "shotDropName") ?? "")
+            }
             router.showsQueue = defaults.bool(forKey: "shotQueue")
             if defaults.bool(forKey: "shotYours") {
                 for name in ["Counterpoint", "Perfect Chopin", "Shellac"] {

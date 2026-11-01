@@ -188,7 +188,7 @@ struct MainWindow: View {
                 case .songs: SongList()
                 case .collections: CollectionGrid()
                 case .artists: NameList()
-                case .alarms: AlarmsPage()
+                case .alarms: DayPage()
                 case .shelf: FreeMusicPage()
                 case .album(let id): AlbumCollection(id: id)
                 case .playlist(let id): YourCollection(id: id)

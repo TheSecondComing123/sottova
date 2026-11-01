@@ -692,6 +692,23 @@ public final class Controller {
         return part < own.count ? own[part].name ?? "part \(part + 1)" : "part \(part + 1)"
     }
 
+    /// A row's parts by name, in turn, and the one it plays next.
+    public func partChoices(for alarm: Alarm) -> (names: [String], next: Int) {
+        let all = parts(for: alarm)
+        let own = playlists.first { $0.id == alarm.source && !$0.breaks.isEmpty }.map(ownParts(of:))
+        let names = all.indices.map { index in own.flatMap { index < $0.count ? $0[index].name : nil } ?? "part \(index + 1)" }
+        return (names, partIndex(from: alarm.nextPart, in: all) ?? 0)
+    }
+
+    /// A row missed earlier, from what it would have played and at its volume. Not its firing: its time has gone, so
+    /// nothing rises, and the part it's on stays next.
+    public func playNow(_ alarm: Alarm) {
+        let songs = rowSongs(alarm)
+        guard !songs.isEmpty else { return }
+        play(alarm.shuffled ? songs.shuffled() : songs, source: playlists.contains { $0.id == alarm.source } ? alarm.source : nil, shuffled: alarm.shuffled)
+        useRowVolume(alarm.volume)
+    }
+
     /// `songs` in `count` runs of about equal length, in order: each song goes to the part its middle falls in.
     nonisolated static func split(_ songs: [Song], into count: Int) -> [[Song]] {
         let count = max(1, min(count, songs.count))
@@ -2330,6 +2347,34 @@ extension Controller {
         case "nothingYet": shotNow = Self.shotMonday(hour: 9)
         case "dayDone": shotNow = Self.shotMonday(hour: 22)
         default: break
+        }
+        shotDay()
+    }
+
+    /// The states Your day has that nothing else needs.
+    private func shotDay() {
+        let defaults = UserDefaults.standard
+        if let clock = defaults.string(forKey: "shotClock")?.split(separator: ":").compactMap({ Int($0) }), clock.count == 2 {
+            shotNow = Self.shotMonday(hour: clock[0], minute: clock[1])
+        }
+        if let name = defaults.string(forKey: "shotOff"), let row = alarms.first(where: { $0.name == name }) { changeAlarm(row.id) { $0.on = false } }
+        if defaults.bool(forKey: "shotOverlap"), let chopin = catalog.albums.first(where: { $0.title == "Perfect Chopin" }) {
+            var row = Alarm(source: chopin.id, name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
+            row.minutes = 60
+            addAlarm(row)
+        }
+        if defaults.bool(forKey: "shotRotates"), let row = alarms.first(where: { $0.name == "Lauds" }) { changeAlarm(row.id) { ($0.rotates, $0.parts) = (true, 2) } }
+        if defaults.bool(forKey: "shotPlayed"), let storage {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let songs = catalog.songs
+            let row = alarms.first { $0.name == "Lauds" }?.id
+            let times = [(7, 2), (7, 40), (15, 1), (15, 14), (15, 25), (15, 37)]
+            let lines = zip(times, songs).compactMap { time, song -> String? in
+                let record = PlayRecord(file: song.id, startedAt: Self.shotMonday(hour: time.0, minute: time.1), skipped: false, gapAfterSec: 0, row: time.0 == 7 ? row : nil)
+                return (try? encoder.encode(record)).flatMap { String(data: $0, encoding: .utf8) }
+            }
+            try? (lines.joined(separator: "\n") + "\n").write(to: storage.appending(path: "plays.jsonl"), atomically: true, encoding: .utf8)
         }
     }
 

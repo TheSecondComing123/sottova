@@ -14,6 +14,11 @@ final class Router {
     var dismissedFoot: String?
     /// The filter on Songs, here so a name anywhere can open Songs filtered to it.
     var songFilter = ""
+    /// A collection on its way from the sidebar onto an hour; the drop itself can't be read until it lands.
+    var draggingCollection: String?
+    #if SHOT
+    var shotDrop: (hour: Int, name: String)?
+    #endif
     #endif
     /// Where each page in the history was scrolled to, so Back lands where you were.
     private(set) var back: [(route: Route, offset: CGFloat)] = []

@@ -45,6 +45,21 @@ struct AlarmRunTests {
         Alarm(source: album.id, name: "Lauds", hour: LiveClock.farHour, minute: 2, weekdays: Set(1...7))
     }
 
+    @Test func playingAMissedRowNowLeavesItsTurnAndAsksForItsVolume() async throws {
+        let (c, album, _) = try await controller()
+        c.volume = 0.8
+        var row = alarm(album)
+        (row.rotates, row.parts, row.volume) = (true, 2, 0.25)
+        c.addAlarm(row)
+        c.playNow(row)
+        #expect(c.status == .playing)
+        #expect(c.volume == 0.25)
+        #expect(c.alarms.first?.lastFired == nil)
+        #expect(c.alarms.first?.nextPart == 0)
+        #expect(c.partChoices(for: row).names == ["part 1", "part 2"])
+        #expect(c.partChoices(for: row).next == 0)
+    }
+
     @Test func anAlarmStopsWhenItsMusicEndsInsteadOfShufflingEverything() async throws {
         let (c, album, _) = try await controller()
         let row = alarm(album)

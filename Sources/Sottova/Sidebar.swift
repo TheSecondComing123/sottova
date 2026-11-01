@@ -162,6 +162,19 @@ private struct CollectionRow: View {
             withAnimation(Theme.quick) { controller.add(songs, to: playlist.id) }
             return true
         } isTargeted: { targeted = $0 && playlist != nil }
+        .onDrag({
+            router.draggingCollection = source
+            return NSItemProvider(object: source as NSString)
+        }, preview: {
+            HStack(spacing: 8) {
+                Artwork(key: controller.alarmArtwork(of: source), size: 28, radius: 3)
+                Text(controller.alarmName(of: source)).role(.body).foregroundStyle(Theme.text)
+            }
+            .padding(.leading, 4)
+            .padding(.trailing, 10)
+            .padding(.vertical, 4)
+            .background(Theme.popover, in: .rect(cornerRadius: Radius.small))
+        })
         .sottovaMenu { playlist.map { MenuEntry.yours($0, controller: controller, router: router, navigate: navigate, renaming: renaming) } ?? [] }
     }
 }
