@@ -33,9 +33,12 @@ extension Theme {
                        dark: Palette.Tokens(slots.dark), light: Palette.Tokens(slots.light))
     }
 
-    static func reloadThemes() {
+    /// True when the colors changed, so the scenes know to re-key.
+    static func reloadThemes() -> Bool {
         themes = ThemeFile.load(from: themeFolders)
+        let before = palette
         palette = slotPalette()
+        return palette != before
     }
 
     static let sidebar = slot(\.sidebarColor)
@@ -171,18 +174,24 @@ struct ThemeLink: View {
     }
 }
 
-/// 14 pt box from the mock, in the theme's color rather than the system's accent; VoiceOver gets the real toggle.
+/// A label with a 14 pt box at the row's right, from the mock, in the theme's color rather than the system's accent; VoiceOver gets the real toggle.
 struct ThemeCheckbox: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         Button { configuration.isOn.toggle() } label: {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 3.5)
-                    .fill(configuration.isOn ? AnyShapeStyle(Theme.muted) : AnyShapeStyle(Theme.selection))
-                    .overlay { if !configuration.isOn { RoundedRectangle(cornerRadius: 3.5).strokeBorder(Theme.frame, lineWidth: 0.5) } }
-                    .overlay { if configuration.isOn { Ph.check.icon(.bold, size: 10).foregroundStyle(Theme.background) } }
-                    .frame(width: 14, height: 14)
+            HStack(spacing: 16) {
                 configuration.label
+                Spacer(minLength: 0)
+                ZStack {
+                    if configuration.isOn {
+                        RoundedRectangle(cornerRadius: 3.5).fill(Theme.muted)
+                        Ph.check.icon(.bold, size: 10).foregroundStyle(Theme.background)
+                    } else {
+                        RoundedRectangle(cornerRadius: 3.5).strokeBorder(Theme.frame, lineWidth: 1)
+                    }
+                }
+                .frame(width: 14, height: 14)
             }
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }

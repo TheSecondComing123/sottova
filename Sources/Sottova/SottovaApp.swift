@@ -11,7 +11,14 @@ struct SottovaApp: App {
     private let controller = Controller(playlistFolder: .musicDirectory.appending(path: "Sottova Playlists"))
     #endif
     /// Theme.palette is set before this changes, so re-keying the scenes below redraws them in the new colors.
+    #if NEWLOOK
+    @AppStorage("palette") private var paletteName = Palette.gruvbox.id
+    /// Bumped when a theme file changed on disk.
+    @State private var themeVersion = 0
+    private var palette: String { "\(paletteName) \(themeVersion)" }
+    #else
     @AppStorage("palette") private var palette = Palette.monochrome.id
+    #endif
     @State private var router = Router()
 
     init() {
@@ -81,7 +88,7 @@ struct SottovaApp: App {
                 .toolbarBackground(.hidden, for: .windowToolbar)
                 .containerBackground(Theme.background, for: .window)
                 #if NEWLOOK
-                .onAppear(perform: Theme.reloadThemes)
+                .onAppear { if Theme.reloadThemes() { themeVersion += 1 } }
                 #endif
         }
         .windowResizability(.contentSize)

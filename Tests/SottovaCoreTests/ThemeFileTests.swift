@@ -54,6 +54,11 @@ struct ThemeFileTests {
         #expect(themes.contains { $0.name == "Test" })
     }
 
+    @Test func aSignIsntAColor() {
+        #expect(ThemeFile.rgb("#+12345") == nil)
+        #expect(ThemeFile.rgb("#ABCDEF") == 0xABCDEF)
+    }
+
     @Test func noFolderStillLeavesMonochrome() {
         let themes = ThemeFile.load(from: [URL(filePath: "/nonexistent")]).themes
         #expect(themes.map(\.name) == ["Monochrome", "Monochrome"])

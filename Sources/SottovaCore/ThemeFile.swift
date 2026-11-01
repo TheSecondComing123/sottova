@@ -92,7 +92,7 @@ public struct ThemeFile: Codable, Equatable, Sendable {
     }
 
     public static func rgb(_ hex: String) -> UInt32? {
-        guard hex.count == 7, hex.first == "#" else { return nil }
+        guard hex.count == 7, hex.first == "#", hex.dropFirst().allSatisfy(\.isHexDigit) else { return nil }
         return UInt32(hex.dropFirst(), radix: 16)
     }
 

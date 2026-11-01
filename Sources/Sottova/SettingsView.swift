@@ -7,7 +7,11 @@ import SottovaCore
 struct SettingsView: View {
     @Bindable var controller: Controller
     @State private var page = Page.playback
+    #if NEWLOOK
+    @AppStorage("palette") private var palette = Palette.gruvbox.id
+    #else
     @AppStorage("palette") private var palette = Palette.monochrome.id
+    #endif
 
     enum Page: String, CaseIterable {
         case playback = "Playback", library = "Library", theme = "Theme", general = "General"
