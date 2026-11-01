@@ -64,6 +64,11 @@ public final class Shelf {
     public private(set) var running = false
     public private(set) var problem: String?
 
+    /// The sets downloading one at a time, each with its own row and its own Cancel.
+    public private(set) var downloading: Set<ShelfSet.ID> = []
+    /// Why a set's last try stopped, in words for its row, until it's tried again.
+    public private(set) var failed: [ShelfSet.ID: String] = [:]
+
     private let session: URLSession
 
     public init(session: URLSession = .shared) {
@@ -85,6 +90,22 @@ public final class Shelf {
             } catch {
                 let failure = "couldn't download \(set.title): \(error.localizedDescription)"
                 problem = problem.map { $0 + "\n" + failure } ?? failure
+            }
+        }
+    }
+
+    /// Just this set, alongside any others. Cancelled, it forgets how far it came; what landed stays, and is picked up
+    /// next time.
+    public func download(_ set: ShelfSet, into root: URL = Shelf.folder) async {
+        downloading.insert(set.id)
+        failed[set.id] = nil
+        defer { downloading.remove(set.id) }
+        do {
+            try await fetch(set, into: root.appending(path: set.folder))
+        } catch {
+            progress[set.id] = nil
+            if !Task.isCancelled {
+                failed[set.id] = "Didn't finish. " + (error is URLError ? "The connection dropped." : "\(error.localizedDescription.prefix(1).uppercased())\(error.localizedDescription.dropFirst()).")
             }
         }
     }

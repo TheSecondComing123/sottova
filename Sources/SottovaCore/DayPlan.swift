@@ -142,6 +142,46 @@ public struct DayPlan: Sendable {
         return first.minute == 0 && twelveHour ? "\(bare) \(first.hour < 12 ? "AM" : "PM")" : bare
     }
 
+    /// Under a collection in the grid: "7:02 weekdays", "3 to 7 PM". Nil if it has no row on.
+    public func shortHours(of source: String) -> String? {
+        firstRow(of: source).map { $0.minutes == nil ? "\(clockTime($0)) \(days($0).lowercased())" : span($0) }
+    }
+
+    /// On a collection's page: "Every day, 8 to 9 PM, at 15%". Nil if it has no row on.
+    public func hours(of source: String) -> String? {
+        firstRow(of: source).map { row in
+            let when = row.minutes == nil ? "\(clockTime(row))\(twelveHour ? row.hour < 12 ? " AM" : " PM" : "")" : span(row)
+            return [days(row), when, row.volume.map { "at \(Int(($0 * 100).rounded()))%" }].compactMap { $0 }.joined(separator: ", ")
+        }
+    }
+
+    private func firstRow(of source: String) -> Alarm? {
+        alarms.filter { $0.on && $0.source == source }.min { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
+    }
+
+    private func clockTime(_ row: Alarm) -> String {
+        Self.time(hour: row.hour, minute: row.minute, twelveHour: twelveHour)
+    }
+
+    /// "8 to 9 PM", "11 AM to 1 PM"; "15:00 to 19:00" on a 24-hour clock.
+    private func span(_ row: Alarm) -> String {
+        let end = (row.hour * 60 + row.minute + (row.minutes ?? 0)) % (24 * 60)
+        let last = Self.time(hour: end / 60, minute: end % 60, twelveHour: twelveHour)
+        guard twelveHour else { return "\(clockTime(row)) to \(last)" }
+        let noon = { (hour: Int) in hour < 12 ? "AM" : "PM" }
+        return noon(row.hour) == noon(end / 60) ? "\(clockTime(row)) to \(last) \(noon(end / 60))" : "\(clockTime(row)) \(noon(row.hour)) to \(last) \(noon(end / 60))"
+    }
+
+    private func days(_ row: Alarm) -> String {
+        switch row.weekdays {
+        case []: "Once"
+        case Set(1...7): "Every day"
+        case [2, 3, 4, 5, 6]: "Weekdays"
+        case [1, 7]: "Weekends"
+        default: "Some days"
+        }
+    }
+
     /// Collections with a row on, by the time of day it starts; the rest after, as they were.
     public func inDayOrder(_ sources: [String]) -> [String] {
         let start = { (source: String) in alarms.filter { $0.on && $0.source == source }.map { $0.hour * 60 + $0.minute }.min() ?? .max }

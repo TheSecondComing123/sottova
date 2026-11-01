@@ -23,6 +23,17 @@ public struct Song: Identifiable, Hashable, Sendable {
     /// When the file landed in its folder.
     public var added: Date? = nil
 
+    /// Who a row leads with: the composer when the tag is one name, else the artist.
+    public var who: String {
+        guard let composer, !composer.isEmpty, composer.rangeOfCharacter(from: CharacterSet(charactersIn: ",/&;")) == nil else { return artist }
+        return composer
+    }
+
+    /// Who plays it, or nil when that only repeats `who`.
+    public var performer: String? {
+        artist == who ? nil : artist
+    }
+
     /// Folded as `searchKey` is. NFC too: a file name can arrive decomposed, what's typed doesn't.
     public static func folded(_ text: String) -> String {
         text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).precomposedStringWithCanonicalMapping
@@ -222,10 +233,15 @@ extension Catalog {
 
 /// The orders the Songs page offers.
 public enum SongSort: String, CaseIterable, Sendable {
-    case title, composer, album, longest, newest
+    case title, composer, album, longest, newest, who, performer
+
+    /// What the old page's sort menu offers.
+    public static let menu: [SongSort] = [.title, .composer, .album, .longest, .newest]
 
     public var label: String {
         switch self {
+        case .who: "by who"
+        case .performer: "by performer"
         case .title: "by title"
         case .composer: "by composer"
         case .album: "by collection"
@@ -249,6 +265,12 @@ public enum SongSort: String, CaseIterable, Sendable {
                     guard let y = b.composer else { return true }
                     return x.localizedStandardCompare(y) == .orderedAscending
                 }
+                return byTitle(a, b)
+            case .who:
+                if a.who != b.who { return a.who.localizedStandardCompare(b.who) == .orderedAscending }
+                return byTitle(a, b)
+            case .performer:
+                if a.artist != b.artist { return a.artist.localizedStandardCompare(b.artist) == .orderedAscending }
                 return byTitle(a, b)
             case .album:
                 if a.album != b.album { return a.album.localizedStandardCompare(b.album) == .orderedAscending }

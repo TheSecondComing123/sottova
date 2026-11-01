@@ -475,7 +475,7 @@ struct SongsPage: View {
     private var sortMenu: some View {
         Menu {
             Picker("Sort", selection: $sort) {
-                ForEach(SongSort.allCases, id: \.self) { Text($0.label.prefix(1).uppercased() + $0.label.dropFirst()).tag($0) }
+                ForEach(SongSort.menu, id: \.self) { Text($0.label.prefix(1).uppercased() + $0.label.dropFirst()).tag($0) }
             }
             .pickerStyle(.inline)
             .labelsHidden()

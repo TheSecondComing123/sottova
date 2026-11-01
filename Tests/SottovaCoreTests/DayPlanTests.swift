@@ -184,4 +184,25 @@ struct DayPlanTests {
         let notes = plan([overworld, twin], date(2, 12)).rows.map(\.overlapNote)
         #expect(notes.compactMap { $0 }.count == 1)
     }
+
+    private func plan(_ rows: [Alarm]) -> DayPlan {
+        DayPlan(alarms: rows, now: date(2, 9), calendar: calendar, twelveHour: true)
+    }
+
+    @Test func hoursInTheGridAndOnThePage() {
+        var compline = Alarm(source: "compline", name: "Compline", hour: 20, minute: 0, weekdays: Set(1...7))
+        (compline.volume, compline.minutes) = (0.15, 60)
+        var noon = Alarm(source: "noon", name: "Noon", hour: 11, minute: 30, weekdays: [1, 7])
+        noon.minutes = 90
+        var off = Alarm(source: "off", name: "Off", hour: 9, minute: 0, weekdays: Set(1...7))
+        off.on = false
+        let day = plan([lauds, overworld, compline, noon, off])
+        #expect(day.shortHours(of: "lauds") == "7:02 weekdays")
+        #expect(day.shortHours(of: "overworld") == "3 to 7 PM")
+        #expect(day.hours(of: "compline") == "Every day, 8 to 9 PM, at 15%")
+        #expect(day.hours(of: "lauds") == "Weekdays, 7:02 AM, at 25%")
+        #expect(day.hours(of: "noon") == "Weekends, 11:30 AM to 1 PM")
+        #expect(day.hours(of: "off") == nil)
+        #expect(day.shortHours(of: "nothing") == nil)
+    }
 }

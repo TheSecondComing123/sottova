@@ -185,4 +185,34 @@ struct GapEstimateTests {
         let tenThousand = (0..<10_000).map { song("/Music/some folder/\($0).flac") }
         #expect(Controller.Origin.key(of: tenThousand, source: nil).utf8.count <= 16)
     }
+
+    private func song(_ artist: String, composer: String?, title: String = "x") -> Song {
+        Song(id: UUID().uuidString, title: title, work: title, detail: nil, artist: artist, album: "a", albumID: "a", albumArtist: artist,
+             composer: composer, trackNumber: nil, discNumber: nil, year: nil, duration: 1, artwork: nil, searchKey: "")
+    }
+
+    @Test(arguments: [
+        ("Luke Faulkner", "Chopin", "Chopin", "Luke Faulkner"),
+        ("Komiku", nil, "Komiku", nil),
+        ("Komiku", "", "Komiku", nil),
+        ("Komiku", "Komiku", "Komiku", nil),
+        ("Hot Five", "Armstrong, Oliver", "Hot Five", nil),
+        ("Hot Five", "Armstrong / Oliver", "Hot Five", nil),
+        ("Hot Five", "Armstrong & Oliver", "Hot Five", nil),
+        ("Hot Five", "Armstrong; Oliver", "Hot Five", nil),
+    ] as [(String, String?, String, String?)])
+    func whoLeadsAndPerformerBlanksWhenEqual(artist: String, composer: String?, who: String, performer: String?) {
+        #expect(song(artist, composer: composer).who == who)
+        #expect(song(artist, composer: composer).performer == performer)
+    }
+
+    @Test func sortsByWhoThenTitle() {
+        let songs = [song("B", composer: "Zed", title: "2"), song("Y", composer: nil, title: "1"), song("A", composer: "Zed", title: "1")]
+        #expect(SongSort.who.sorted(songs).map(\.artist) == ["Y", "A", "B"])
+        #expect(SongSort.performer.sorted(songs).map(\.artist) == ["A", "B", "Y"])
+    }
+
+    @Test func theOldMenuKeepsItsFive() {
+        #expect(SongSort.menu.map(\.rawValue) == ["title", "composer", "album", "longest", "newest"])
+    }
 }

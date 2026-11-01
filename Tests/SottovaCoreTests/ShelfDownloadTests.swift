@@ -150,4 +150,49 @@ struct ShelfDownloadTests {
         #expect(shelf.problem == nil)
         #expect(try Data(contentsOf: root.appending(path: "\(one.folder)/a.mp3")) == song)
     }
+
+    @Test func aSetAloneReportsOnItsOwnRow() async throws {
+        let (good, bad) = (set("good"), set("bad"))
+        try lists("good", mp3s: ["a.mp3"])
+        StubbedArchive.answers["/download/good/a.mp3"] = .init(body: song)
+        StubbedArchive.answers["/metadata/bad"] = .init(offline: true)
+        await shelf.download(good, into: root)
+        await shelf.download(bad, into: root)
+        #expect(shelf.failed[good.id] == nil)
+        #expect(shelf.progress[good.id] == 1)
+        #expect(shelf.failed[bad.id] == "Didn't finish. The connection dropped.")
+        #expect(shelf.downloading.isEmpty)
+        #expect(shelf.problem == nil)
+    }
+
+    @Test func aRefusalSaysWhatArchiveSaid() async throws {
+        let one = set("busy")
+        StubbedArchive.answers["/metadata/busy"] = .init(status: 503, type: "text/html", body: errorPage)
+        await shelf.download(one, into: root)
+        #expect(shelf.failed[one.id] == "Didn't finish. Archive.org answered 503.")
+    }
+
+    @Test func tryingAgainClearsTheFailure() async throws {
+        let one = set("retry")
+        StubbedArchive.answers["/metadata/retry"] = .init(offline: true)
+        await shelf.download(one, into: root)
+        #expect(shelf.failed[one.id] != nil)
+        try lists("retry", mp3s: ["a.mp3"])
+        StubbedArchive.answers["/download/retry/a.mp3"] = .init(body: song)
+        await shelf.download(one, into: root)
+        #expect(shelf.failed[one.id] == nil)
+        #expect(landed(one).contains("credits.txt"))
+    }
+
+    @Test func cancellingForgetsProgressAndIsntAFailure() async throws {
+        let one = set("stop")
+        try lists("stop", mp3s: ["a.mp3"])
+        StubbedArchive.answers["/download/stop/a.mp3"] = .init(body: song)
+        let task = Task { await shelf.download(one, into: root) }
+        task.cancel()
+        await task.value
+        #expect(shelf.failed[one.id] == nil)
+        #expect(shelf.progress[one.id] == nil)
+        #expect(shelf.downloading.isEmpty)
+    }
 }

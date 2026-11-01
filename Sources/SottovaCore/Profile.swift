@@ -109,6 +109,37 @@ extension Settings {
     }
 }
 
+/// A length typed into a preset: "5 min", "90 s", "1:30", "1 min 30 s". A bare number takes `unit`, in seconds.
+public enum TypedDuration {
+    public static func parse(_ text: String, unit: Double) -> Double? {
+        let text = text.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !text.isEmpty else { return nil }
+        if let match = text.wholeMatch(of: /(\d+):([0-5]\d)/) { return Double(match.1)! * 60 + Double(match.2)! }
+        if let bare = Double(text) { return bare >= 0 && bare.isFinite ? bare * unit : nil }
+        var total = 0.0, rest = Substring(text)
+        // each piece needs its own unit, largest first, so "5 s 2 min" isn't read as anything
+        var limit = Double.infinity
+        while !rest.isEmpty {
+            guard let match = rest.prefixMatch(of: /(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\s*/),
+                  let number = Double(match.1) else { return nil }
+            let size: Double = match.2.hasPrefix("h") ? 3600 : match.2.hasPrefix("m") ? 60 : 1
+            guard size < limit else { return nil }
+            limit = size
+            total += number * size
+            rest = rest[match.range.upperBound...]
+        }
+        return total
+    }
+
+    /// As the fields show it: "6 s", "5 min", "1 min 30 s".
+    public static func format(_ seconds: Double) -> String {
+        let minutes = Int(seconds / 60), left = seconds - Double(minutes) * 60
+        let s = String(format: "%g", left)
+        if minutes == 0 { return "\(s) s" }
+        return left == 0 ? "\(minutes) min" : "\(minutes) min \(s) s"
+    }
+}
+
 /// profile.json: the user's own settings at the top level, plus the albums that play with their own gaps and the
 /// presets they've named.
 struct ProfileFile: Codable {
