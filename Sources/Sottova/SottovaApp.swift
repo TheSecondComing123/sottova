@@ -11,7 +11,7 @@ struct SottovaApp: App {
     private let controller = Controller(playlistFolder: .musicDirectory.appending(path: "Sottova Playlists"))
     #endif
     /// Theme.palette is set before this changes, so re-keying the scenes below redraws them in the new colors.
-    @AppStorage("palette") private var paletteName = Palette.gruvbox.id
+    @AppStorage("palette") private var paletteName = "gruvbox"
     /// Bumped when a theme file changed on disk.
     @State private var themeVersion = 0
     private var palette: String { "\(paletteName) \(themeVersion)" }
@@ -141,7 +141,7 @@ private struct Keepalive: View {
     }
 }
 
-/// sottova:// links arrive here; SwiftUI's onOpenURL needs a window scene, and the panel isn't one until opened.
+/// sottova:// links arrive here; SwiftUI's onOpenURL needs a window scene, and the main window may not be open.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var controller: Controller?
     /// Work from anywhere, with or without a window open, unlike SwiftUI's environment actions.
@@ -183,16 +183,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated { Self.controller?.quitting() }
-    }
-}
-
-extension PlaybackStatus {
-    var symbol: String {
-        switch self {
-        case .idle: "music.note"
-        case .playing: "waveform"
-        case .resting: "ellipsis"
-        case .paused: "pause"
-        }
     }
 }

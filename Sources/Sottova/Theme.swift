@@ -2,8 +2,7 @@ import AppKit
 import SwiftUI
 import SottovaCore
 
-/// Color tokens from the active palette, for dark and light. Monochrome's dark values follow monochrome.st's CSS,
-/// with text tokens raised to pass WCAG AA at 11–13 pt, on a hovered row too.
+/// Color tokens from the active theme files, for dark and light.
 enum Theme {
     /// Read every time a color draws; the scenes re-key on the palette's id, so a change rebuilds them and shows at once.
     nonisolated(unsafe) static var palette = slotPalette()
@@ -20,14 +19,8 @@ enum Theme {
     static let primary = token(\.primary)
     static let onPrimary = token(\.onPrimary)
     static let coverInk = token(\.coverInk)
-    /// A menu's ground: a step lighter than the window in dark, the page's own white-ish raised in light.
-    static let menu = Color(nsColor: NSColor(name: nil) { appearance in
-        let tokens = tokens(appearance)
-        return rgb(appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? tokens.hover : tokens.raised)
-    })
 
-    /// An item's own color, by its place in a fixed list (sections, presets). Monochrome has no accents, so it falls
-    /// back to the gray token the item used before.
+    /// An item's own color, by its place in a fixed list. A theme without accents falls back to a gray token.
     static func accent(_ index: Int, or fallback: KeyPath<Palette.Tokens, UInt32> = \.text) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let tokens = tokens(appearance)
@@ -41,7 +34,7 @@ enum Theme {
         accent(Int(stableHash(key ?? "")), or: fallback)
     }
 
-    /// The ground for a cover drawn from type: grays in monochrome, the accents in a color palette.
+    /// The ground for a cover drawn from type.
     static func coverGround(for key: String) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let covers = tokens(appearance).covers
@@ -54,15 +47,9 @@ enum Theme {
         text.unicodeScalars.reduce(UInt32(2166136261)) { ($0 ^ $1.value) &* 16777619 }
     }
 
-    static func select(_ id: String) {
-        palette = slotPalette(id)
-    }
-
     static let quick = curve(0.2)
     static let settle = Animation.spring(duration: 0.35, bounce: 0.12)
     static let page = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
-    /// System-driven changes (a track ending, a gap starting) ease slowly, like the audio does.
-    static let ambient = curve(0.6)
 
     /// One deceleration curve for everything that isn't a spring: quick to start, long to settle.
     static func curve(_ duration: Double) -> Animation {
@@ -82,35 +69,12 @@ enum Theme {
     }
 }
 
-extension Font {
-    /// SF Pro anywhere on its weight axis (1–1000, bold is 700), so a title can thin continuously with the sound
-    /// instead of stepping between named weights. Optical size follows the point size, as the named weights do.
-    @MainActor static func system(size: CGFloat, axisWeight: Double) -> Font {
-        let key = "\(size) \(axisWeight)"
-        if let font = axisFonts[key] { return font }
-        let weight = 0x7767_6874, opticalSize = 0x6F70_737A
-        let base = NSFont.systemFont(ofSize: size)
-        let descriptor = base.fontDescriptor.addingAttributes([
-            NSFontDescriptor.AttributeName(kCTFontVariationAttribute as String): [weight: axisWeight, opticalSize: Double(size)],
-        ])
-        let font = Font(NSFont(descriptor: descriptor, size: size) ?? base)
-        axisFonts[key] = font
-        return font
-    }
-
-    /// At most 3 sizes × 51 weights: the hero rounds its weight to steps of 10.
-    @MainActor private static var axisFonts: [String: Font] = [:]
-}
-
 /// Phosphor icons (MIT), vendored as SVGs in Support/Icons and copied into the app's Resources: the PhosphorSwift
 /// package ships an asset catalog, which `swift build` can't compile. Only the name-weight pairs in use are vendored.
 enum Ph: String {
-    case house, clock, alarm, check, shuffle, x, waveform, play, pause, archive
-    case stack, musicNote = "music-note", microphoneStage = "microphone-stage"
-    case folderPlus = "folder-plus", gearSix = "gear-six", magnifyingGlass = "magnifying-glass"
-    case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
-    case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
-    case folder, plus, minus, palette, moon, queue, dotsThree = "dots-three", arrowsClockwise = "arrows-clockwise"
+    case clock, alarm, check, x, play, pause
+    case magnifyingGlass = "magnifying-glass", speakerHigh = "speaker-high", caretDown = "caret-down"
+    case folder, plus, minus, palette, dotsThree = "dots-three"
     case sunHorizon = "sun-horizon", musicNotes = "music-notes", trayArrowDown = "tray-arrow-down", caretUpDown = "caret-up-down"
     case barPause = "bar-pause", barPlay = "bar-play", barSkip = "bar-skip", barMoon = "bar-moon", barQueue = "bar-queue"
 
@@ -230,31 +194,6 @@ struct LinkText: View {
     }
 }
 
-/// The white (or black) circle play button.
-struct PlayCircle: View {
-    var size: CGFloat = 52
-    var playing = false
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            (playing ? Ph.pause : Ph.play).icon(.fill, size: size * 0.4)
-                // no nudge: Phosphor's triangle is already drawn right of its box's center, so it reads centered as is
-                .foregroundStyle(Theme.onPrimary)
-                .frame(width: size, height: size)
-                .background(Theme.primary, in: .circle)
-                .scaleEffect(hovering ? 1.05 : 1)
-        }
-        .buttonStyle(PressStyle())
-        .onHover { hovering in
-            withAnimation(Theme.settle) { self.hovering = hovering }
-        }
-        .help(playing ? "pause" : "play")
-        .accessibilityLabel(playing ? "pause" : "play")
-    }
-}
-
 struct IconButton: View {
     let icon: Ph
     var weight: Ph.IconWeight = .duotone
@@ -306,17 +245,8 @@ enum Format {
         return minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
     }
 
-    /// Header art grows with the window, from 232 pt up to 320, so a wide window isn't a small square and a long gap.
-    static func heroArt(for width: CGFloat) -> CGFloat {
-        min(max(width * 0.2, 232), 320).rounded()
-    }
-
     static func count(_ n: Int, _ noun: String) -> String {
         "\(n.formatted()) \(noun)\(n == 1 ? "" : "s")"
-    }
-
-    static func gaps(_ s: SottovaCore.Settings) -> String {
-        s.crossfade ? "crossfades, no gaps" : "\(range(s)) gaps"
     }
 
     /// The gap range alone, with the unit written once: "10–20 min".

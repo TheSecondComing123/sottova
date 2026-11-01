@@ -24,9 +24,8 @@ extension Theme {
                 ThemeFile.slot(.light, named: defaults.string(forKey: "themeLight"), palette: palette, in: themes.themes))
     }
 
-    /// The old tokens follow the slots too, so pages not yet redone sit on the same ground.
-    static func slotPalette(_ id: String? = nil) -> Palette {
-        if let id { UserDefaults.standard.set(id, forKey: "palette") }
+    /// Theme's tokens follow the slots.
+    static func slotPalette() -> Palette {
         slots = currentSlots()
         return Palette(id: "\(slots.dark.name)/\(slots.light.name)", name: "", detail: "",
                        dark: Palette.Tokens(slots.dark), light: Palette.Tokens(slots.light))

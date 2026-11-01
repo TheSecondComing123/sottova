@@ -18,7 +18,7 @@ struct PageScroll<Content: View>: View {
             .padding(insets)
             .overlayScrollers()
         }
-        // rows fade out under the floating player bar instead of showing through the strip beneath it
+        // rows fade out at the page's foot
         .scrollEdgeEffectStyle(.soft, for: .bottom)
         .scrollPosition($position)
         .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in router.offset = y }
@@ -31,31 +31,6 @@ struct PageScroll<Content: View>: View {
             instant.disablesAnimations = true
             withTransaction(instant) { position.scrollTo(y: y) }
         }
-    }
-}
-
-/// One row of tiles that scrolls sideways, so a shelf never wraps an orphan onto a second line.
-private struct Shelf<Item: Identifiable, Cell: View>: View {
-    let items: [Item]
-    @ViewBuilder let cell: (Item) -> Cell
-
-    var body: some View {
-        ScrollView(.horizontal) {
-            LazyHStack(alignment: .top, spacing: 4) {
-                ForEach(items) { item in
-                    cell(item).frame(width: 188)
-                }
-            }
-            .padding(.horizontal, 24)
-        }
-        .scrollIndicators(.never)
-        .padding(.horizontal, -32)
-    }
-
-    /// Whether `count` tiles run past a page `width` wide, so "Show all" only appears when some are out of sight.
-    /// 188 pt cells 4 apart, 24 pt insets, and the shelf bleeds 32 pt past the page on each side.
-    static func overflows(_ count: Int, in width: CGFloat) -> Bool {
-        48 + CGFloat(count) * 192 - 4 > width + 64
     }
 }
 

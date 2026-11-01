@@ -1,7 +1,7 @@
 import SwiftUI
 import SottovaCore
 
-/// What plays next, floating over the right of the page the way the player bar floats over its bottom. Not modal:
+/// What plays next, floating over the right of the page. Not modal:
 /// the page stays live behind it. Drag rows to reorder; the list is native, so the insertion line is too.
 struct QueuePanel: View {
     let close: () -> Void

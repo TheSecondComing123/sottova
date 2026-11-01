@@ -2,21 +2,6 @@ import AppKit
 import SwiftUI
 import SottovaCore
 
-private struct Title: View {
-    let song: Song
-    @Environment(Controller.self) private var controller
-
-    var body: some View {
-        let isCurrent = controller.current?.id == song.id && controller.status != .idle
-        // the catalog number trails the work in a quieter voice, as on a concert program
-        Text("\(song.work)\(Text(song.detail.map { "  \($0)" } ?? "").font(.system(size: 13)).foregroundStyle(Theme.faint))")
-            .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
-            .foregroundStyle(Theme.text)
-            .lineLimit(1)
-            .accessibilityValue(isCurrent ? "playing" : "")
-    }
-}
-
 /// A set of songs you press play on: an album that came with your files, or one of yours.
 enum MusicCollection: Identifiable {
     case album(Album)

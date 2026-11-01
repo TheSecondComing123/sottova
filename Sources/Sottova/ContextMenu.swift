@@ -28,9 +28,6 @@ struct MenuEntry {
 
     static var divider: MenuEntry { MenuEntry(kind: .divider) }
 
-    var selectable: Bool {
-        if case .divider = kind { false } else { enabled }
-    }
 }
 
 extension View {

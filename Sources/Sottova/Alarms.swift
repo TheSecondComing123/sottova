@@ -432,7 +432,7 @@ private struct KnobToggle: ToggleStyle {
     }
 }
 
-/// The player bar's volume line, with the square knob from the gap range: no system accent in it.
+/// A volume line with a square knob: no system accent in it.
 private struct LineSlider: View {
     @Binding var value: Double
 
@@ -458,35 +458,8 @@ private struct LineSlider: View {
     }
 }
 
-/// Under an album or playlist title: when it starts by itself, and a way to call that off.
-struct AlarmLine: View {
-    let source: String
-    @Environment(Controller.self) private var controller
-
-    var body: some View {
-        let mine = controller.alarms.filter { $0.source == source && $0.on }
-        if !mine.isEmpty {
-            HStack(spacing: 8) {
-                Ph.clock.icon(size: 14)
-                    .foregroundStyle(Theme.accent(for: source))
-                ForEach(mine) { alarm in
-                    Text(Self.describe(alarm))
-                        .foregroundStyle(Theme.muted)
-                    LinkText(text: "turn off") {
-                        controller.changeAlarm(alarm.id) { $0.on = false }
-                    }
-                        .foregroundStyle(Theme.text)
-                }
-            }
-            .font(.system(size: 11, weight: .medium))
-        }
-    }
-
-    /// "Lauds at 7:02 tomorrow", by when it next goes off, so a repeating one names its day too.
-    static func headline(_ alarm: Alarm, at: Date) -> String {
-        "\(alarm.name) at \(time(alarm)) \(day(at))"
-    }
-
+/// How a row reads in words.
+enum AlarmLine {
     private static func day(_ at: Date) -> String {
         Calendar.current.isDateInToday(at) ? "today" : Calendar.current.isDateInTomorrow(at) ? "tomorrow" : at.formatted(.dateTime.weekday(.wide))
     }
@@ -501,12 +474,6 @@ struct AlarmLine: View {
     static func end(of alarm: Alarm, minutes: Int) -> String {
         ((Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: .now) ?? .now) + Double(minutes) * 60)
             .formatted(date: .omitted, time: .shortened)
-    }
-
-    /// Under a row's name: "on weekdays, shuffled", "every day, while you're at the mac". Its end sits under its time.
-    static func subtitle(_ alarm: Alarm) -> String {
-        days(alarm) + (alarm.whileHere ? ", while you're at the mac" : alarm.shuffled ? ", shuffled" : "")
-            + (alarm.rotates ? ", a part each time" : "")
     }
 
     static func time(_ alarm: Alarm) -> String {
