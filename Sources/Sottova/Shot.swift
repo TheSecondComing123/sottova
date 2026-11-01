@@ -16,9 +16,40 @@ struct ShotReady: ViewModifier {
             try? await controller.shotEnter(defaults.string(forKey: "shotState") ?? "idle",
                                             covers: defaults.string(forKey: "shotCovers").map { URL(filePath: $0) })
             let routes: [String: Route] = ["home": .home, "songs": .songs, "collections": .collections, "artists": .artists, "alarms": .alarms, "shelf": .shelf]
-            router.go(to: routes[defaults.string(forKey: "shotRoute") ?? "home"]!)
+            let asked = defaults.string(forKey: "shotRoute") ?? "home"
+            if asked.hasPrefix("collection:") {
+                let name = asked.dropFirst("collection:".count)
+                if let playlist = controller.playlists.first(where: { $0.name == name }) {
+                    router.go(to: .playlist(playlist.id))
+                } else if let album = controller.catalog.albums.first(where: { $0.title == name }) {
+                    router.go(to: .album(album.id))
+                }
+            } else {
+                router.go(to: routes[asked]!)
+            }
             #if NEWLOOK
             router.droppingMusic = defaults.bool(forKey: "shotDragging")
+            if let filter = defaults.string(forKey: "shotFilter") { router.songFilter = filter }
+            if let picked = defaults.string(forKey: "shotPicked") {
+                let titles = picked.components(separatedBy: "|")
+                router.selected = Set(controller.catalog.songs.filter { titles.contains($0.title) }.map(\.id))
+            }
+            if defaults.bool(forKey: "shotSheet") {
+                var preset = controller.settings
+                (preset.name, preset.gapMin, preset.gapMax, preset.fadeIn, preset.crossfade) = ("Long evening", 300, 720, 6, false)
+                router.presetEdit = PresetEdit(preset: preset)
+            }
+            if let free = defaults.string(forKey: "shotFree") {
+                let credit = { (title: String) in
+                    let folder = Shelf.folder.appending(path: Shelf.sets.first { $0.title == title }!.folder)
+                    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try? Data().write(to: folder.appending(path: "credits.txt"))
+                }
+                if free != "first" { credit("Open Goldberg Variations") }
+                if free == "downloaded" { credit("Cloud Cover") }
+                if free == "downloading" { ShelfDownload.shelf.shotRow("musopen-chopin", running: 0.4) }
+                if free == "failed" { ShelfDownload.shelf.shotRow("ChrisZabriskieDirectToVideo", failure: "Didn't finish. The connection dropped.") }
+            }
             #endif
             let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
             let window = NSApp.windows.first { $0.title == "Sottova" }
@@ -35,7 +66,8 @@ struct ShotReady: ViewModifier {
             // for someone watching: in front, but still not activated
             if defaults.bool(forKey: "shotRaise") { window?.orderFrontRegardless() }
             try? await Task.sleep(for: .seconds(1))
-            try? Data(String(window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
+            // a sheet is its own window: asking for one takes the picture of it alone
+            try? Data(String((defaults.bool(forKey: "shotSheet") ? window?.attachedSheet?.windowNumber : nil) ?? window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
         }
     }
 }

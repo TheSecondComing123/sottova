@@ -2221,12 +2221,16 @@ extension Controller {
     }
 
     public func shotEnter(_ state: String, covers: URL?) async throws {
-        guard ["empty", "idle", "playing", "paused", "fading", "rising", "silence", "live", "arriving", "pausedSilence", "noCover", "longTitle", "easing", "away", "call", "busy", "media", "noAudio", "reading", "missed", "dayDone", "nothingYet", "nothingDay", "preview", "liveSilence"].contains(state) else { fatalError("no such state: \(state)") }
+        guard ["empty", "idle", "playing", "paused", "fading", "rising", "silence", "live", "arriving", "pausedSilence", "noCover", "longTitle", "easing", "away", "call", "busy", "media", "noAudio", "reading", "missed", "complinePlaying", "dayDone", "nothingYet", "nothingDay", "preview", "liveSilence"].contains(state) else { fatalError("no such state: \(state)") }
         keepsMacAwake = false
         loadTrims()
         loadAlarms()
         if state == "empty" { return }
-        try await seed(covers: covers)
+        if UserDefaults.standard.bool(forKey: "shotLibrary") {
+            try await seedLibrary(covers: covers)
+        } else {
+            try await seed(covers: covers)
+        }
         apply(Settings.presets.first { $0.name == "Sparse" }!)
         let overworld = catalog.albums.first { $0.title == "Overworld" }!
         let row = alarms.first { $0.name == "Overworld" }!.id
@@ -2301,6 +2305,10 @@ extension Controller {
         case "missed":
             changeAlarm(alarms.first { $0.name == "Lauds" }!.id) { $0.missed = Alarm.Missed(at: Self.shotMonday(hour: 7, minute: 2), why: .off) }
             shotNow = Self.shotMonday(hour: 9)
+        case "complinePlaying":
+            let compline = playlists.first { $0.name == "Compline" }!
+            play(songs(of: compline), source: compline.id)
+            advance(track!.fadeIn + 30)
         case "nothingDay": alarms.map(\.id).forEach(removeAlarm)
         case "liveSilence":
             var long = settings
@@ -2320,6 +2328,82 @@ extension Controller {
     /// A Monday, so every seeded row is on.
     private static func shotMonday(hour: Int, minute: Int = 0) -> Date {
         Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 2, hour: hour, minute: minute))!
+    }
+
+    /// The mock's library, for Songs and collections: real tags, Compline's parts, a collection of mixed covers, Shellac with none.
+    private func seedLibrary(covers: URL?) async throws {
+        typealias Row = (who: String?, title: String, artist: String, album: String, seconds: Int, cover: String?)
+        let mixed = UserDefaults.standard.bool(forKey: "shotMixed")
+        var rows: [Row] = [
+            (nil, "The road we use to travel when we were kids", "Komiku", "Overworld", 140, "overworld"),
+            (nil, "A forest for you and me", "Komiku", "Overworld", 192, "overworld"),
+            (nil, "green world", "Komiku", "Overworld", 171, "overworld"),
+            ("Bach", "Goldberg Variations: Aria", "Kimiko Ishizaka", "Compline", 300, "compline"),
+            ("Chopin", "Nocturne in F-sharp minor Op. 48 No. 2", "Luke Faulkner", "Compline", 496, "compline"),
+            ("Dowland", "Sorrow, stay", "In Stile Moderno", "Compline", 442, "compline"),
+            ("Schubert", "Sonata in A major: II. Andantino D. 959", "Paul Pitman", "Compline", 546, "compline"),
+            ("Chopin", "Nocturne in C minor B. 108", "Diana Hughes", "Compline", 193, "compline"),
+            ("Borodin", "String Quartet No. 2: III. Notturno", "Musopen String Quartet", "Compline", 547, "compline"),
+            ("Bach", "Well-Tempered Clavier: Prelude in C", "Kimiko Ishizaka", "Lauds", 134, "lauds"),
+            ("Bach", "Cello Suite No. 1: Prelude", "Pieter Wispelwey", "Lauds", 151, "lauds"),
+            ("Palestrina", "Missa Papae Marcelli: Kyrie", "Tallis Scholars", "Counterpoint", 258, "counterpoint"),
+            ("Tallis", "If ye love me", "Tallis Scholars", "Counterpoint", 126, "counterpoint"),
+            ("Louis Armstrong", "West End Blues", "Hot Five", "Shellac", 196, nil),
+            ("Duke Ellington", "Mood Indigo", "His Orchestra", "Shellac", 180, nil),
+            ("Bessie Smith", "St. Louis Blues", "with Louis Armstrong", "Shellac", 190, nil),
+            ("Coleman Hawkins", "Body and Soul", "His Orchestra", "Shellac", 180, nil),
+            ("Billie Holiday", "Strange Fruit", "Commodore", "Shellac", 192, nil),
+        ]
+        let chopin: String? = mixed ? nil : "Chopin"
+        rows += [(chopin, "Nocturne in E-flat Op. 9 No. 2", "Luke Faulkner", "Perfect Chopin", 270, "perfectchopin")]
+        if mixed { rows += [(nil, "Harbor Lights", "Mara Lind", "Perfect Chopin", 228, "neon")] }
+        rows += [(chopin, "Etude Op. 10 No. 3", "Diana Hughes", "Perfect Chopin", 232, "perfectchopin")]
+        if mixed { rows += [(nil, "Blue Hour", "Tomas Ek", "Perfect Chopin", 209, "pale")] }
+        rows += [(chopin, "Ballade No. 1", "Musopen", "Perfect Chopin", 561, mixed ? "counterpoint" : "perfectchopin")]
+        if mixed { rows += [(nil, "Last Train", "Ines Vale", "Perfect Chopin", 362, "tiny"), (nil, "Static Coast", "Ines Vale", "Perfect Chopin", 235, "flat")] }
+        rows += [(chopin, "Prelude Op. 28 No. 4", "Diana Hughes", "Perfect Chopin", 135, "perfectchopin")]
+
+        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 8_000, channels: 1, interleaved: false)!
+        let saved: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 8_000, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16]
+        var art: [String: String] = [:]
+        var paths: [String: [String]] = [:]
+        for row in rows {
+            if let name = row.cover, art[name] == nil, let data = covers.flatMap({ try? Data(contentsOf: $0.appending(path: "\(name).jpg")) }) {
+                art[name] = artwork?.save(data)
+            }
+            let folder = ShotEnv.music.appending(path: row.album)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let url = folder.appending(path: "\(paths[row.album, default: []].count + 1).caf")
+            paths[row.album, default: []].append(url.path)
+            // only what plays needs its length on disk; the rest take the tag's word for it
+            let plays = row.album == "Overworld" || row.title == "Goldberg Variations: Aria"
+            let frames = AVAudioFrameCount((plays ? row.seconds : 1) * 8_000)
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
+            buffer.frameLength = frames
+            buffer.floatChannelData![0].update(repeating: 0, count: Int(frames))
+            try AVAudioFile(forWriting: url, settings: saved).write(from: buffer)
+            var meta = TrackMeta(title: row.title, artist: row.artist, album: row.album, albumArtist: row.album == "Overworld" ? row.artist : "Various",
+                                 trackNumber: paths[row.album]!.count, duration: Double(row.seconds), artwork: row.cover.flatMap { art[$0] })
+            meta.composer = row.who
+            library.entries[url.path] = Library.Entry(size: 0, modified: .now, loudness: Loudness(lufs: -18, truePeakDb: -10), meta: meta)
+        }
+        folders = [ShotEnv.music]
+        refreshTracks()
+        while catalog.songs.count < rows.count { try await Task.sleep(for: .milliseconds(10)) }
+        let album = { (title: String) in self.catalog.albums.first { $0.title == title }! }
+        let own = { (title: String) in self.newPlaylist(named: title, songs: album(title).songs, fromAlbum: album(title).id)! }
+        let compline = own("Compline")
+        for (index, name) in [(2, "Sorrow, stay"), (3, "Trembling shadow"), (5, "Candle out")] { setBreak(true, at: index, in: compline); namePart(name, at: index, in: compline) }
+        namePart("Dusk", at: 0, in: compline)
+        _ = own("Perfect Chopin")
+        if UserDefaults.standard.bool(forKey: "shotNewCollection") { newPlaylist() }
+        var lauds = Alarm(source: album("Lauds").id, name: "Lauds", hour: 7, minute: 2, weekdays: [2, 3, 4, 5, 6], shuffled: true)
+        lauds.volume = 0.25
+        var overworld = Alarm(source: album("Overworld").id, name: "Overworld", hour: 15, minute: 0, weekdays: Set(1...7), shuffled: true)
+        (overworld.whileHere, overworld.minutes) = (true, 240)
+        var evening = Alarm(source: compline, name: "Compline", hour: 20, minute: 0, weekdays: Set(1...7))
+        (evening.volume, evening.minutes) = (0.15, 60)
+        [lauds, overworld, evening].forEach(addAlarm)
     }
 
     private func seed(covers: URL?) async throws {

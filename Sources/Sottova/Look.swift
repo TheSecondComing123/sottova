@@ -70,17 +70,17 @@ extension Palette.Tokens {
 
 /// The type scale, from v4.css.
 enum Role {
-    case title, name, row, sheet, body, small, label
+    case title, name, row, item, sheet, body, small, label, column
 
     var size: CGFloat {
         switch self {
         case .title: 32
         case .name: 22
         case .row: 17
-        case .sheet: 15
+        case .item, .sheet: 15
         case .body: 13
         case .small: 12
-        case .label: 11
+        case .label, .column: 11
         }
     }
 
@@ -89,16 +89,16 @@ enum Role {
         case .title: 37
         case .name: 27
         case .row: 22
-        case .sheet: 20
+        case .item, .sheet: 20
         case .body: 18
         case .small: 16
-        case .label: 14
+        case .label, .column: 14
         }
     }
 
     var weight: Font.Weight {
         switch self {
-        case .title, .name, .row: .medium
+        case .title, .name, .row, .item, .column: .medium
         case .sheet, .label: .semibold
         case .body, .small: .regular
         }
@@ -124,12 +124,16 @@ extension View {
 struct ThemeButton: View {
     let title: String
     var primary = false
+    var icon: Ph?
+    var iconWeight = Ph.IconWeight.fill
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .role(.body)
+            HStack(spacing: 6) {
+                if let icon { icon.icon(iconWeight, size: 11) }
+                Text(title).role(.body)
+            }
                 .foregroundStyle(primary ? Theme.onPrimary : Theme.text)
                 .padding(.horizontal, 11)
                 .frame(height: 24)
@@ -171,6 +175,26 @@ struct ThemeLink: View {
                 .foregroundStyle(underlined ? Theme.text : Theme.primary)
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// `.field` in the mock, its ring from `.focus`.
+struct FieldLook: ViewModifier {
+    var focused = false
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content
+            .textFieldStyle(.plain)
+            .focusEffectDisabled()
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            // the mock's .18 is for dark grounds; on a light one it reads as disabled
+            .background(.black.opacity(scheme == .dark ? 0.18 : 0.05), in: .rect(cornerRadius: Radius.small))
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.frame, lineWidth: 0.5)
+                if focused { RoundedRectangle(cornerRadius: Radius.small).stroke(Theme.primary.opacity(0.55), lineWidth: 2.5).padding(-1.25) }
+            }
     }
 }
 

@@ -90,39 +90,7 @@ struct SongRow: View {
             return NSItemProvider(object: URL(filePath: song.id) as NSURL)
         }
         .sottovaMenu {
-            let songs = picked
-            if songs.count > 1 {
-                var entries: [MenuEntry] = [
-                    .item("Play \(songs.count) next") { controller.playNext(songs) },
-                    .addToCollection(songs, name: "\(songs.count) songs", controller: controller),
-                ]
-                if let remove {
-                    entries.append(.item("Remove \(songs.count) from this collection") { remove(Set(songs.map(\.id))) })
-                }
-                return entries
-            }
-            var entries: [MenuEntry] = [
-                .item("Play", action: play),
-                .item("Play next") { controller.playNext([song]) },
-                .addToCollection([song], name: song.work, controller: controller),
-            ]
-            entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })
-            if let remove {
-                entries.append(.item("Remove from this collection") { remove([song.id]) })
-            }
-            if let part {
-                entries.append(.item(part.starts ? "Join the part before" : "Start a new part here", action: part.flip))
-            }
-            entries += [
-                .divider,
-                .item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) },
-                .item("Go to artist") { navigate(.artist(song.artist)) },
-            ]
-            if let composer = song.composer {
-                entries.append(.item("Go to composer") { navigate(.composer(composer)) })
-            }
-            entries.append(.item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) })
-            return entries
+            MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, controller: controller, router: router, navigate: navigate)
         }
     }
 }
@@ -287,28 +255,7 @@ struct AlbumTile: View {
                     .lineLimit(1)
             }
         }
-        .sottovaMenu {
-            let gaps = controller.albumSettings[album.id]?.name
-            var choices: [MenuEntry] = [.item("Your setting", checked: gaps == nil) { controller.albumSettings[album.id] = nil }]
-            choices += controller.allPresets.map { preset in
-                .item(preset.name, checked: gaps == preset.name) { controller.albumSettings[album.id] = preset }
-            }
-            // Custom is edited on the album page; here it only shows that it's the one in use
-            if gaps == "Custom" {
-                choices.append(.item("Custom", checked: true, enabled: false) {})
-            }
-            return [
-                .item("Play") { controller.play(album.songs) },
-                .item("Play next") { controller.playNext(album.songs) },
-                .addToCollection(album.songs, name: album.title, controller: controller),
-                .item("Go to artist") { navigate(.artist(album.artist)) },
-                .divider,
-                .item("Choose cover…") { router.coverFor = .album(album.id) },
-                .item("Start at…") { router.alarm = .new(.album(album.id)) },
-                .item("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } },
-                .submenu("Gaps", choices),
-            ]
-        }
+        .sottovaMenu { MenuEntry.album(album, controller: controller, router: router, navigate: navigate) }
     }
 }
 
@@ -440,6 +387,66 @@ struct PageHeader: View {
 }
 
 extension MenuEntry {
+    /// A song's row; several picked get what can be done to all of them.
+    @MainActor static func song(_ song: Song, picked songs: [Song], play: @escaping () -> Void, remove: ((Set<String>) -> Void)?,
+                                part: (starts: Bool, flip: () -> Void)?, controller: Controller, router: Router, navigate: Navigate) -> [MenuEntry] {
+        if songs.count > 1 {
+            var entries: [MenuEntry] = [
+                .item("Play \(songs.count) next") { controller.playNext(songs) },
+                .addToCollection(songs, name: "\(songs.count) songs", controller: controller),
+            ]
+            if let remove {
+                entries.append(.item("Remove \(songs.count) from this collection") { remove(Set(songs.map(\.id))) })
+            }
+            return entries
+        }
+        var entries: [MenuEntry] = [
+            .item("Play", action: play),
+            .item("Play next") { controller.playNext([song]) },
+            .addToCollection([song], name: song.work, controller: controller),
+        ]
+        entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })
+        if let remove {
+            entries.append(.item("Remove from this collection") { remove([song.id]) })
+        }
+        if let part {
+            entries.append(.item(part.starts ? "Join the part before" : "Start a new part here", action: part.flip))
+        }
+        entries += [
+            .divider,
+            .item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) },
+            .item("Go to artist") { navigate(.artist(song.artist)) },
+        ]
+        if let composer = song.composer {
+            entries.append(.item("Go to composer") { navigate(.composer(composer)) })
+        }
+        entries.append(.item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: song.id)]) })
+        return entries
+    }
+
+    @MainActor static func album(_ album: Album, controller: Controller, router: Router, navigate: Navigate) -> [MenuEntry] {
+        let gaps = controller.albumSettings[album.id]?.name
+        var choices: [MenuEntry] = [.item("Your setting", checked: gaps == nil) { controller.albumSettings[album.id] = nil }]
+        choices += controller.allPresets.map { preset in
+            .item(preset.name, checked: gaps == preset.name) { controller.albumSettings[album.id] = preset }
+        }
+        // Custom is edited on the album page; here it only shows that it's the one in use
+        if gaps == "Custom" {
+            choices.append(.item("Custom", checked: true, enabled: false) {})
+        }
+        return [
+            .item("Play") { controller.play(album.songs) },
+            .item("Play next") { controller.playNext(album.songs) },
+            .addToCollection(album.songs, name: album.title, controller: controller),
+            .item("Go to artist") { navigate(.artist(album.artist)) },
+            .divider,
+            .item("Choose cover…") { router.coverFor = .album(album.id) },
+            .item("Start at…") { router.alarm = .new(.album(album.id)) },
+            .item("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } },
+            .submenu("Gaps", choices),
+        ]
+    }
+
     /// "Add to collection ▸": every one of yours, then a new one named after what's being added.
     @MainActor static func addToCollection(_ songs: [Song], name: String, controller: Controller) -> MenuEntry {
         var entries = controller.playlists.map { playlist in MenuEntry.item(playlist.name) { controller.add(songs, to: playlist.id) } }

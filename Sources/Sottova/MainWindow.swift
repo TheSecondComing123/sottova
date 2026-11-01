@@ -100,6 +100,19 @@ struct MainWindow: View {
         .environment(\.windowVisible, visible)
         .environment(\.renaming, $renaming)
         .environment(\.navigate, Navigate { route in
+            #if NEWLOOK
+            // a name opens Songs filtered to it
+            if case .artist(let name) = route {
+                router.go(to: .songs)
+                router.songFilter = name
+                return
+            }
+            if case .composer(let name) = route {
+                router.go(to: .songs)
+                router.songFilter = name
+                return
+            }
+            #endif
             // an album made yours opens as its copy
             if case .album(let id) = route, let copy = controller.copy(ofAlbum: id) {
                 router.go(to: .playlist(copy.id))
@@ -136,7 +149,11 @@ struct MainWindow: View {
         // at the window, never inside a lazy row that could be recycled with the sheet open
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
+        #if NEWLOOK
+        .sheet(item: Binding(get: { router.presetEdit }, set: { router.presetEdit = $0 })) { SilenceSheet(edit: $0) }
+        #else
         .sheet(item: Binding(get: { router.presetEdit }, set: { router.presetEdit = $0 })) { PresetSheet(edit: $0) }
+        #endif
         .sheet(item: Binding(get: { router.trimming }, set: { router.trimming = $0 })) { TrimSheet(song: $0) }
     }
 
@@ -154,9 +171,17 @@ struct MainWindow: View {
                 switch router.route {
                 #if NEWLOOK
                 case .home: NowPage()
+                case .songs: SongList()
+                case .collections: CollectionGrid()
+                case .artists: NameList()
+                case .alarms: AlarmsPage()
+                case .shelf: FreeMusicPage()
+                case .album(let id): AlbumCollection(id: id)
+                case .playlist(let id): YourCollection(id: id)
+                // navigate sends names to Songs; these only come back through history from before that
+                case .artist, .composer: SongList()
                 #else
                 case .home: HomePage()
-                #endif
                 case .songs: SongsPage()
                 case .collections: CollectionsPage()
                 case .artists: ArtistsPage()
@@ -166,6 +191,7 @@ struct MainWindow: View {
                 case .artist(let name): ArtistPage(name: name)
                 case .playlist(let id): PlaylistPage(id: id)
                 case .composer(let name): ComposerPage(name: name)
+                #endif
                 }
             }
         }

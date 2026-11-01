@@ -12,6 +12,8 @@ final class Router {
     var droppingMusic = false
     /// A missed line put away at the foot of Now; it stays on its row.
     var dismissedFoot: String?
+    /// The filter on Songs, here so a name anywhere can open Songs filtered to it.
+    var songFilter = ""
     #endif
     /// Where each page in the history was scrolled to, so Back lands where you were.
     private(set) var back: [(route: Route, offset: CGFloat)] = []
@@ -60,6 +62,9 @@ final class Router {
     func go(to destination: Route) {
         query = ""
         selected = []
+        #if NEWLOOK
+        if destination == .songs { songFilter = "" }
+        #endif
         guard destination != route else { return }
         restore = nil
         withAnimation(Theme.page) {

@@ -113,6 +113,8 @@ struct ShelfPage: View {
 enum ShelfDownload {
     static let shelf = Shelf()
     static var task: Task<Void, Never>?
+    /// The sets running alone, each stopped by its row's Cancel.
+    static var tasks: [ShelfSet.ID: Task<Void, Never>] = [:]
 
     /// A finished set writes its credits last; one being downloaded may have them from before.
     static func isDone(_ set: ShelfSet) -> Bool {

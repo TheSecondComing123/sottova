@@ -110,6 +110,14 @@ public final class Shelf {
         }
     }
 
+    #if SHOT
+    /// For a picture of a row mid-download or failed: nothing is fetched.
+    public func shotRow(_ id: ShelfSet.ID, running: Double? = nil, failure: String? = nil) {
+        if let running { (progress[id], _) = (running, downloading.insert(id)) }
+        failed[id] = failure
+    }
+    #endif
+
     struct Item: Decodable {
         struct File: Decodable {
             let name: String

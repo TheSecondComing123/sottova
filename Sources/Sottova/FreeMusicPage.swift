@@ -1,0 +1,91 @@
+#if NEWLOOK
+import SwiftUI
+import SottovaCore
+
+/// Free music: each set downloads on its own, into Music › Sottova Library, carrying on while you're on another page.
+struct FreeMusicPage: View {
+    @Environment(Controller.self) private var controller
+    private let shelf = ShelfDownload.shelf
+
+    var body: some View {
+        PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
+            Text("Free music")
+                .role(.title)
+                .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.bottom, 27)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Shelf.sets) { row($0) }
+                Text("Free to keep. CC BY sets credit the artist.")
+                    .role(.body)
+                    .foregroundStyle(Theme.faint)
+                    .padding(.top, 20)
+            }
+            .frame(maxWidth: 720)
+        }
+    }
+
+    private func row(_ set: ShelfSet) -> some View {
+        let running = shelf.downloading.contains(set.id)
+        let progress = shelf.progress[set.id] ?? 0
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(set.title)
+                    .role(.item)
+                    .foregroundStyle(Theme.text)
+                Text("\(set.creator), \(set.license), \(Self.size(set.megabytes))")
+                    .role(.body)
+                    .foregroundStyle(Theme.muted)
+            }
+            .lineLimit(1)
+            Spacer(minLength: 12)
+            if running {
+                Text("\(Int(progress * Double(set.megabytes))) MB of \(Self.size(set.megabytes))")
+                    .role(.body)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.muted)
+                ThemeButton(title: "Cancel") { ShelfDownload.tasks[set.id]?.cancel() }
+            } else if ShelfDownload.isDone(set) {
+                HStack(spacing: 6) {
+                    Ph.check.icon(.bold, size: 10)
+                    Text("In your library").role(.body)
+                }
+                .foregroundStyle(Theme.muted)
+            } else if let failure = shelf.failed[set.id] {
+                Text(failure)
+                    .role(.body)
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+                ThemeButton(title: "Try again") { start(set) }
+            } else {
+                ThemeButton(title: "Download") { start(set) }
+            }
+        }
+        .frame(height: 56)
+        .overlay(alignment: .bottom) {
+            if running {
+                Rectangle().fill(Theme.hairline).frame(height: 2)
+                    .overlay(alignment: .leading) {
+                        GeometryReader { geo in
+                            Rectangle().fill(Theme.faint).frame(width: geo.size.width * progress, height: 2)
+                        }
+                    }
+            }
+        }
+    }
+
+    private func start(_ set: ShelfSet) {
+        try? FileManager.default.createDirectory(at: Shelf.folder, withIntermediateDirectories: true)
+        // a folder already watched (Music itself, say) sees the new one; adding it too would list every piece twice
+        let path = Shelf.folder.path(percentEncoded: false)
+        if !controller.folders.contains(where: { path == $0.path(percentEncoded: false) || path.hasPrefix($0.path(percentEncoded: false) + "/") }) {
+            controller.addFolders([Shelf.folder])
+        }
+        ShelfDownload.tasks[set.id] = Task { await shelf.download(set) }
+    }
+
+    private static func size(_ megabytes: Int) -> String {
+        megabytes >= 1000 ? String(format: "%.1f GB", Double(megabytes) / 1000) : "\(megabytes) MB"
+    }
+}
+#endif

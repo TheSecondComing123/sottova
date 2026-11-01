@@ -3,6 +3,7 @@ import SwiftUI
 import SottovaCore
 
 struct PageScroll<Content: View>: View {
+    var insets = EdgeInsets(top: 12, leading: 32, bottom: 24, trailing: 32)
     @ViewBuilder let content: Content
     @Environment(Router.self) private var router
     @State private var position = ScrollPosition(edge: .top)
@@ -14,9 +15,7 @@ struct PageScroll<Content: View>: View {
             }
             // capped so a wide window doesn't spread a song's columns a screen apart
             .frame(maxWidth: 1440, alignment: .leading)
-            .padding(.horizontal, 32)
-            .padding(.top, 12)
-            .padding(.bottom, 24)
+            .padding(insets)
             .overlayScrollers()
         }
         // rows fade out under the floating player bar instead of showing through the strip beneath it
@@ -1328,7 +1327,7 @@ struct SearchPage: View {
 }
 
 /// A list page with nothing in it yet: what will appear, and the one way to get it there.
-private struct EmptyLibrary: View {
+struct EmptyLibrary: View {
     let what: String
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -1360,7 +1359,7 @@ private struct EmptyLibrary: View {
     }
 }
 
-private struct Missing: View {
+struct Missing: View {
     let text: String
 
     var body: some View {
