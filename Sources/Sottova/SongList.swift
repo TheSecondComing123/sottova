@@ -1,4 +1,3 @@
-#if NEWLOOK
 import AppKit
 import SwiftUI
 import SottovaCore
@@ -258,4 +257,3 @@ struct NameList: View {
         }
     }
 }
-#endif

@@ -375,7 +375,6 @@ private struct RecentList: View {
     }
 }
 
-#if NEWLOOK
 /// What's left on the old names until the switch renames them: `.btn.def`, the single next action.
 struct InvertedButton: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
@@ -406,40 +405,6 @@ struct QuietButton: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
-#else
-struct InvertedButton: ButtonStyle {
-    @Environment(\.isEnabled) private var enabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .semibold))
-            .padding(.horizontal, 16)
-            .frame(height: 40)
-            // disabled, it steps back into the surface instead of staying the heaviest thing on it at low opacity
-            .foregroundStyle(enabled ? Theme.background : Theme.faint)
-            .background(enabled ? Theme.text : Theme.hover, in: .rect(cornerRadius: 8))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(Theme.quick, value: configuration.isPressed)
-    }
-}
-
-/// The quiet partner of InvertedButton, for Cancel: the whole 40 pt block is the target, not just the word.
-struct QuietButton: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(Theme.muted)
-            .padding(.horizontal, 12)
-            .frame(height: 40)
-            // an edge, so one standing alone ("Hear it") still reads as a button, not a caption
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
-            .contentShape(.rect)
-            .hoverable(radius: 8)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(Theme.quick, value: configuration.isPressed)
-    }
-}
-#endif
 
 struct SongsPage: View {
     @Environment(Controller.self) private var controller

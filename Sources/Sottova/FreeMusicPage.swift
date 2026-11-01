@@ -1,4 +1,3 @@
-#if NEWLOOK
 import SwiftUI
 import SottovaCore
 
@@ -88,4 +87,3 @@ struct FreeMusicPage: View {
         megabytes >= 1000 ? String(format: "%.1f GB", Double(megabytes) / 1000) : "\(megabytes) MB"
     }
 }
-#endif

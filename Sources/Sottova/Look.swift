@@ -1,4 +1,3 @@
-#if NEWLOOK
 import AppKit
 import SwiftUI
 import SottovaCore
@@ -252,4 +251,3 @@ struct ThemeCheckbox: ToggleStyle {
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
     }
 }
-#endif

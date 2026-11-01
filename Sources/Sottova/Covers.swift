@@ -108,13 +108,8 @@ struct CoverPicker: View {
         }
         .padding(24)
         .frame(width: 712)
-        #if NEWLOOK
         .background(Theme.sidebar)
         .presentationBackground(Theme.sidebar)
-        #else
-        .background(Theme.background)
-        .presentationBackground(Theme.background)
-        #endif
     }
 
     /// The square that will be written, which is also where a file can be dropped.
@@ -283,14 +278,7 @@ struct CoverCredit: View {
     var body: some View {
         Group {
             if let credit {
-                #if NEWLOOK
                 Text(credit).role(.small).foregroundStyle(Theme.faint).lineLimit(2).help(credit)
-                #else
-                Text(credit)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.faint)
-                    .lineLimit(1)
-                #endif
             }
         }
         .task(id: key) { credit = url.flatMap(CoverFile.credit(at:)) }

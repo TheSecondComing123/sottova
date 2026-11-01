@@ -1,4 +1,3 @@
-#if NEWLOOK
 import AppKit
 import SwiftUI
 import SottovaCore
@@ -630,4 +629,3 @@ private struct CollectionCard: View {
         }
     }
 }
-#endif

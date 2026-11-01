@@ -1,4 +1,3 @@
-#if NEWLOOK
 import AppKit
 import SottovaCore
 
@@ -114,4 +113,3 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 extension URL {
     static let soundSettings = URL(string: "x-apple.systempreferences:com.apple.Sound-Settings.extension")!
 }
-#endif

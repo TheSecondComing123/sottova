@@ -27,7 +27,6 @@ struct ShotReady: ViewModifier {
             } else {
                 router.go(to: routes[asked]!)
             }
-            #if NEWLOOK
             router.droppingMusic = defaults.bool(forKey: "shotDragging")
             if let filter = defaults.string(forKey: "shotFilter") { router.songFilter = filter }
             if let picked = defaults.string(forKey: "shotPicked") {
@@ -75,7 +74,6 @@ struct ShotReady: ViewModifier {
                 controller.volume = 0.62
                 if router.showsQueue { controller.playNext(Array(controller.catalog.songs.prefix(4))) }
             }
-            #endif
             let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
             let window = NSApp.windows.first { $0.title == "Sottova" }
             window?.setContentSize(NSSize(width: width, height: 800))
@@ -91,7 +89,6 @@ struct ShotReady: ViewModifier {
             // for someone watching: in front, but still not activated
             if defaults.bool(forKey: "shotRaise") { window?.orderFrontRegardless() }
             try? await Task.sleep(for: .seconds(1))
-            #if NEWLOOK
             // from the window's top left, as the mocks measure
             if let at = defaults.string(forKey: "shotMenuAt")?.split(separator: ",").compactMap({ Double($0) }), let window, let height = window.contentView?.bounds.height {
                 return shotMenu(at: NSPoint(x: at[0], y: height - at[1]), in: window)
@@ -101,7 +98,6 @@ struct ShotReady: ViewModifier {
                 _ = AppDelegate.statusMenu?.item.menu?.popUp(positioning: nil, at: NSPoint(x: window.frame.midX, y: window.frame.midY), in: nil)
                 return
             }
-            #endif
             if defaults.bool(forKey: "shotSettings") {
                 AppDelegate.showSettings()
                 try? await Task.sleep(for: .seconds(1))

@@ -1,4 +1,3 @@
-#if NEWLOOK
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -528,4 +527,3 @@ private struct HourDrop: DropDelegate {
         return true
     }
 }
-#endif

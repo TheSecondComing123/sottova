@@ -1,4 +1,3 @@
-#if NEWLOOK
 import AppKit
 import SwiftUI
 import SottovaCore
@@ -319,4 +318,3 @@ struct Scrubber: NSViewRepresentable {
         override func mouseExited(with event: NSEvent) { scrubber?.hovered(nil) }
     }
 }
-#endif

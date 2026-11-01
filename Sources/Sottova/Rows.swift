@@ -434,16 +434,10 @@ extension MenuEntry {
         if gaps == "Custom" {
             choices.append(.item("Custom", checked: true, enabled: false) {})
         }
-        #if NEWLOOK
         let choicesName = "Silence"
-        #else
-        let choicesName = "Gaps"
-        #endif
         var goToArtist: [MenuEntry] = [.item("Go to artist") { navigate(.artist(album.artist)) }]
-        #if NEWLOOK
         // a name opens Songs filtered, and no song is tagged with Catalog's word for a compilation
         if album.artist == "Various Artists" { goToArtist = [] }
-        #endif
         return [
             .item("Play") { controller.play(album.songs) },
             .item("Play next") { controller.playNext(album.songs) },

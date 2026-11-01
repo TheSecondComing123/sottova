@@ -6,11 +6,7 @@ import SottovaCore
 /// with text tokens raised to pass WCAG AA at 11–13 pt, on a hovered row too.
 enum Theme {
     /// Read every time a color draws; the scenes re-key on the palette's id, so a change rebuilds them and shows at once.
-    #if NEWLOOK
     nonisolated(unsafe) static var palette = slotPalette()
-    #else
-    nonisolated(unsafe) static var palette = Palette.named(UserDefaults.standard.string(forKey: "palette"))
-    #endif
 
     static let background = token(\.background)
     static let raised = token(\.raised)
@@ -59,11 +55,7 @@ enum Theme {
     }
 
     static func select(_ id: String) {
-        #if NEWLOOK
         palette = slotPalette(id)
-        #else
-        palette = Palette.named(id)
-        #endif
     }
 
     static let quick = curve(0.2)
@@ -119,16 +111,12 @@ enum Ph: String {
     case speakerHigh = "speaker-high", speakerSlash = "speaker-slash"
     case caretLeft = "caret-left", caretRight = "caret-right", caretDown = "caret-down", skipForward = "skip-forward"
     case folder, plus, minus, palette, moon, queue, dotsThree = "dots-three", arrowsClockwise = "arrows-clockwise"
-    #if NEWLOOK
     case sunHorizon = "sun-horizon", musicNotes = "music-notes", trayArrowDown = "tray-arrow-down", caretUpDown = "caret-up-down"
     case barPause = "bar-pause", barPlay = "bar-play", barSkip = "bar-skip", barMoon = "bar-moon", barQueue = "bar-queue"
-    #endif
 
     enum IconWeight: String {
         case duotone, bold, fill
-        #if NEWLOOK
         case line
-        #endif
     }
 
     /// Drawn as a template image, so it takes foregroundStyle like text; the duotone layer keeps its 20% alpha,

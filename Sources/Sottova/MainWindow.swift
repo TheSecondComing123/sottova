@@ -11,28 +11,16 @@ struct MainWindow: View {
     @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
-    #if NEWLOOK
     @State private var narrow = false
-    #endif
 
     var body: some View {
         HStack(spacing: 0) {
-            #if NEWLOOK
             Sidebar(section: router.route.section)
                 .frame(width: narrow ? 176 : 216)
                 .overlay(alignment: .top) { TitleDrag().frame(height: 44) }
                 .background(Theme.sidebar)
                 .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
-            #else
-            Sidebar(section: router.route.section) { root in
-                router.go(to: root)
-            }
-            .frame(width: 228)
 
-            Rectangle().fill(Theme.border).frame(width: 1)
-            #endif
-
-            #if NEWLOOK
             VStack(spacing: 0) {
                 TitleBar(narrow: narrow, toggleQueue: toggleQueue)
                 page.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -46,59 +34,22 @@ struct MainWindow: View {
                         .transition(reduceMotion ? .opacity : .scale(scale: 0.98, anchor: .topTrailing).combined(with: .opacity))
                 }
             }
-            #else
-            VStack(spacing: 0) {
-                // under the toolbar
-                Color.clear.frame(height: 60)
-                page
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // the page makes room for the queue, so no column hides under it; padding, not safe-area padding, or
-                    // sideways shelves would still draw under the panel and show through its gutters
-                    .padding(.trailing, router.showsQueue ? 356 : 0)
-                    .overlay(alignment: .trailing) {
-                        if router.showsQueue {
-                            QueuePanel(close: toggleQueue)
-                                .padding([.trailing, .bottom], 16)
-                                .padding(.top, 8)
-                                // it leaves the way it came
-                                .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
-                        }
-                    }
-            }
-            .safeAreaBar(edge: .bottom, spacing: 0) {
-                PlayerBar(showsQueue: router.showsQueue, toggleQueue: toggleQueue)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-            }
-            #endif
         }
         .background(Theme.background)
         .ignoresSafeArea(.container, edges: .top)
         // in the toolbar, so the title bar is 52 pt with the traffic lights on this line, and clicks reach them
         .toolbar {
-            #if NEWLOOK
             // empty, it keeps the title bar 52 pt with the lights at 19, 19; the bar itself is content
             ToolbarItem(placement: .navigation) { Color.clear.frame(width: 1, height: 1) }
                 .sharedBackgroundVisibility(.hidden)
-            #else
-            ToolbarItem(placement: .navigation) { NavArrows() }
-                .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .principal) { SearchField() }
-                .sharedBackgroundVisibility(.hidden)
-            #endif
         }
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        #if NEWLOOK
         .frame(minWidth: 855, minHeight: 640)
         .onGeometryChange(for: Bool.self) { $0.size.width < 1040 } action: { narrow = $0 }
-        #else
-        .frame(minWidth: 980, minHeight: 640)
-        #endif
         .background(WindowVisibility(visible: $visible))
         .environment(\.windowVisible, visible)
         .environment(\.renaming, $renaming)
         .environment(\.navigate, Navigate { route in
-            #if NEWLOOK
             // a name opens Songs filtered to it
             if case .artist(let name) = route {
                 router.go(to: .songs)
@@ -110,7 +61,6 @@ struct MainWindow: View {
                 router.songFilter = name
                 return
             }
-            #endif
             // an album made yours opens as its copy
             if case .album(let id) = route, let copy = controller.copy(ofAlbum: id) {
                 router.go(to: .playlist(copy.id))
@@ -119,19 +69,11 @@ struct MainWindow: View {
             }
         })
         // drop music folders anywhere on the window
-        #if NEWLOOK
         .dropDestination(for: URL.self, action: { urls, _ in
             let folders = urls.filter(\.hasDirectoryPath)
             controller.addFolders(folders)
             return !folders.isEmpty
         }, isTargeted: { router.droppingMusic = $0 })
-        #else
-        .dropDestination(for: URL.self) { urls, _ in
-            let folders = urls.filter(\.hasDirectoryPath)
-            controller.addFolders(folders)
-            return !folders.isEmpty
-        }
-        #endif
         .onAppear(perform: watchMouseButtons)
         .onAppear { controller.undo = undoManager }
         .onChange(of: undoManager) { controller.undo = undoManager }
@@ -142,16 +84,11 @@ struct MainWindow: View {
                 controller.trashPlaylist(id)
             }
         } message: {
-            #if NEWLOOK
             Text("Its rows on Your day go too: they'd have nothing to play.")
-            #else
-            Text("its alarms go too: they'd have nothing to play")
-            #endif
         }
         // at the window, never inside a lazy row that could be recycled with the sheet open
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }
         .sheet(item: Binding(get: { router.alarm }, set: { router.alarm = $0 })) { AlarmSheet(request: $0) }
-        #if NEWLOOK
         .disabled(router.presetEdit != nil)
         // not a system sheet: Tahoe's sits mid-window with 26 pt corners and dims the page twice as far as the mock
         .overlay {
@@ -170,9 +107,6 @@ struct MainWindow: View {
             }
         }
         .animation(Theme.quick, value: router.presetEdit?.id)
-        #else
-        .sheet(item: Binding(get: { router.presetEdit }, set: { router.presetEdit = $0 })) { PresetSheet(edit: $0) }
-        #endif
         .sheet(item: Binding(get: { router.trimming }, set: { router.trimming = $0 })) { TrimSheet(song: $0) }
     }
 
@@ -188,7 +122,6 @@ struct MainWindow: View {
                 SearchPage(query: router.query)
             } else {
                 switch router.route {
-                #if NEWLOOK
                 case .home: NowPage()
                 case .songs: SongList()
                 case .collections: CollectionGrid()
@@ -199,18 +132,6 @@ struct MainWindow: View {
                 case .playlist(let id): YourCollection(id: id)
                 // navigate sends names to Songs; these only come back through history from before that
                 case .artist, .composer: SongList()
-                #else
-                case .home: HomePage()
-                case .songs: SongsPage()
-                case .collections: CollectionsPage()
-                case .artists: ArtistsPage()
-                case .alarms: AlarmsPage()
-                case .shelf: ShelfPage()
-                case .album(let id): AlbumPage(id: id)
-                case .artist(let name): ArtistPage(name: name)
-                case .playlist(let id): PlaylistPage(id: id)
-                case .composer(let name): ComposerPage(name: name)
-                #endif
                 }
             }
         }
@@ -259,9 +180,7 @@ struct MainWindow: View {
         guard !Self.watching else { return }
         Self.watching = true
         _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            #if NEWLOOK
             guard router.presetEdit == nil else { return event }
-            #endif
             guard event.keyCode == 53, router.showsQueue, !(event.window?.firstResponder is NSText) else { return event }
             toggleQueue()
             return nil
@@ -278,362 +197,3 @@ struct MainWindow: View {
     }
 }
 
-#if !NEWLOOK
-private struct Sidebar: View {
-    let section: Route
-    let select: (Route) -> Void
-    @Environment(Router.self) private var router
-    @Environment(Controller.self) private var controller
-    @Environment(\.openSettings) private var openSettings
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.renaming) private var renaming
-    @Namespace private var pill
-
-    #if NEWLOOK
-    private static let homeName = "Now"
-    #else
-    private static let homeName = "Home"
-    #endif
-
-    private let items: [(Route, String, Ph)] = [
-        (.home, Self.homeName, .house),
-        (.songs, "Songs", .musicNote),
-        (.collections, "Collections", .stack),
-        (.artists, "Artists", .microphoneStage),
-        (.alarms, "Your day", .alarm),
-        (.shelf, "Free music", .archive),
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // the traffic lights have the top bar's line to themselves; the wordmark heads the sidebar below them
-            Text("sottova")
-                .font(.system(size: 22, weight: .bold))
-                .tracking(-0.6)
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 24)
-                .padding(.top, 52 + 8)
-                .padding(.bottom, 24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
-                .gesture(WindowDragGesture())
-
-            VStack(spacing: 2) {
-                ForEach(Array(items.enumerated()), id: \.element.0) { index, entry in
-                    navRow(entry.0, entry.1, entry.2, accent: index)
-                }
-            }
-            .padding(.horizontal, 12)
-
-            // the two lists scroll together, so many of yours never push the footer off the window
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text("Listening")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Theme.faint)
-                            .accessibilityAddTraits(.isHeader)
-                        Spacer()
-                        IconButton(icon: .plus, weight: .bold, help: "new preset", size: 24) {
-                            var preset = controller.settings
-                            preset.name = ""
-                            preset.crossfade = false
-                            router.presetEdit = PresetEdit(preset: preset)
-                        }
-                    }
-                    .padding(.leading, 24)
-                    .padding(.trailing, 16)
-                    .padding(.top, 24)
-                    .padding(.bottom, 4)
-
-                    VStack(spacing: 2) {
-                        ForEach(controller.allPresets, id: \.name) { preset in
-                            presetRow(preset)
-                        }
-                        if controller.settings.name == "Custom" {
-                            presetRow(controller.settings)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-
-                    HStack {
-                        Text("Yours")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Theme.faint)
-                            .accessibilityAddTraits(.isHeader)
-                        Spacer()
-                        IconButton(icon: .plus, weight: .bold, help: "new collection", size: 24) {
-                            guard let id = controller.newPlaylist() else { return }
-                            renaming.wrappedValue = id
-                            select(.playlist(id))
-                        }
-                    }
-                    .padding(.leading, 24)
-                    .padding(.trailing, 16)
-                    .padding(.top, 24)
-                    .padding(.bottom, 4)
-
-                    VStack(spacing: 2) {
-                        ForEach(controller.playlists) { playlist in
-                            PlaylistRow(playlist: playlist, selected: section == .playlist(playlist.id)) { select(.playlist(playlist.id)) }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 16)
-                    .animation(Theme.quick, value: controller.playlists.map(\.id))
-                }
-                .overlayScrollers()
-            }
-            .scrollEdgeEffectStyle(.soft, for: .bottom)
-
-            // where it can be seen while working, not only in the menu-bar panel; a click puts it away
-            if let problem = controller.problem {
-                Button { controller.problem = nil } label: {
-                    Text(problem)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(PressStyle(scale: 0.99))
-                .help("dismiss")
-                .padding(.horizontal, 24)
-                .padding(.bottom, 8)
-                .transition(.opacity)
-            }
-
-            // only when there's news: the song count alone is already on the Songs page
-            if controller.folders.isEmpty || controller.pendingAnalysis > 0 || !controller.skippedFiles.isEmpty {
-                Text(controller.libraryLine)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.faint)
-                    .lineLimit(2)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 8)
-            }
-
-            VStack(spacing: 2) {
-                footerRow("Add folder…", .folderPlus, action: controller.chooseFolders)
-                footerRow("Settings", .gearSix) { openSettings() }
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 16)
-        }
-    }
-
-    private func navRow(_ item: Route, _ label: String, _ icon: Ph, accent: Int) -> some View {
-        let selected = section == item
-        return Button { select(item) } label: {
-            HStack(spacing: 12) {
-                // each section its own accent in a color palette; in monochrome it follows the label
-                icon.icon(size: 18)
-                    .foregroundStyle(Theme.accent(accent * 3, or: selected ? \.text : \.muted))
-                    .frame(width: 20)
-                Text(label)
-                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
-                Spacer(minLength: 0)
-            }
-            // a quiet fill: the selection shouldn't outshine the play button and the title on the page
-            .foregroundStyle(selected ? Theme.text : Theme.muted)
-            .padding(.horizontal, 12)
-            .frame(height: 40)
-            .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Theme.hover)
-                        .matchedGeometryEffect(id: "pill", in: pill)
-                }
-            }
-            .hoverable(radius: 8)
-        }
-        .buttonStyle(PressStyle(scale: 0.98))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .animation(reduceMotion ? Theme.quick : Theme.settle, value: section)
-    }
-
-    /// Spread across the accents so neighbors differ: 2, 6, 10, 14…
-    private func presetAccent(_ preset: SottovaCore.Settings) -> Int {
-        2 + 4 * (controller.allPresets.firstIndex { $0.name == preset.name } ?? controller.allPresets.count)
-    }
-
-    private func presetRow(_ preset: SottovaCore.Settings) -> some View {
-        let active = controller.settings.name == preset.name
-        let custom = preset.name == "Custom"
-        let named = controller.customPresets.contains { $0.name == preset.name }
-        return Button {
-            if custom {
-                var saving = preset
-                saving.name = ""
-                router.presetEdit = PresetEdit(preset: saving)
-            } else {
-                controller.apply(preset)
-            }
-        } label: {
-            HStack(spacing: 12) {
-                // the active mode is marked in the icon column; the rows are type only, so the ranges carry the comparison
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Theme.accent(presetAccent(preset)))
-                    .frame(width: 2, height: 14)
-                    .opacity(active ? 1 : 0)
-                    .frame(width: 20)
-                Text(preset.name)
-                    .font(.system(size: 13, weight: active ? .semibold : .medium))
-                    .foregroundStyle(active ? Theme.text : Theme.muted)
-                    .fixedSize()
-                Spacer(minLength: 0)
-                // every row, so the modes compare at a glance; a crossfade has no range, and its glyph shows the overlap
-                if !preset.crossfade {
-                    Text(Format.range(preset))
-                        .lineLimit(1)
-                        .font(.system(size: 11, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(active ? Theme.muted : Theme.faint)
-                }
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .hoverable(radius: 8)
-        }
-        .buttonStyle(PressStyle(scale: 0.98))
-        .accessibilityAddTraits(active ? .isSelected : [])
-        .animation(Theme.quick, value: active)
-        .help(custom ? "save as a preset" : Format.gaps(preset))
-        .sottovaMenu {
-            guard named else { return [] }
-            return [
-                .item("Edit…") { router.presetEdit = PresetEdit(preset: preset, replacing: preset.name) },
-                .item("Delete") { controller.deletePreset(preset.name) },
-            ]
-        }
-    }
-
-    private func footerRow(_ label: String, _ icon: Ph, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                icon.icon(size: 16)
-                    .frame(width: 20)
-                Text(label)
-                    .font(.system(size: 13, weight: .medium))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(Theme.muted)
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .hoverable(radius: 8)
-        }
-        .buttonStyle(PressStyle(scale: 0.98))
-    }
-}
-
-/// Back and forward, beside the traffic lights in the toolbar.
-private struct NavArrows: View {
-    @Environment(Router.self) private var router
-
-    var body: some View {
-        HStack(spacing: 4) {
-            arrow(.caretLeft, enabled: !router.back.isEmpty, help: "back", action: router.goBack)
-            arrow(.caretRight, enabled: !router.forward.isEmpty, help: "forward", action: router.goForward)
-        }
-    }
-
-    private func arrow(_ icon: Ph, enabled: Bool, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            icon.icon(.bold, size: 15)
-                .foregroundStyle(enabled ? Theme.text : Theme.faint)
-                .frame(width: 32, height: 32)
-                .hoverable(radius: 16)
-        }
-        .buttonStyle(PressStyle())
-        .disabled(!enabled)
-        .help(help)
-        .accessibilityLabel(help)
-    }
-}
-
-/// Search, in the middle of the toolbar.
-private struct SearchField: View {
-    @Environment(Router.self) private var router
-    @FocusState private var searching: Bool
-
-    var body: some View {
-        @Bindable var router = router
-        HStack(spacing: 8) {
-            Ph.magnifyingGlass.icon(size: 16)
-                .foregroundStyle(Theme.muted)
-            TextField("search songs, collections, artists", text: $router.query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.text)
-                .focused($searching)
-                .onExitCommand { router.query = ""; searching = false }
-                .onChange(of: searching) { _, focused in router.typing = focused }
-                #if !NEWLOOK
-                .onChange(of: router.searchRequests) { searching = true }
-                #endif
-                // AppKit hands a new window's focus to its first text field; here that would swallow Space
-                .onAppear { DispatchQueue.main.async { searching = false } }
-            if !router.query.isEmpty {
-                IconButton(icon: .x, weight: .bold, help: "clear search", size: 24) { router.query = "" }
-            }
-        }
-        .padding(.horizontal, 12)
-        .frame(width: 480, height: 36)
-        .background(Theme.raised, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(searching ? Theme.muted : Theme.border))
-        .animation(Theme.quick, value: searching)
-    }
-}
-
-/// One of yours in the sidebar: its cover, name and count. Songs dropped on it are added, and the count ticks up.
-private struct PlaylistRow: View {
-    let playlist: Playlist
-    let selected: Bool
-    let select: () -> Void
-    @Environment(Controller.self) private var controller
-    @Environment(\.navigate) private var navigate
-    @Environment(\.renaming) private var renaming
-    @Environment(Router.self) private var router
-    @State private var targeted = false
-
-    var body: some View {
-        let first = playlist.paths.lazy.compactMap { controller.catalog.songsByID[$0] }.first
-        Button(action: select) {
-            HStack(spacing: 12) {
-                Artwork(key: controller.playlistCovers[playlist.id] ?? first?.artwork, size: 16, radius: 4, title: playlist.name)
-                    .frame(width: 20)
-                Text(playlist.name)
-                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
-                    .foregroundStyle(selected ? Theme.text : Theme.muted)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Text("\(playlist.paths.count)")
-                    .font(.system(size: 11, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.faint)
-                    .contentTransition(.numericText(value: Double(playlist.paths.count)))
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .background(selected ? Theme.hover : .clear, in: .rect(cornerRadius: 8))
-            .background(Theme.accent(for: playlist.name).opacity(targeted ? 0.14 : 0), in: .rect(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.accent(for: playlist.name), lineWidth: 1.5).opacity(targeted ? 1 : 0))
-            .hoverable(radius: 8)
-        }
-        .buttonStyle(PressStyle(scale: 0.98))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .help("drop songs here to add them")
-        .dropDestination(for: URL.self) { urls, _ in
-            let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
-            guard !songs.isEmpty else { return false }
-            withAnimation(Theme.quick) { controller.add(songs, to: playlist.id) }
-            return true
-        } isTargeted: { on in
-            // the highlight comes on at once and leaves on the quick curve
-            withAnimation(on ? nil : Theme.quick) { targeted = on }
-        }
-        .sottovaMenu { MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming) }
-    }
-}
-#endif

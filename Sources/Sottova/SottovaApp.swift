@@ -11,29 +11,21 @@ struct SottovaApp: App {
     private let controller = Controller(playlistFolder: .musicDirectory.appending(path: "Sottova Playlists"))
     #endif
     /// Theme.palette is set before this changes, so re-keying the scenes below redraws them in the new colors.
-    #if NEWLOOK
     @AppStorage("palette") private var paletteName = Palette.gruvbox.id
     /// Bumped when a theme file changed on disk.
     @State private var themeVersion = 0
     private var palette: String { "\(paletteName) \(themeVersion)" }
-    #else
-    @AppStorage("palette") private var palette = Palette.monochrome.id
-    #endif
     @State private var router = Router()
 
     init() {
-        #if NEWLOOK
         // a launch with saved state, even an old build's, presents only what was saved: no keepalive, so nothing reopens
         // and text as thin as the mock's; the system's smoothing thickens light on dark
         UserDefaults.standard.register(defaults: ["ApplePersistenceIgnoreState": true, "AppleFontSmoothing": 0])
-        #endif
         let controller = controller
         AppDelegate.controller = controller
-        #if NEWLOOK
         let router = Router()
         _router = State(initialValue: router)
         AppDelegate.router = router
-        #endif
         Artwork.store = controller.artwork
         // M1 kept a single folder path in defaults
         if let path = UserDefaults.standard.string(forKey: "folder") {
@@ -67,12 +59,8 @@ struct SottovaApp: App {
     }
 
     @ViewBuilder private var settings: some View {
-        #if NEWLOOK
         SettingsView(controller: controller) { themeVersion += 1 }
             .id(themeVersion)
-        #else
-        SettingsView(controller: controller)
-        #endif
     }
 
     var body: some Scene {
@@ -87,25 +75,12 @@ struct SottovaApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 800)
-        #if NEWLOOK
         // the keepalive opens it, as whether this is a login isn't known yet when scenes are read
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
-        #endif
         // otherwise every sottova:// link opens another window
         .handlesExternalEvents(matching: [])
         .commands { SottovaCommands(controller: controller, router: router) }
-
-        #if !NEWLOOK
-        MenuBarExtra {
-            Panel(controller: controller)
-                .id(palette)
-                .environment(controller)
-        } label: {
-            Image(systemName: controller.status.symbol)
-        }
-        .menuBarExtraStyle(.window)
-        #endif
 
         Settings {
             settings
@@ -113,16 +88,11 @@ struct SottovaApp: App {
                 .toolbar(removing: .title)
                 .toolbarBackground(.hidden, for: .windowToolbar)
                 .containerBackground(Theme.background, for: .window)
-                #if NEWLOOK
                 .onAppear { if Theme.reloadThemes() { themeVersion += 1 } }
-                #endif
         }
         .windowResizability(.contentSize)
-        #if NEWLOOK
         .restorationBehavior(.disabled)
-        #endif
 
-        #if NEWLOOK
         // a suppressed launch runs no views in the main window, so something else has to hold what can reopen it
         Window("", id: "keepalive") { Keepalive() }
             .windowStyle(.plain)
@@ -131,11 +101,9 @@ struct SottovaApp: App {
             .commandsRemoved()
             // a sottova:// link mustn't bring it forward: then the Dock would see a window and open nothing
             .handlesExternalEvents(matching: [])
-        #endif
     }
 }
 
-#if NEWLOOK
 private struct Keepalive: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
@@ -172,12 +140,10 @@ private struct Keepalive: View {
         }
     }
 }
-#endif
 
 /// sottova:// links arrive here; SwiftUI's onOpenURL needs a window scene, and the panel isn't one until opened.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var controller: Controller?
-    #if NEWLOOK
     /// Work from anywhere, with or without a window open, unlike SwiftUI's environment actions.
     @MainActor static var showMain: () -> Void = {}
     @MainActor static var showSettings: () -> Void = {}
@@ -210,7 +176,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !hasVisibleWindows { MainActor.assumeIsolated { Self.showMain() } }
         return false
     }
-    #endif
 
     func application(_ application: NSApplication, open urls: [URL]) {
         urls.forEach { Self.controller?.open($0) }

@@ -90,7 +90,7 @@ struct MetadataTests {
         let thumbnail = try #require(store.image(for: key, maxPixel: 80))
         #expect(max(thumbnail.width, thumbnail.height) <= 80)
         let stored = try #require(store.image(for: key, maxPixel: 1000))
-        #expect(max(stored.width, stored.height) <= 600)
+        #expect(max(stored.width, stored.height) <= 800)
     }
 
     @Test func untaggedFileUsesTheFolderCover() async throws {

@@ -1,4 +1,3 @@
-#if NEWLOOK
 import EventKit
 import ServiceManagement
 import SwiftUI
@@ -267,4 +266,3 @@ private struct CalendarRows: View {
         #endif
     }
 }
-#endif

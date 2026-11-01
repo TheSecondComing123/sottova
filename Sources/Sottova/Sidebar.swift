@@ -1,4 +1,3 @@
-#if NEWLOOK
 import AppKit
 import SwiftUI
 import SottovaCore
@@ -268,4 +267,3 @@ private struct SilenceFoot: View {
         @objc private func fire() { run() }
     }
 }
-#endif

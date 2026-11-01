@@ -1,4 +1,3 @@
-#if NEWLOOK
 import SwiftUI
 import SottovaCore
 
@@ -150,4 +149,3 @@ struct SilenceSheet: View {
         }
     }
 }
-#endif

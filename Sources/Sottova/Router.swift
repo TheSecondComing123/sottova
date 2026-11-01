@@ -7,7 +7,6 @@ import SottovaCore
 @Observable @MainActor
 final class Router {
     private(set) var route = Route.home
-    #if NEWLOOK
     /// Something's being dragged over the window, for the first run's frame.
     var droppingMusic = false
     /// A missed line put away at the foot of Now; it stays on its row.
@@ -18,7 +17,6 @@ final class Router {
     var draggingCollection: String?
     #if SHOT
     var shotDrop: (hour: Int, name: String)?
-    #endif
     #endif
     /// Where each page in the history was scrolled to, so Back lands where you were.
     private(set) var back: [(route: Route, offset: CGFloat)] = []
@@ -67,9 +65,7 @@ final class Router {
     func go(to destination: Route) {
         query = ""
         selected = []
-        #if NEWLOOK
         if destination == .songs { songFilter = "" }
-        #endif
         guard destination != route else { return }
         restore = nil
         withAnimation(Theme.page) {
@@ -98,10 +94,8 @@ final class Router {
     }
 
     func search() {
-        #if NEWLOOK
         // the filter on Songs is the search; asking from elsewhere goes there, so it never waits to take focus later
         if route != .songs || !query.isEmpty { go(to: .songs) }
-        #endif
         searchRequests += 1
     }
 
@@ -157,11 +151,7 @@ struct SottovaCommands: Commands {
                 .keyboardShortcut("o")
         }
         CommandMenu("Go") {
-            #if NEWLOOK
             goItems.disabled(router.presetEdit != nil)
-            #else
-            goItems
-            #endif
         }
     }
 
@@ -175,21 +165,12 @@ struct SottovaCommands: Commands {
                 .keyboardShortcut("]")
                 .disabled(router.forward.isEmpty)
             Divider()
-            #if NEWLOOK
             Button("Now") { router.go(to: .home) }.keyboardShortcut("1")
             Button("Your day") { router.go(to: .alarms) }.keyboardShortcut("2")
             Button("Songs") { router.go(to: .songs) }.keyboardShortcut("3")
             Button("Free music") { router.go(to: .shelf) }.keyboardShortcut("4")
             Button("Collections") { router.go(to: .collections) }.keyboardShortcut("5")
             Button("Names") { router.go(to: .artists) }.keyboardShortcut("6")
-            #else
-            Button("Home") { router.go(to: .home) }.keyboardShortcut("1")
-            Button("Songs") { router.go(to: .songs) }.keyboardShortcut("2")
-            Button("Collections") { router.go(to: .collections) }.keyboardShortcut("3")
-            Button("Artists") { router.go(to: .artists) }.keyboardShortcut("4")
-            Button("Your day") { router.go(to: .alarms) }.keyboardShortcut("5")
-            Button("Free music") { router.go(to: .shelf) }.keyboardShortcut("6")
-            #endif
             Divider()
             Button("Search") {
                 openWindow(id: "main")

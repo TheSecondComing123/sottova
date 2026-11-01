@@ -172,13 +172,11 @@ struct WindowVisibility: NSViewRepresentable {
                 NotificationCenter.default.removeObserver(observer)
             }
             guard let window else { return }
-            #if NEWLOOK
             // restoration is off, and SwiftUI's frame saving goes with it
             window.setFrameAutosaveName("main")
             // otherwise a press on any control in the title bar's band moves the window, whatever the control says:
             // TitleDrag moves it from the blank parts instead
             window.isMovable = false
-            #endif
             observer = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self, let window = self.window else { return }

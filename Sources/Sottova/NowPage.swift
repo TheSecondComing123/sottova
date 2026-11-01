@@ -1,4 +1,3 @@
-#if NEWLOOK
 import AppKit
 import SwiftUI
 import SottovaCore
@@ -333,4 +332,3 @@ private enum Balance {
         return high.rounded(.up) + 1
     }
 }
-#endif

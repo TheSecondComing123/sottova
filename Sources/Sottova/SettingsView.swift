@@ -3,83 +3,6 @@ import ServiceManagement
 import SwiftUI
 import SottovaCore
 
-#if !NEWLOOK
-/// Settings in the main window's language: a rail of three pages, and on each a control shaped like what it sets.
-struct SettingsView: View {
-    @Bindable var controller: Controller
-    @State private var page = Page.playback
-    @AppStorage("palette") private var palette = Palette.monochrome.id
-
-    enum Page: String, CaseIterable {
-        case playback = "Playback", library = "Library", theme = "Theme", general = "General"
-
-        var icon: Ph {
-            switch self {
-            case .playback: .waveform
-            case .library: .folder
-            case .theme: .palette
-            case .general: .gearSix
-            }
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(Array(Page.allCases.enumerated()), id: \.element) { index, item in
-                    Button { page = item } label: {
-                        HStack(spacing: 12) {
-                            item.icon.icon(size: 18)
-                                .foregroundStyle(Theme.accent(index * 3 + 1, or: page == item ? \.text : \.muted))
-                                .frame(width: 20)
-                            Text(item.rawValue)
-                                .font(.system(size: 13, weight: page == item ? .semibold : .medium))
-                            Spacer(minLength: 0)
-                        }
-                        .foregroundStyle(page == item ? Theme.text : Theme.muted)
-                        .padding(.horizontal, 12)
-                        .frame(height: 40)
-                        .background(Theme.hover.opacity(page == item ? 1 : 0), in: .rect(cornerRadius: 8))
-                        .hoverable(radius: 8)
-                    }
-                    .buttonStyle(PressStyle(scale: 0.98))
-                    .accessibilityAddTraits(page == item ? .isSelected : [])
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            // clears the traffic lights, which sit over the rail
-            .padding(.top, 48)
-            .frame(width: 200)
-
-            Rectangle().fill(Theme.border).frame(width: 1)
-
-            ScrollView {
-                Group {
-                    switch page {
-                    case .playback: PlaybackPage(controller: controller)
-                    case .library: LibraryPage(controller: controller)
-                    case .theme: ThemePage(selection: $palette)
-                    case .general: GeneralPage(controller: controller)
-                    }
-                }
-                .padding(.horizontal, 32)
-                .padding(.top, 40)
-                .padding(.bottom, 32)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .scrollIndicators(.never)
-        }
-        // 560 tall below the hidden title bar, then stretched up under it so the rail meets the traffic lights
-        // re-keyed on the palette so it redraws in the new colors; the page lives above, so it stays put
-        .id(palette)
-        .frame(width: 760)
-        .frame(minHeight: 560, idealHeight: 560, maxHeight: .infinity)
-        .background(Theme.background)
-        .ignoresSafeArea()
-    }
-}
-#endif
 
 private struct PageTitle: View {
     let title: String
@@ -553,7 +476,6 @@ struct SwitchKnob: View {
     let on: Bool
 
     var body: some View {
-        #if NEWLOOK
         // the new look's checkbox, for what's left on this name until the switch
         ZStack {
             if on {
@@ -564,19 +486,6 @@ struct SwitchKnob: View {
             }
         }
         .frame(width: 14, height: 14)
-        #else
-        ZStack(alignment: on ? .trailing : .leading) {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(on ? Theme.text : Theme.hover)
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border))
-            RoundedRectangle(cornerRadius: 4)
-                .fill(on ? Theme.background : Theme.muted)
-                .frame(width: 16, height: 16)
-                .padding(3)
-        }
-        .frame(width: 40, height: 22)
-        .animation(Theme.settle, value: on)
-        #endif
     }
 }
 
@@ -890,10 +799,8 @@ struct PresetEdit: Identifiable {
     let id = UUID()
     var preset: SottovaCore.Settings
     var replacing: String?
-    #if NEWLOOK
     /// Silence for one collection rather than a preset: its name, and where it goes.
     var collection: (name: String, apply: (SottovaCore.Settings) -> Void)?
-    #endif
 }
 
 /// Names a preset and sets its gaps and fades; the rest of how it plays comes from where it started.
