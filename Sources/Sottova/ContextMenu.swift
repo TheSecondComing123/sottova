@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SottovaCore
 
 /// One line of a right-click menu.
 struct MenuEntry {
@@ -30,21 +31,80 @@ struct MenuEntry {
     }
 }
 
+#if NEWLOOK
+extension View {
+    /// A native right-click menu. The entries are built when the menu opens, so they show the state at that moment.
+    func sottovaMenu(_ entries: @escaping () -> [MenuEntry]) -> some View {
+        overlay(RightClick { event, view in
+            let entries = entries()
+            if !entries.isEmpty { NSMenu.popUpContextMenu(NSMenu(entries), with: event, for: view) }
+        })
+        .accessibilityAction(named: "Show menu") {
+            let entries = entries()
+            if !entries.isEmpty { NSMenu(entries).popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil) }
+        }
+    }
+}
+
+extension NSMenu {
+    @MainActor convenience init(_ entries: [MenuEntry]) {
+        self.init()
+        autoenablesItems = false
+        for entry in entries {
+            switch entry.kind {
+            case .divider:
+                addItem(.separator())
+            case .action(let action):
+                let item = NSMenuItem(title: entry.title, action: #selector(MenuRun.run), keyEquivalent: "")
+                item.target = MenuRun.shared
+                item.representedObject = MenuRun.Box(action)
+                item.state = entry.checked ? .on : .off
+                item.isEnabled = entry.enabled
+                addItem(item)
+            case .submenu(let entries):
+                let item = NSMenuItem(title: entry.title, action: nil, keyEquivalent: "")
+                item.submenu = NSMenu(entries)
+                item.isEnabled = entry.enabled
+                addItem(item)
+            }
+        }
+    }
+}
+
+/// Menu items hold their target weakly, and an action can't carry a closure.
+@MainActor
+private final class MenuRun: NSObject {
+    static let shared = MenuRun()
+
+    final class Box {
+        let action: () -> Void
+        init(_ action: @escaping () -> Void) { self.action = action }
+    }
+
+    @objc func run(_ item: NSMenuItem) {
+        (item.representedObject as? Box)?.action()
+    }
+}
+#else
 extension View {
     /// Sottova's own right-click menu, in the app's type and colors instead of the system's. The entries are built
     /// when the menu opens, so they show the state at that moment.
     func sottovaMenu(_ entries: @escaping () -> [MenuEntry]) -> some View {
-        overlay(RightClick { point, window in MenuPresenter.shared.show(entries(), at: point, over: window) })
-            .accessibilityAction(named: "Show menu") {
-                guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) else { return }
-                MenuPresenter.shared.show(entries(), at: NSEvent.mouseLocation, over: window)
-            }
+        overlay(RightClick { event, view in
+            guard let window = view.window else { return }
+            MenuPresenter.shared.show(entries(), at: window.convertPoint(toScreen: event.locationInWindow), over: window)
+        })
+        .accessibilityAction(named: "Show menu") {
+            guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) else { return }
+            MenuPresenter.shared.show(entries(), at: NSEvent.mouseLocation, over: window)
+        }
     }
 }
+#endif
 
 /// Takes right-clicks and control-clicks, and nothing else: every other event falls through to the view beneath.
 private struct RightClick: NSViewRepresentable {
-    let open: (NSPoint, NSWindow) -> Void
+    let open: (NSEvent, NSView) -> Void
 
     func makeNSView(context: Context) -> Catcher {
         Catcher()
@@ -55,7 +115,7 @@ private struct RightClick: NSViewRepresentable {
     }
 
     final class Catcher: NSView {
-        var open: ((NSPoint, NSWindow) -> Void)?
+        var open: ((NSEvent, NSView) -> Void)?
 
         override func hitTest(_ point: NSPoint) -> NSView? {
             guard let event = NSApp.currentEvent,
@@ -65,13 +125,14 @@ private struct RightClick: NSViewRepresentable {
         }
 
         override func rightMouseDown(with event: NSEvent) {
-            show(event)
+            open?(event, self)
         }
 
         override func mouseDown(with event: NSEvent) {
-            show(event)
+            open?(event, self)
         }
 
+        #if !NEWLOOK
         // the press that opened the menu keeps coming here: sliding onto a row and letting go chooses it
         override func rightMouseDragged(with event: NSEvent) {
             MenuPresenter.shared.track(NSEvent.mouseLocation)
@@ -88,14 +149,36 @@ private struct RightClick: NSViewRepresentable {
         override func mouseUp(with event: NSEvent) {
             MenuPresenter.shared.release(at: NSEvent.mouseLocation)
         }
-
-        private func show(_ event: NSEvent) {
-            guard let window else { return }
-            open?(window.convertPoint(toScreen: event.locationInWindow), window)
-        }
+        #endif
     }
 }
 
+#if SHOT && NEWLOOK
+/// Opens the real menu of whatever sits at `point` in the window, with no input event sent, and writes the menu's
+/// window number to `ready` for scripts/harness.sh.
+@MainActor
+func shotMenu(at point: NSPoint, in window: NSWindow) {
+    func catcher(in view: NSView) -> RightClick.Catcher? {
+        for sub in view.subviews.reversed() {
+            if let found = catcher(in: sub) { return found }
+        }
+        guard let view = view as? RightClick.Catcher, view.bounds.contains(view.convert(point, from: nil)) else { return nil }
+        return view
+    }
+    guard let view = window.contentView.flatMap(catcher),
+          let event = NSEvent.mouseEvent(with: .rightMouseDown, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                                         context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { return }
+    let timer = Timer(timeInterval: 0.6, repeats: false) { _ in
+        let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[CFString: Any]] ?? []
+        let menu = windows.first { $0[kCGWindowOwnerPID] as? pid_t == getpid() && $0[kCGWindowLayer] as? Int ?? 0 > 0 }
+        try? Data(String(menu?[kCGWindowNumber] as? Int ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    view.open?(event, view)
+}
+#endif
+
+#if !NEWLOOK
 /// The open menu and its submenus, one panel each, and the monitors that close them.
 @MainActor
 final class MenuPresenter {
@@ -384,3 +467,4 @@ private struct MenuRow: View {
         .accessibilityAction { presenter.choose(index, depth: depth) }
     }
 }
+#endif

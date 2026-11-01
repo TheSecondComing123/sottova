@@ -66,6 +66,12 @@ struct ShotReady: ViewModifier {
             // for someone watching: in front, but still not activated
             if defaults.bool(forKey: "shotRaise") { window?.orderFrontRegardless() }
             try? await Task.sleep(for: .seconds(1))
+            #if NEWLOOK
+            // from the window's top left, as the mocks measure
+            if let at = defaults.string(forKey: "shotMenuAt")?.split(separator: ",").compactMap({ Double($0) }), let window, let height = window.contentView?.bounds.height {
+                return shotMenu(at: NSPoint(x: at[0], y: height - at[1]), in: window)
+            }
+            #endif
             // a sheet is its own window: asking for one takes the picture of it alone
             try? Data(String((defaults.bool(forKey: "shotSheet") ? window?.attachedSheet?.windowNumber : nil) ?? window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
         }

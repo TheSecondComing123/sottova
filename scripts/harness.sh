@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shoots one window of the isolated copy, then quits it. Nothing it runs can reach real data, wakes or sound.
-# Usage: scripts/harness.sh <scratch-path> <state> <out.png> [-palette gruvbox] [-shotRoute alarms] [-shotWidth 855] [-shotAppearance light]
+# Usage: scripts/harness.sh <scratch-path> <state> <out.png> [-palette gruvbox] [-shotRoute alarms] [-shotWidth 855] [-shotAppearance light] [-shotMenuAt 700,356]
 # States: the list in Controller.shotEnter. EXTRA_SWIFT=-DNEWLOOK builds the new look.
 set -euo pipefail
 cd "$(dirname "$0")/.."
