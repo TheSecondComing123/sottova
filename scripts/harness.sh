@@ -37,7 +37,6 @@ stop() {
     [[ -n "${TICKS:-}" && -f "$storage/ticks" ]] && cp "$storage/ticks" "$TICKS"
     rm -rf "${storage:?}"
 }
-trap stop EXIT
 check() {
     if [[ "$(world)" != "$before" ]]; then
         echo "the real world changed while the copy ran: stopping it" >&2
@@ -46,6 +45,8 @@ check() {
     fi
 }
 if pgrep -qx SottovaShot; then echo "a copy is already running" >&2; exit 1; fi
+# only now: stop kills by name, so set earlier it would kill the copy that made this refuse
+trap stop EXIT
 before=$(world)
 defaults delete com.alanbagel.sottova.shot 2>/dev/null || true
 
