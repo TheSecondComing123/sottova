@@ -629,11 +629,13 @@ public final class Controller {
             }
         }
         let alarm = alarms[index]
+        var played = false
         if late {
             problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
         } else if alarm.heedsCalendar, calendarBusy() {
             problem = "\(alarm.name) didn't play at \(due.formatted(date: .omitted, time: .shortened)): your calendar had something on"
         } else if case let songs = rowSongs(alarm), !songs.isEmpty {
+            played = true
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
             let history = storage.map { PlayRecord.read($0.appending(path: "plays.jsonl"), last: 2000) } ?? []
             play(alarm.shuffled ? Self.alarmOrder(songs, at: alarm, due: due, history: history, using: &rng) : songs,
@@ -650,12 +652,14 @@ public final class Controller {
             problem = "the \(alarm.name) alarm went off, but there's nothing in it to play" + (away > 0 ? ". \(away) song\(away == 1 ? " is" : "s are") out of reach right now, which may be why" : "")
         }
         // one player: any other due now doesn't play, and says so
-        for (other, at) in dueAlarms(now: now) {
+        for (other, at) in played ? dueAlarms(now: now) : [] {
             problem = "\(other.name) didn't play at \(at.formatted(date: .omitted, time: .shortened)): \(alarm.name) was starting"
             if let i = alarms.firstIndex(where: { $0.id == other.id }) { alarms[i].lastFired = at }
         }
         alarms.removeAll { $0.weekdays.isEmpty && !$0.whileHere && $0.lastFired != nil }
         alarmsChanged()
+        // this one stayed quiet, so one still in time gets its turn; each go spends one, so this ends
+        if !played, let next = dueAlarms(now: now).max(by: { $0.at < $1.at }) { fire(next.alarm.id, due: next.at, now: now) }
     }
 
     private func songs(for alarm: Alarm) -> [Song] {

@@ -1245,4 +1245,19 @@ struct AlarmRunTests {
         #expect(row.missed?.why == .asleep)
         #expect(row.missed?.at == later.next(after: .now - 3660))
     }
+
+    /// One too late to play can't take the turn of one still in time.
+    @Test func aLateAlarmLeavesTheOneStillDueToPlay() async throws {
+        guard Calendar.current.component(.hour, from: .now) >= 2 else { return }
+        let (c, album, _) = try await controller()
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: .now - 120)
+        let early = alarm(album)
+        let due = Alarm(source: album.id, name: "Due", hour: parts.hour!, minute: parts.minute!, weekdays: Set(1...7))
+        c.addAlarm(early)
+        c.addAlarm(due)
+        c.fire(early.id, due: .now - 3600)
+        #expect(c.status != .idle)
+        #expect(c.soundingRow?.id == due.id)
+        #expect(c.alarms.first { $0.id == early.id }?.missed?.why == .asleep)
+    }
 }
