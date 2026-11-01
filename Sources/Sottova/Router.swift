@@ -93,6 +93,10 @@ final class Router {
     }
 
     func search() {
+        #if NEWLOOK
+        // the filter on Songs is the search; asking from elsewhere goes there, so it never waits to take focus later
+        if route != .songs { go(to: .songs) }
+        #endif
         searchRequests += 1
     }
 

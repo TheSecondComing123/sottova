@@ -102,11 +102,7 @@ public struct Catalog: Sendable {
         songs = entries.compactMap { path, entry in entry.unplayable || entry.unreachable == true ? nil : Self.song(path: path, meta: entry.meta, added: entry.added) }
             .sorted(by: Self.libraryOrder)
         songsByID = Dictionary(uniqueKeysWithValues: songs.map { ($0.id, $0) })
-        #if NEWLOOK
         for sort in SongSort.allCases { orders[sort] = sort.sorted(songs) }
-        #else
-        for sort in SongSort.menu { orders[sort] = sort.sorted(songs) }
-        #endif
 
         albums = Dictionary(grouping: songs, by: \.albumID).map { id, songs in
             let artists = Set(songs.map(\.albumArtist))
