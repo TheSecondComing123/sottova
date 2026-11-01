@@ -156,6 +156,7 @@ private struct QueueRow: View {
         .frame(height: 48)
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        .help("drag to reorder")
         .sottovaMenu {
             [.item("Play now") { controller.playQueued(entry.id) }]
                 + (song.map { song in [.item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) }] } ?? [])

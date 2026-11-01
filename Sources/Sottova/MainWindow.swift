@@ -518,6 +518,7 @@ private struct PlaylistRow: View {
         }
         .buttonStyle(PressStyle(scale: 0.98))
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .help("drop songs here to add them")
         .dropDestination(for: URL.self) { urls, _ in
             let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
             guard !songs.isEmpty else { return false }

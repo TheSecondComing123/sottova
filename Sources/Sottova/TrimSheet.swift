@@ -249,6 +249,7 @@ private struct Waveform: View {
         .offset(x: x - 8)
         .gesture(DragGesture(coordinateSpace: .named("wave")).onChanged { drag($0.location.x) })
         .pointerStyle(.columnResize)
+        .help("drag to move this end")
     }
 }
 

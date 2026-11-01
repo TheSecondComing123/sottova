@@ -315,8 +315,10 @@ struct GapRange: View {
                     RoundedRectangle(cornerRadius: 2).fill(Theme.text).frame(width: max(x1 - x0, 4), height: 4).offset(x: x0)
                     thumb.offset(x: x0 - 8)
                         .gesture(DragGesture(minimumDistance: 0).onChanged { low = min(seconds(at: $0.location.x / w), high) })
+                        .help("drag to set the shortest gap")
                     thumb.offset(x: x1 - 8)
                         .gesture(DragGesture(minimumDistance: 0).onChanged { high = max(seconds(at: $0.location.x / w), low) })
+                        .help("drag to set the longest gap")
                 }
                 .frame(height: 20)
             }

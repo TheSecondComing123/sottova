@@ -84,6 +84,7 @@ struct SongRow: View {
         .simultaneousGesture(TapGesture().onEnded { router.select(song.id, in: order) })
         .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityAction(named: "Play", play)
+        .help(remove == nil ? "double-click to play, drag to a collection or the queue" : "double-click to play, drag to reorder")
         .onDrag {
             dragStarted?()
             return NSItemProvider(object: URL(filePath: song.id) as NSURL)
