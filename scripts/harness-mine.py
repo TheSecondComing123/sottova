@@ -27,7 +27,8 @@ for path, entry in library["entries"].items():
                 + b"data" + struct.pack("<I", data))
         # sparse: zeros are silence and use no disk
         f.truncate(44 + data)
-    entries[target] = entry
+    # playlists read their songs through standardizedFileURL, which drops /private from a temp path
+    entries[target.removeprefix("/private")] = entry
 library["entries"] = entries
 os.makedirs(storage, exist_ok=True)
 json.dump(library, open(f"{storage}/library.json", "w"))
