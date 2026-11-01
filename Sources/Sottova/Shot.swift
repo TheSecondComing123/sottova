@@ -32,6 +32,8 @@ struct ShotReady: ViewModifier {
                 window?.alphaValue = 0.02
                 window?.orderFrontRegardless()
             }
+            // for someone watching: in front, but still not activated
+            if defaults.bool(forKey: "shotRaise") { window?.orderFrontRegardless() }
             try? await Task.sleep(for: .seconds(1))
             try? Data(String(window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
         }

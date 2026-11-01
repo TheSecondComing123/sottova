@@ -2267,6 +2267,13 @@ extension Controller {
                 advance(self.track!.outStart - 15 - self.track!.elapsed)
                 lastTick = .now
                 startTicker()
+                // and again, each piece heading for its fall after ten seconds, so it can be watched as often as wanted
+                Task { [weak self] in
+                    while let self {
+                        try? await Task.sleep(for: .seconds(1))
+                        if let t = self.track, self.status == .playing, t.elapsed > 10, t.elapsed < t.outStart - 6 { self.advance(t.outStart - 6 - t.elapsed) }
+                    }
+                }
             }
         case "rising":
             fire(alarms.first { $0.name == "Lauds" }!.id, due: .now)

@@ -10,6 +10,8 @@ final class Router {
     #if NEWLOOK
     /// Something's being dragged over the window, for the first run's frame.
     var droppingMusic = false
+    /// A missed line put away at the foot of Now; it stays on its row.
+    var dismissedFoot: String?
     #endif
     /// Where each page in the history was scrolled to, so Back lands where you were.
     private(set) var back: [(route: Route, offset: CGFloat)] = []

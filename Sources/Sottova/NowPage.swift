@@ -43,14 +43,13 @@ struct NowPage: View {
     @Environment(\.navigate) private var navigate
     @Environment(\.windowVisible) private var visible
     @State private var motion = NowMotion()
-    @State private var dismissed: String?
 
     private struct Key: Equatable {
-        let status: PlaybackStatus, song: String?, seeks, skips: Int, visible: Bool, pending: Int, albums: Int, hold: Hold?, alarms: [Alarm]
+        let status: PlaybackStatus, song, art: String?, seeks, skips: Int, visible: Bool, pending: Int, albums: Int, hold: Hold?, alarms: [Alarm]
     }
 
     private var key: Key {
-        Key(status: controller.status, song: controller.current?.id, seeks: controller.seeks, skips: controller.skips, visible: visible,
+        Key(status: controller.status, song: controller.current?.id, art: controller.current?.artwork, seeks: controller.seeks, skips: controller.skips, visible: visible,
             pending: controller.pendingAnalysis, albums: controller.catalog.albums.count, hold: controller.hold, alarms: controller.alarms)
     }
 
@@ -83,12 +82,12 @@ struct NowPage: View {
 
     @ViewBuilder
     private var foot: some View {
-        if let line = motion.foot, line != dismissed {
+        if let line = motion.foot, line != router.dismissedFoot {
             HStack(spacing: 8) {
                 let missed = line.hasPrefix("Missed")
                 Text(line).role(.body).foregroundStyle(missed ? Theme.text : Theme.muted)
                 if missed {
-                    Button { dismissed = line } label: {
+                    Button { router.dismissedFoot = line } label: {
                         Ph.x.icon(.bold, size: 12).foregroundStyle(Theme.faint)
                     }
                     .buttonStyle(.plain)
@@ -128,6 +127,7 @@ struct NowPage: View {
                     seen = .resting
                 }
             }
+            if status == .paused { seen = seen.paused }
             apply(seen, fill: track.map { $0.duration > 0 ? min($0.elapsed / $0.duration, 1) : 0 } ?? 0, idle: status == .idle)
             let now = Date.now
             if now.timeIntervalSince(lastWords) >= 1 || seen.silent != wasSilent {
@@ -170,8 +170,11 @@ struct NowPage: View {
 
     /// The new piece's cover goes on top and the last one under it, to be risen through. Nothing playing, nothing shown.
     private func showArt() async {
-        let key = controller.status == .idle ? nil : controller.current?.artwork
-        guard key != shownKey else { return }
+        let idle = controller.status == .idle
+        let key = idle ? nil : controller.current?.artwork
+        let piece = idle ? nil : controller.current?.id
+        // the song too: the next piece of an album has the same art, and the old layer under it has to be this one
+        guard piece != shownPiece || key != shownKey else { return }
         let image: CGImage?
         if let key, let store = Artwork.store {
             image = await Self.decode(store, key)
@@ -181,7 +184,7 @@ struct NowPage: View {
         }
         motion.under = controller.status == .idle ? nil : motion.over
         motion.over = image
-        shownKey = key
+        (shownKey, shownPiece) = (key, piece)
     }
 
     @State private var shownKeyBox = ShownKey()
@@ -190,7 +193,12 @@ struct NowPage: View {
         nonmutating set { shownKeyBox.value = newValue }
     }
 
-    private final class ShownKey { var value: String? }
+    private var shownPiece: String? {
+        get { shownKeyBox.piece }
+        nonmutating set { shownKeyBox.piece = newValue }
+    }
+
+    private final class ShownKey { var value, piece: String? }
 
     @concurrent
     nonisolated private static func decode(_ store: ArtworkStore, _ key: String) async -> CGImage? {
@@ -231,7 +239,8 @@ private struct NowCover: View {
             if let over = motion.over {
                 art(over, level: motion.cover, scale: motion.scale)
             } else if kind == .piece, !motion.silent {
-                tile.opacity(motion.cover)
+                // it goes with the words: no afterimage without art
+                tile.opacity(motion.text)
             } else if kind == .firstRun || kind == .reading {
                 RoundedRectangle(cornerRadius: Radius.small)
                     .fill(dragging ? Theme.primary.opacity(0.1) : .clear)
@@ -264,6 +273,8 @@ private struct NowCover: View {
             .clipShape(.rect(cornerRadius: Radius.small))
             .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Color(white: 0.5, opacity: 0.28), lineWidth: 1))
             .scaleEffect(reduceMotion ? 1 : scale)
+            // or multiply takes the image and its outline separately
+            .compositingGroup()
             // on a light ground plain opacity reads as fog; multiply keeps the painting's darks
             .opacity(light ? Track.multiplied(level) : level)
             .blendMode(light ? .multiply : .normal)

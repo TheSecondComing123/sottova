@@ -84,10 +84,10 @@ extension Controller {
     }
 
     private var nowThird: String? {
-        if rising {
+        if status != .paused, rising {
             return soundingRow?.volume.map { "Rising to \(Int(($0 * 100).rounded()))%" } ?? "Rising"
         }
-        if easing {
+        if status != .paused, easing {
             guard case .at(let date)? = sleepTimer else { return "Easing down" }
             let clock = Calendar.current.dateComponents([.hour, .minute], from: date)
             return String(format: "Easing down, stops at %d:%02d", ((clock.hour ?? 0) + 11) % 12 + 1, clock.minute ?? 0)

@@ -131,6 +131,26 @@ struct TrackVisualTests {
         #expect(t.visual(at: t.outStart + 1).cover <= level.cover + 0.0001)
     }
 
+    @Test func aSkipAfterTheFallStaysSilent() {
+        var settings = Settings()
+        (settings.fadeIn, settings.fadeOut) = (6, 8)
+        var m = Machine(settings: settings, seed: 1)
+        _ = m.handle(.start)
+        _ = m.handle(.trackStarted(duration: 100))
+        for _ in 0..<9700 { _ = m.handle(.tick(0.01)) } // past the visual fall, the audio still going
+        _ = m.handle(.skip)
+        guard case .track(let t) = m.phase else { Issue.record("no track"); return }
+        #expect(t.visual(at: t.outStart).silent)
+        #expect(t.visual(at: t.outStart + 0.3).silent)
+    }
+
+    @Test func pausedAlwaysShowsSomething() {
+        #expect(sparse.visual(at: 0).paused.text == 1)
+        #expect(near(sparse.visual(at: 0).paused.cover, 0.25))
+        #expect(sparse.visual(at: 100).paused == sparse.visual(at: 100))
+        #expect(sparse.visual(at: 196.4).paused.text == 1)
+    }
+
     @Test func noFadesAtAllDoesntDivideByZero() {
         let t = Track(duration: 10, fadeIn: 0, outStart: 10, outLength: 0)
         #expect(t.visual(at: 0).cover == 1)

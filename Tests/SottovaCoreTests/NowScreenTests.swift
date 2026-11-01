@@ -58,6 +58,16 @@ struct NowScreenTests {
         #expect(c.nowScreen().third == "Paused, 1:49 left")
     }
 
+    @Test func pausedWinsOverAnEasing() async throws {
+        let (c, _) = try await playing()
+        c.advance(20)
+        c.sleep(minutes: 1)
+        c.advance(55)
+        #expect(c.easing)
+        c.toggle()
+        #expect(c.nowScreen().third?.hasPrefix("Paused,") == true)
+    }
+
     @Test func silenceOffersTheNextSong() async throws {
         let (c, _) = try await playing()
         while c.status != .resting { c.advance(0.5) }

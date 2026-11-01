@@ -14,6 +14,14 @@ extension Track {
         /// "Silence" has the title's place.
         public var silent: Bool
 
+        /// Held still by a pause: never a blank page, since the words say what to do.
+        public var paused: Visual {
+            var held = self
+            held.text = 1
+            held.cover = max(cover, Track.afterimage)
+            return held
+        }
+
         public static let full = Visual(cover: 1, under: 0, scale: 1, text: 1, hairline: 1, silent: false)
         /// A silence with nothing moving, as when a relaunch lands in one.
         public static let resting = Visual(cover: afterimage, under: 0, scale: 1, text: 1, hairline: 0, silent: true)
@@ -28,6 +36,8 @@ extension Track {
     public func visual(at t: Double) -> Visual {
         if t >= outStart {
             let from = visualFrom ?? arrival(at: outStart)
+            // a skip once the screen already reads as silence has nothing left to fall
+            if from.silent { return Visual(cover: from.cover, under: 0, scale: 1, text: from.text, hairline: 0, silent: true) }
             let floor = min(Self.afterimage, from.cover)
             let end = outStart + fallLength
             guard t < end else {
