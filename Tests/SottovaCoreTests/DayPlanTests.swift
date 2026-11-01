@@ -1,0 +1,162 @@
+import Foundation
+import Testing
+@testable import SottovaCore
+
+struct DayPlanTests {
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        return calendar
+    }
+
+    /// November 2026: the 2nd is a Monday. The clocks go back on the 1st.
+    private func date(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour, minute: minute))!
+    }
+
+    private var lauds: Alarm {
+        var row = Alarm(source: "lauds", name: "Lauds", hour: 7, minute: 2, weekdays: [2, 3, 4, 5, 6])
+        row.volume = 0.25
+        return row
+    }
+
+    private var overworld: Alarm {
+        var row = Alarm(source: "overworld", name: "Overworld", hour: 15, minute: 0, weekdays: Set(1...7))
+        (row.whileHere, row.minutes) = (true, 240)
+        return row
+    }
+
+    private var compline: Alarm {
+        var row = Alarm(source: "compline", name: "Compline", hour: 20, minute: 0, weekdays: Set(1...7))
+        row.minutes = 60
+        return row
+    }
+
+    private func plan(_ alarms: [Alarm], _ now: Date, lengths: [Alarm.ID: TimeInterval] = [:], twelveHour: Bool = true) -> DayPlan {
+        DayPlan(alarms: alarms, now: now, lengths: lengths, calendar: calendar, twelveHour: twelveHour)
+    }
+
+    @Test func todaysRowsComeInOrderAndOnlyToday() {
+        let monday = plan([compline, lauds, overworld], date(2, 12))
+        #expect(monday.rows.map(\.alarm.name) == ["Lauds", "Overworld", "Compline"])
+        #expect(monday.rows[1].start == date(2, 15) && monday.rows[1].end == date(2, 19))
+        let sunday = plan([compline, lauds, overworld], date(8, 12))
+        #expect(sunday.rows.map(\.alarm.name) == ["Overworld", "Compline"])
+    }
+
+    @Test func aRowTurnedOffStaysOnTheDayButIsNoNextOne() {
+        var off = overworld
+        off.on = false
+        let day = plan([off, compline], date(2, 12))
+        #expect(day.rows.map(\.alarm.name) == ["Overworld", "Compline"])
+        #expect(day.quiet().line == "Compline at 8.")
+    }
+
+    @Test func aRowWithNoEndIsAsLongAsItsCollection() {
+        let row = lauds
+        let day = plan([row], date(2, 12), lengths: [row.id: 69 * 60])
+        #expect(day.rows[0].end == date(2, 8, 11))
+        #expect(plan([row], date(2, 12)).rows[0].end == date(2, 7, 2))
+    }
+
+    @Test func aOneOffIsOnlyOnItsDay() {
+        let once = Alarm(source: "x", name: "Once", hour: 9, minute: 0, day: date(3, 0))
+        #expect(plan([once], date(2, 8)).rows.isEmpty)
+        #expect(plan([once], date(3, 8)).rows.map(\.alarm.name) == ["Once"])
+    }
+
+    @Test func oneRunningFromLastNightIsOnTodayAndThePlanReachesMidnight() {
+        var late = Alarm(source: "x", name: "Late", hour: 23, minute: 0, weekdays: [2])
+        late.minutes = 180
+        let night = plan([late], date(3, 0, 30))
+        #expect(night.rows.map(\.alarm.name) == ["Late"])
+        #expect(night.position(of: night.rows[0].start) == 0)
+        let evening = plan([late], date(2, 12))
+        #expect(evening.lastHour == 24)
+        #expect(evening.position(of: evening.rows[0].end) == 1)
+    }
+
+    @Test func theRailIsToScaleFromSixToTen() {
+        let day = plan([overworld], date(2, 12))
+        #expect((day.firstHour, day.lastHour) == (6, 22))
+        #expect(day.position(of: date(2, 6)) == 0)
+        #expect(day.position(of: date(2, 14)) == 0.5)
+        #expect(day.position(of: date(2, 22)) == 1)
+        #expect(day.position(of: date(2, 23)) == 1)
+    }
+
+    @Test func theRailGrowsForRowsOutsideIt() {
+        var early = Alarm(source: "x", name: "Early", hour: 4, minute: 30, weekdays: Set(1...7))
+        early.minutes = 15
+        var late = Alarm(source: "y", name: "Late", hour: 22, minute: 30, weekdays: Set(1...7))
+        late.minutes = 15
+        let day = plan([early, late], date(2, 12))
+        #expect((day.firstHour, day.lastHour) == (4, 23))
+    }
+
+    @Test func theRailReadsTheClockOnTheDayItChanges() {
+        let day = plan([], date(1, 12))
+        #expect(day.position(of: date(1, 14)) == 0.5)
+    }
+
+    @Test func theLaterOfTwoOverlappingRowsSaysItHasTheTime() {
+        var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
+        (chopin.whileHere, chopin.minutes) = (true, 60)
+        let day = plan([overworld, chopin, compline], date(2, 12))
+        #expect(day.rows[0].overlapNote == nil)
+        #expect(day.rows[1].overlapNote == "Overlaps Overworld. This one plays, Overworld waits.")
+        #expect(day.rows[2].overlapNote == nil)
+        var off = overworld
+        off.on = false
+        #expect(plan([off, chopin], date(2, 12)).rows[1].overlapNote == nil)
+    }
+
+    @Test func aLongStretchBetweenRowsIsSaid() {
+        let row = lauds
+        let day = plan([row, overworld, compline], date(2, 12), lengths: [row.id: 69 * 60])
+        #expect(day.gaps.map(\.text) == ["Nothing from 8 to 3."])
+        #expect(day.gaps[0].from == date(2, 8, 11) && day.gaps[0].to == date(2, 15))
+    }
+
+    @Test func whatSoundingLeadsTo() {
+        #expect(plan([lauds, overworld, compline], date(2, 15, 40)).foot(sounding: overworld) == "Overworld until 7, then Compline at 8.")
+        #expect(plan([lauds, overworld, compline], date(2, 20, 5)).foot(sounding: compline) == "Compline until 9. Then nothing until Lauds at 7:02.")
+        #expect(plan([lauds, overworld, compline], date(2, 7, 5)).foot(sounding: lauds) == "Lauds at 7:02. Then nothing until 3.")
+        #expect(plan([overworld], date(2, 15, 40)).foot(sounding: overworld) == "Overworld until 7. Then nothing until Overworld at 3.")
+        let once = Alarm(source: "x", name: "Once", hour: 9, minute: 5, day: date(2, 0))
+        #expect(plan([once], date(2, 9, 6)).foot(sounding: once) == "Once at 9:05.")
+    }
+
+    @Test func aFarDayIsNamed() {
+        #expect(plan([lauds, compline], date(6, 20, 5)).foot(sounding: compline) == "Compline until 9. Then nothing until Compline at 8.")
+        #expect(plan([lauds], date(6, 7, 5)).foot(sounding: lauds) == "Lauds at 7:02. Then nothing until Lauds at 7:02 Monday.")
+    }
+
+    @Test func whatNowSaysInSilenceOfTheDay() {
+        #expect(plan([], date(2, 12)).quiet() == .init(headline: "Nothing on your day", line: "Press play, or give a collection some hours.", foot: nil))
+        #expect(plan([lauds, overworld, compline], date(2, 12)).quiet() == .init(headline: "Nothing on yet", line: "Overworld at 3.", foot: "Then Compline at 8."))
+        #expect(plan([lauds, overworld, compline], date(2, 22)).quiet(wakeScheduled: true) == .init(headline: "The day is done", line: "Lauds at 7:02 tomorrow.", foot: "The Mac will wake for it."))
+        #expect(plan([lauds], date(2, 22)).quiet().foot == nil)
+        #expect(plan([overworld], date(2, 22)).quiet(wakeScheduled: true).foot == nil)
+        #expect(plan([lauds], date(8, 12)).quiet(wakeScheduled: true) == .init(headline: "Nothing on today", line: "Lauds at 7:02 tomorrow.", foot: "The Mac will wake for it."))
+        #expect(plan([lauds], date(7, 12)).quiet().line == "Lauds at 7:02 Monday.")
+    }
+
+    @Test func sidebarLabels() {
+        let day = plan([lauds, overworld, compline], date(2, 15, 40))
+        #expect(day.label(of: "lauds") == "7:02")
+        #expect(day.label(of: "overworld") == "till 7")
+        #expect(day.label(of: "compline") == "8 PM")
+        #expect(day.label(of: "other") == nil)
+        #expect(plan([overworld], date(2, 12)).label(of: "overworld") == "3 PM")
+        #expect(plan([overworld], date(2, 12), twelveHour: false).label(of: "overworld") == "15:00")
+        var off = compline
+        off.on = false
+        #expect(day.label(of: "x") == nil && plan([off], date(2, 12)).label(of: "compline") == nil)
+    }
+
+    @Test func theSidebarGoesInDayOrder() {
+        let day = plan([compline, lauds, overworld], date(2, 12))
+        #expect(day.inDayOrder(["shellac", "compline", "counterpoint", "overworld", "lauds"]) == ["lauds", "overworld", "compline", "shellac", "counterpoint"])
+    }
+}
