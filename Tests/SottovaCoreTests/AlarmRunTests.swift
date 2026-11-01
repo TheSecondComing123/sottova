@@ -1160,4 +1160,48 @@ struct AlarmRunTests {
         c.play(album.songs + other.songs)
         #expect(c.playingFrom == nil)
     }
+
+    @Test func aRowThatPassedWithTheAppGoneIsMissedAtTheNextLaunch() async throws {
+        // a time 30 minutes ago has to still be today
+        guard Calendar.current.component(.hour, from: .now) >= 1 else { return }
+        let storage = try temp()
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: .now - 1800)
+        let row = Alarm(source: "a", name: "Lauds", hour: parts.hour!, minute: parts.minute!, weekdays: Set(1...7))
+        let url = storage.appending(path: "alarms.json")
+        try JSONEncoder().encode([row]).write(to: url)
+        try FileManager.default.setAttributes([.modificationDate: Date.now - 7200], ofItemAtPath: url.path)
+        let c = Controller(storage: storage)
+        c.loadAlarms()
+        #expect(c.alarms[0].missed?.at == row.next(after: .now - 1860))
+        #expect(c.alarms[0].lastFired == nil)
+        let saved = try JSONDecoder().decode([Alarm].self, from: Data(contentsOf: url))
+        #expect(saved[0].missed == c.alarms[0].missed)
+    }
+
+    @Test func aMacAsleepThroughAnAlarmMarksItAndTheNextOneClearsIt() async throws {
+        let (c, album, _) = try await controller()
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now - 3600)
+        #expect(c.alarms[0].missed?.why == .asleep)
+        c.fire(row.id, due: .now)
+        #expect(c.alarms[0].missed == nil)
+    }
+
+    @Test func whatPlayedTodayNamesItsRowAndTheOneThatsOn() async throws {
+        let storage = try temp()
+        let (c, album, _) = try await controller(storage: storage)
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        c.advance(0.2)
+        #expect(c.playedToday().map(\.title) == ["t0"])
+        #expect(c.playedToday().first?.row == "Lauds")
+        c.play(album.songs.reversed())
+        for _ in 0..<300 where c.current?.title != "t1" { c.advance(0.01) }
+        let played = c.playedToday()
+        #expect(played.map(\.title) == ["t0", "t1"])
+        #expect(played.map(\.row) == ["Lauds", nil])
+        #expect(c.playedToday(now: .now + 2 * 86_400).isEmpty)
+    }
 }

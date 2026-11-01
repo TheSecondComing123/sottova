@@ -36,6 +36,23 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     public var lastFired: Date?
     /// The `lastFired` that used up a part, so one window doesn't use up two.
     public var partSpent: Date?
+    /// The last time it didn't go off and why, shown on its row that day.
+    public var missed: Missed?
+
+    public struct Missed: Codable, Equatable, Sendable {
+        public enum Why: String, Codable, Sendable { case asleep, off, notRunning }
+        public let at: Date
+        public let why: Why
+
+        /// "The Mac was off."
+        public var reason: String {
+            switch why {
+            case .asleep: "The Mac was asleep."
+            case .off: "The Mac was off."
+            case .notRunning: "Sottova wasn't running."
+            }
+        }
+    }
 
     public init(source: String, name: String, hour: Int, minute: Int, weekdays: Set<Int> = [], day: Date? = nil, shuffled: Bool = false) {
         self.source = source
@@ -48,7 +65,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts, nextPart, lastFired, partSpent
+        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts, nextPart, lastFired, partSpent, missed
     }
 
     // alarms.json from before alarms could be turned off has no `on`
@@ -73,6 +90,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         nextPart = try c.decodeIfPresent(Int.self, forKey: .nextPart) ?? 0
         lastFired = try c.decodeIfPresent(Date.self, forKey: .lastFired)
         partSpent = try c.decodeIfPresent(Date.self, forKey: .partSpent)
+        missed = try c.decodeIfPresent(Missed.self, forKey: .missed)
     }
 
     /// What you can set yourself, from `other`. Its id and what the app keeps about when it last went off stay.
@@ -89,6 +107,16 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         if next(after: now, calendar: calendar) == nil, !(whileHere && window(containing: now, calendar: calendar) != nil) {
             day = calendar.date(byAdding: .day, value: 1, to: now)
         }
+    }
+
+    /// Its time today, if that passed unheard with the app gone. `lastSaved` is when alarms.json last changed: nothing
+    /// before it counts, or a row set at noon for 7:02 would be missed that morning. One only just passed isn't missed,
+    /// it still goes off. A Mac that started after the time was off; one that didn't just didn't have the app open.
+    public func missedWhileGone(lastSaved: Date, booted: Date, now: Date, lateness: TimeInterval, calendar: Calendar = .current) -> Missed? {
+        guard on, !whileHere else { return nil }
+        guard let at = times(after: max(lastSaved, calendar.startOfDay(for: now)), until: now - lateness + 1, calendar: calendar).last,
+              at != lastFired, at != missed?.at else { return nil }
+        return Missed(at: at, why: booted > at ? .off : .notRunning)
     }
 
     /// Every time it goes off after `now` and before `end`, soonest first.

@@ -159,4 +159,16 @@ struct DayPlanTests {
         let day = plan([compline, lauds, overworld], date(2, 12))
         #expect(day.inDayOrder(["shellac", "compline", "counterpoint", "overworld", "lauds"]) == ["lauds", "overworld", "compline", "shellac", "counterpoint"])
     }
+
+    @Test func aMissTodayIsSaidAndYesterdaysIsnt() {
+        var row = lauds
+        row.missed = Alarm.Missed(at: date(2, 7, 2), why: .off)
+        let today = plan([row, overworld], date(2, 12))
+        #expect(today.missedToday(row) == "Missed at 7:02. The Mac was off.")
+        #expect(today.quiet().foot == "Missed Lauds at 7:02. The Mac was off.")
+        #expect(today.quiet().line == "Overworld at 3.")
+        let tomorrow = plan([row, overworld], date(3, 12))
+        #expect(tomorrow.missedToday(row) == nil)
+        #expect(tomorrow.quiet().foot == nil)
+    }
 }

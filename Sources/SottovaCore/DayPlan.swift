@@ -100,8 +100,26 @@ public struct DayPlan: Sendable {
                                                                 : "\(head). Then nothing until \(time(next.at))."
     }
 
-    /// Nothing sounding. `wakeScheduled` is whether the Mac will wake for the next one: only then can it say so.
+    /// On its row: "Missed at 7:02. The Mac was off."
+    public func missedToday(_ row: Alarm) -> String? {
+        guard let missed = row.missed, calendar.isDate(missed.at, inSameDayAs: now) else { return nil }
+        return "Missed at \(time(missed.at)). \(missed.reason)"
+    }
+
+    private var missedLine: String? {
+        rows.compactMap { row in row.alarm.missed.flatMap { calendar.isDate($0.at, inSameDayAs: now) ? ($0, row.alarm.name) : nil } }
+            .max { $0.0.at < $1.0.at }
+            .map { "Missed \($0.1) at \(time($0.0.at)). \($0.0.reason)" }
+    }
+
+    /// Nothing sounding. `wakeScheduled` is whether the Mac will wake for the next one: only then can it say so. A miss
+    /// today takes the foot, which is where you'd look for it.
     public func quiet(wakeScheduled: Bool = false) -> Quiet {
+        let plan = quietPlan(wakeScheduled: wakeScheduled)
+        return missedLine.map { Quiet(headline: plan.headline, line: plan.line, foot: $0) } ?? plan
+    }
+
+    private func quietPlan(wakeScheduled: Bool) -> Quiet {
         guard let next = following(after: now) else {
             return Quiet(headline: "Nothing on your day", line: "Press play, or give a collection some hours.", foot: nil)
         }

@@ -488,6 +488,7 @@ public final class Controller {
             catchUpAlarms()
         }
         guard let url = storage?.appending(path: "alarms.json"), FileManager.default.fileExists(atPath: url.path) else { return }
+        let lastSaved = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         let saved: [Alarm]
         do {
             saved = try JSONDecoder().decode([Alarm].self, from: Data(contentsOf: url))
@@ -504,11 +505,23 @@ public final class Controller {
         }
         // a one-off whose time passed while the app was closed is dropped, not played late, unless it's only just passed
         alarms = saved.filter { $0.next(after: .now - Self.alarmLateness) != nil || $0.whileHere && $0.window(containing: .now) != nil }
+        if let lastSaved {
+            for i in alarms.indices {
+                alarms[i].missed = alarms[i].missedWhileGone(lastSaved: lastSaved, booted: Self.bootTime(), now: .now, lateness: Self.alarmLateness) ?? alarms[i].missed
+            }
+        }
         if alarms != saved {
             alarmsChanged()
         } else {
             armAlarm()
         }
+    }
+
+    private static func bootTime() -> Date {
+        var boot = timeval()
+        var size = MemoryLayout<timeval>.size
+        sysctlbyname("kern.boottime", &boot, &size, nil, 0)
+        return Date(timeIntervalSince1970: Double(boot.tv_sec))
     }
 
     /// One timer for the soonest alarm, on the wall clock: it still fires on time after the Mac has slept, and
@@ -601,8 +614,10 @@ public final class Controller {
             return
         }
         alarms[index].lastFired = due
+        let late = now.timeIntervalSince(due) > Self.alarmLateness
+        alarms[index].missed = late ? Alarm.Missed(at: due, why: .asleep) : nil
         let alarm = alarms[index]
-        if now.timeIntervalSince(due) > Self.alarmLateness {
+        if late {
             problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
         } else if alarm.heedsCalendar, calendarBusy() {
             problem = "\(alarm.name) didn't play at \(due.formatted(date: .omitted, time: .shortened)): your calendar had something on"
@@ -703,7 +718,10 @@ public final class Controller {
     /// The row this music is for: an hour while it has the music, or the alarm that started it, by the time it went
     /// off, so it survives a relaunch. A one-off is gone once fired, so it has none.
     public var soundingRow: Alarm? {
-        guard status != .idle else { return nil }
+        status == .idle ? nil : rowInCharge
+    }
+
+    private var rowInCharge: Alarm? {
         if let hourPlaying { return alarms.first { $0.id == hourPlaying } }
         guard fromAlarm, let alarmDue else { return nil }
         return alarms.first { !$0.whileHere && $0.lastFired == alarmDue }
@@ -723,6 +741,27 @@ public final class Controller {
     /// The album or playlist this piece came from; nil for the shuffler's pick or a mix of albums.
     public var playingFrom: String? { status == .idle ? nil : currentSource }
 
+    public struct Played: Equatable, Sendable {
+        public let at: Date
+        public let title: String
+        /// The row it played for, by its name now.
+        public let row: String?
+    }
+
+    /// What played today, soonest first, from the log and the piece that's on, which is only logged once it's over.
+    public func playedToday(now: Date = .now, calendar: Calendar = .current) -> [Played] {
+        let played = { (path: String, at: Date, row: Alarm.ID?) in
+            Played(at: at, title: self.catalog.songsByID[path]?.title ?? URL(filePath: path).deletingPathExtension().lastPathComponent,
+                   row: self.alarms.first { $0.id == row }?.name)
+        }
+        var today = storage.map { PlayRecord.read($0.appending(path: "plays.jsonl"), last: 2000) }?
+            .filter { calendar.isDate($0.startedAt, inSameDayAs: now) }.map { played($0.file, $0.startedAt, $0.row) } ?? []
+        if status != .idle, !inSilence, let path = file?.url.path, calendar.isDate(startedAt, inSameDayAs: now) {
+            today.append(played(path, startedAt, pieceRow))
+        }
+        return today
+    }
+
     // MARK: Hours
 
     /// The alarm that plays while you're at the Mac whose collection is playing; nil once anything else is played.
@@ -736,6 +775,8 @@ public final class Controller {
     @ObservationIgnored private var partDue: (id: Alarm.ID, time: Date)?
     @ObservationIgnored private var lastHourCheck = Date.distantPast
     @ObservationIgnored private var currentSource: String?
+    /// The row in charge when this piece started, for the play log: it's written at the end, after a press may have changed that.
+    @ObservationIgnored private var pieceRow: Alarm.ID?
     /// The stop after this piece is the hour's, not yours, so whatever you play next isn't cut short by it.
     @ObservationIgnored private var hourEnding = false
     /// Reads the Mac for a reason to wait; tests put their own in.
@@ -1104,6 +1145,7 @@ public final class Controller {
             trackGain = gain(of: path)
         }
         startedAt = Date()
+        pieceRow = rowInCharge?.id
         if let elapsed = state.elapsed, let file {
             // scheduled from that frame when play is pressed, like after a device change
             needsReschedule = true
@@ -1833,6 +1875,7 @@ public final class Controller {
             title = current?.title ?? url.deletingPathExtension().lastPathComponent
             refreshRecent()
             startedAt = Date()
+            pieceRow = rowInCharge?.id
             failures = 0
             if problem == playbackProblem { problem = nil }
             send(.trackStarted(duration: duration))
@@ -2107,7 +2150,7 @@ public final class Controller {
 
     private func log(skipped: Bool, gap: Double) {
         guard let url = storage?.appending(path: "plays.jsonl"), let file else { return }
-        let record = PlayRecord(file: file.url.path, startedAt: startedAt, skipped: skipped, gapAfterSec: gap, heardSec: lastTrack?.elapsed)
+        let record = PlayRecord(file: file.url.path, startedAt: startedAt, skipped: skipped, gapAfterSec: gap, heardSec: lastTrack?.elapsed, row: pieceRow)
         do {
             try record.append(to: url)
         } catch {

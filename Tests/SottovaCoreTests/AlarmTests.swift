@@ -238,4 +238,42 @@ struct AlarmOrderTests {
         #expect(row.volume == 0.2 && row.rotates && !row.on)
         #expect(row.id == kept.0 && row.lastFired == kept.1 && row.partSpent == kept.2 && row.nextPart == kept.3)
     }
+
+    @Test func whatCountsAsMissedWhileGone() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let at = { (day: Int, hour: Int, minute: Int) in calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour, minute: minute))! }
+        let row = Alarm(source: "a", name: "Lauds", hour: 7, minute: 2, weekdays: [2, 3, 4, 5, 6])
+        let missed = { (saved: Date, booted: Date, now: Date, row: Alarm) in
+            row.missedWhileGone(lastSaved: saved, booted: booted, now: now, lateness: 600, calendar: calendar)
+        }
+        let due = at(2, 7, 2)
+        #expect(missed(at(1, 20, 0), at(1, 8, 0), at(2, 8, 0), row) == Alarm.Missed(at: due, why: .notRunning))
+        #expect(missed(at(1, 20, 0), at(2, 7, 30), at(2, 8, 0), row) == Alarm.Missed(at: due, why: .off))
+        // set after its time this morning
+        #expect(missed(at(2, 7, 30), at(1, 8, 0), at(2, 8, 0), row) == nil)
+        // still in time to go off
+        #expect(missed(at(1, 20, 0), at(1, 8, 0), at(2, 7, 5), row) == nil)
+        // before it
+        #expect(missed(at(1, 20, 0), at(1, 8, 0), at(2, 6, 0), row) == nil)
+        // yesterday's isn't today's: Monday's, at Tuesday noon, was never on this row's today
+        #expect(missed(at(2, 8, 0), at(1, 8, 0), at(3, 6, 0), row) == nil)
+        var played = row
+        played.lastFired = due
+        #expect(missed(at(1, 20, 0), at(1, 8, 0), at(2, 8, 0), played) == nil)
+        var off = row
+        off.on = false
+        #expect(missed(at(1, 20, 0), at(1, 8, 0), at(2, 8, 0), off) == nil)
+        var here = row
+        here.whileHere = true
+        #expect(missed(at(1, 20, 0), at(1, 8, 0), at(2, 8, 0), here) == nil)
+    }
+
+    @Test func aMissSurvivesBeingSaved() throws {
+        var row = Alarm(source: "a", name: "Lauds", hour: 7, minute: 2, weekdays: [2])
+        row.missed = Alarm.Missed(at: Date(timeIntervalSince1970: 1_000), why: .off)
+        let back = try JSONDecoder().decode(Alarm.self, from: JSONEncoder().encode(row))
+        #expect(back.missed == row.missed)
+        #expect(back.missed?.reason == "The Mac was off.")
+    }
 }

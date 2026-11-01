@@ -8,6 +8,8 @@ struct PlayRecord: Codable {
     var gapAfterSec: Double
     /// Seconds of the track that played. Older lines don't have it.
     var heardSec: Double?
+    /// The row it played for. Older lines don't have it.
+    var row: UUID?
 
     static func read(_ url: URL, last count: Int = .max) -> [PlayRecord] {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
