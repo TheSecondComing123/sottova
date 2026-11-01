@@ -53,6 +53,20 @@ struct ShotReady: ViewModifier {
             if let hour = defaults.object(forKey: "shotDropHour") as? Int ?? Int(defaults.string(forKey: "shotDropHour") ?? "") {
                 router.shotDrop = (hour, defaults.string(forKey: "shotDropName") ?? "")
             }
+            if let name = defaults.string(forKey: "shotCustom"), let playlist = controller.playlists.first(where: { $0.name == name }) {
+                var own = controller.settings
+                (own.name, own.crossfade) = ("Custom", false)
+                router.presetEdit = PresetEdit(preset: own, collection: (name, { controller.setGaps($0, for: playlist.id) }))
+            }
+            if let name = defaults.string(forKey: "shotOwnSilence"), let playlist = controller.playlists.first(where: { $0.name == name }) {
+                var own = controller.settings
+                (own.name, own.gapMin, own.gapMax) = ("Custom", 300, 300)
+                controller.setGaps(own, for: playlist.id)
+            }
+            if let name = defaults.string(forKey: "shotCredit"), let playlist = controller.playlists.first(where: { $0.name == name }),
+               let cover = defaults.string(forKey: "shotCovers").flatMap({ try? Data(contentsOf: URL(filePath: $0).appending(path: "compline.jpg")) }) {
+                controller.setCover(cover, credit: "Caspar David Friedrich, Moonrise over the Sea, 1822", forPlaylist: playlist.id)
+            }
             router.showsQueue = defaults.bool(forKey: "shotQueue")
             if defaults.bool(forKey: "shotYours") {
                 for name in ["Counterpoint", "Perfect Chopin", "Shellac"] {
@@ -88,6 +102,13 @@ struct ShotReady: ViewModifier {
                 return
             }
             #endif
+            if defaults.bool(forKey: "shotSettings") {
+                AppDelegate.showSettings()
+                try? await Task.sleep(for: .seconds(1))
+                let settings = NSApp.windows.first { $0.isVisible && $0.title.contains("Settings") } ?? NSApp.windows.first { $0.isVisible && $0.contentView?.frame.width == 620 }
+                try? Data(String(settings?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
+                return
+            }
             // a sheet is its own window: asking for one takes the picture of it alone
             try? Data(String((defaults.bool(forKey: "shotSheet") ? window?.attachedSheet?.windowNumber : nil) ?? window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
         }

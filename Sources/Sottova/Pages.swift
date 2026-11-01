@@ -375,6 +375,38 @@ private struct RecentList: View {
     }
 }
 
+#if NEWLOOK
+/// What's left on the old names until the switch renames them: `.btn.def`, the single next action.
+struct InvertedButton: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .role(.body)
+            .foregroundStyle(enabled ? Theme.onPrimary : Theme.disabled)
+            .padding(.horizontal, 11)
+            .frame(height: 24)
+            .background(enabled ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
+            .contentShape(.rect)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
+/// `.btn`.
+struct QuietButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .role(.body)
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 11)
+            .frame(height: 24)
+            .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
+            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
+            .contentShape(.rect)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+#else
 struct InvertedButton: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
 
@@ -407,6 +439,7 @@ struct QuietButton: ButtonStyle {
             .animation(Theme.quick, value: configuration.isPressed)
     }
 }
+#endif
 
 struct SongsPage: View {
     @Environment(Controller.self) private var controller

@@ -2,8 +2,7 @@
 import SwiftUI
 import SottovaCore
 
-/// Makes or changes a preset, with the lengths typed: "5 min", "90 s". The fade out and the rest of how it plays come
-/// from where it started.
+/// Makes or changes a preset, or a collection's own silence, with the lengths typed: "5 min", "90 s".
 struct SilenceSheet: View {
     let edit: PresetEdit
     @Environment(Controller.self) private var controller
@@ -12,9 +11,10 @@ struct SilenceSheet: View {
     @State private var shortest: String
     @State private var longest: String
     @State private var fadeIn: String
+    @State private var fadeOut: String
     @FocusState private var focus: Field?
 
-    private enum Field { case name, shortest, longest, fadeIn }
+    private enum Field { case name, shortest, longest, fadeIn, fadeOut }
 
     init(edit: PresetEdit) {
         self.edit = edit
@@ -22,15 +22,17 @@ struct SilenceSheet: View {
         _shortest = State(initialValue: TypedDuration.format(edit.preset.gapMin))
         _longest = State(initialValue: TypedDuration.format(edit.preset.gapMax))
         _fadeIn = State(initialValue: TypedDuration.format(edit.preset.fadeIn))
+        _fadeOut = State(initialValue: TypedDuration.format(edit.preset.fadeOut))
     }
 
     /// The draft with what's typed in it, nil while something can't be read. A bare number is minutes between songs,
     /// seconds in a fade, which is what those fields already say.
     private var saved: SottovaCore.Settings? {
         guard !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let fade = TypedDuration.parse(fadeIn, unit: 1) else { return nil }
+              let fade = TypedDuration.parse(fadeIn, unit: 1), let out = TypedDuration.parse(fadeOut, unit: 1) else { return nil }
         var preset = draft
         preset.fadeIn = min(fade, 20)
+        preset.fadeOut = min(out, 20)
         // overlapping, the gaps' fields are off and keep what they had
         if draft.crossfade { return preset }
         guard let low = TypedDuration.parse(shortest, unit: 60), let high = TypedDuration.parse(longest, unit: 60) else { return nil }
@@ -42,15 +44,17 @@ struct SilenceSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(edit.replacing.map { "Edit \($0)" } ?? "New preset")
+            Text(edit.collection.map { "Silence for \($0.name)" } ?? edit.replacing.map { "Edit \($0)" } ?? "New preset")
                 .role(.sheet)
                 .foregroundStyle(Theme.text)
                 .padding(.bottom, 4)
-            row("Name") {
-                TextField("", text: $draft.name)
-                    .foregroundStyle(Theme.text)
-                    .focused($focus, equals: .name)
-                    .modifier(FieldLook(focused: focus == .name))
+            if edit.collection == nil {
+                row("Name") {
+                    TextField("", text: $draft.name)
+                        .foregroundStyle(Theme.text)
+                        .focused($focus, equals: .name)
+                        .modifier(FieldLook(focused: focus == .name))
+                }
             }
             row("Between songs") {
                 length($shortest, .shortest, unit: 60)
@@ -60,6 +64,8 @@ struct SilenceSheet: View {
             .disabled(draft.crossfade)
             .opacity(draft.crossfade ? 0.5 : 1)
             row("Fade in") { length($fadeIn, .fadeIn, unit: 1) }
+            // a preset's comes from where it started; a collection's own is all it has
+            if edit.collection != nil { row("Fade out") { length($fadeOut, .fadeOut, unit: 1) } }
             row("Overlap") { overlap }
             HStack(spacing: 8) {
                 if let name = edit.replacing {
@@ -73,7 +79,11 @@ struct SilenceSheet: View {
                     .keyboardShortcut(.cancelAction)
                 ThemeButton(title: "Save", primary: true) {
                     guard let saved else { return }
-                    controller.savePreset(saved, replacing: edit.replacing)
+                    if let collection = edit.collection {
+                        collection.apply(saved)
+                    } else {
+                        controller.savePreset(saved, replacing: edit.replacing)
+                    }
                     router.presetEdit = nil
                 }
                 .keyboardShortcut(.defaultAction)
@@ -87,7 +97,7 @@ struct SilenceSheet: View {
         .background(Theme.sidebar, in: .rect(cornerRadius: Radius.window))
         .overlay { RoundedRectangle(cornerRadius: Radius.window).strokeBorder(.black.opacity(0.5), lineWidth: 0.5) }
         .shadow(color: .black.opacity(0.55), radius: 25, y: 18)
-        .onAppear { focus = .name }
+        .onAppear { focus = edit.collection == nil ? .name : .shortest }
         .onChange(of: focus) { _, field in
             router.typing = field != nil
             tidy()
@@ -127,30 +137,17 @@ struct SilenceSheet: View {
         shortest = tidied(shortest, 60, .shortest)
         longest = tidied(longest, 60, .longest)
         if focus != .fadeIn, let fade = TypedDuration.parse(fadeIn, unit: 1) { fadeIn = TypedDuration.format(min(fade, 20)) }
+        if focus != .fadeOut, let out = TypedDuration.parse(fadeOut, unit: 1) { fadeOut = TypedDuration.format(min(out, 20)) }
     }
 
     private var overlap: some View {
-        Menu {
+        ThemePopup(title: draft.crossfade ? TypedDuration.format(draft.crossfadeSec) : "None") {
             Button("None") { draft.crossfade = false }
             Divider()
             ForEach(overlaps.contains(draft.crossfadeSec) ? overlaps : (overlaps + [draft.crossfadeSec]).sorted(), id: \.self) { seconds in
                 Button(TypedDuration.format(seconds)) { (draft.crossfade, draft.crossfadeSec) = (true, seconds) }
             }
-        } label: {
-            HStack(spacing: 6) {
-                Text(draft.crossfade ? TypedDuration.format(draft.crossfadeSec) : "None").foregroundStyle(Theme.text)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .medium)).foregroundStyle(Theme.muted)
-            }
-            .padding(.leading, 9)
-            .padding(.trailing, 6)
-            .frame(height: 24)
-            .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
-            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
         }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
     }
 }
 #endif

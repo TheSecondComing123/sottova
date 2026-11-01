@@ -33,6 +33,8 @@ extension Theme {
                        dark: Palette.Tokens(slots.dark), light: Palette.Tokens(slots.light))
     }
 
+    static var slotNames: (dark: String, light: String) { (slots.dark.name, slots.light.name) }
+
     /// True when the colors changed, so the scenes know to re-key.
     static func reloadThemes() -> Bool {
         themes = ThemeFile.load(from: themeFolders)
@@ -198,6 +200,32 @@ struct FieldLook: ViewModifier {
                 RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.frame, lineWidth: 0.5)
                 if focused { RoundedRectangle(cornerRadius: Radius.small).stroke(Theme.primary.opacity(0.55), lineWidth: 2.5).padding(-1.25) }
             }
+    }
+}
+
+/// `.popup` in the mock: a native menu behind the theme's button.
+struct ThemePopup<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            HStack(spacing: 6) {
+                Text(title).role(.body).foregroundStyle(Theme.text)
+                Ph.caretUpDown.icon(.line, size: 11).foregroundStyle(Theme.muted)
+            }
+            .padding(.leading, 9)
+            .padding(.trailing, 6)
+            .frame(height: 24)
+            .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
+            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
     }
 }
 

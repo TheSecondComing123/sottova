@@ -45,6 +45,8 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     let empty: Bool
     var dropTargeted = false
     let lines: [String]
+    /// Where the painting's credit is, and what re-reads it.
+    var credit: (url: URL?, key: String?) = (nil, nil)
     @ViewBuilder let name: Name
     @ViewBuilder let actions: Actions
     @ViewBuilder let songs: (_ narrow: Bool) -> Songs
@@ -73,6 +75,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
                         .foregroundStyle(Theme.muted)
                         .padding(.top, index == 0 ? 8 : 0)
                 }
+                CoverCredit(url: credit.url, key: credit.key).padding(.top, 4)
                 actions.padding(.top, 14)
             }
             .frame(width: side, alignment: .leading)
@@ -132,11 +135,13 @@ struct PlayButton: View {
     }
 }
 
-/// How the gaps choice reads in a collection's menu; Custom only shows while it's the one in use.
+/// The silence a collection plays with, in its menu: yours, a preset, or typed for it alone.
 struct SilenceChoices: View {
+    let title: String
     let chosen: SottovaCore.Settings?
     let choose: (SottovaCore.Settings?) -> Void
     @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
 
     var body: some View {
         Menu("Silence") {
@@ -144,11 +149,26 @@ struct SilenceChoices: View {
             ForEach(controller.allPresets, id: \.name) { preset in
                 Toggle(preset.name, isOn: Binding(get: { chosen?.name == preset.name }, set: { _ in choose(preset) }))
             }
-            if chosen?.name == "Custom" {
-                Toggle("Custom", isOn: .constant(true)).disabled(true)
-            }
+            Divider()
+            Toggle("Custom…", isOn: Binding(get: { chosen?.name == "Custom" }, set: { _ in custom() }))
         }
     }
+
+    private func custom() {
+        var own = chosen?.gaps(over: controller.yourSettings) ?? controller.yourSettings
+        own.name = "Custom"
+        own.crossfade = chosen?.name == "Custom" && own.crossfade
+        router.presetEdit = PresetEdit(preset: own, collection: (title, choose))
+    }
+}
+
+/// Only when it isn't yours: what this collection's silence is and how long it makes it.
+@MainActor
+private func ownSilence(_ gaps: SottovaCore.Settings?, songs: [Song], controller: Controller) -> [String] {
+    guard let gaps else { return [] }
+    let music = songs.reduce(0) { $0 + $1.duration }
+    let paced = gaps.gaps(over: controller.yourSettings).lengthWithGaps(count: songs.count, music: music)
+    return ["\(gaps.name) silence" + (paced > music ? ", about \(Format.length(paced))" : "")]
 }
 
 private func songCount(_ songs: [Song]) -> String {
@@ -165,7 +185,9 @@ struct AlbumCollection: View {
     var body: some View {
         if let album = controller.catalog.albumsByID[id] {
             CollectionFrame(cover: album.artwork, empty: false,
-                            lines: [DayPlan(alarms: controller.alarms).hours(of: id) ?? "No hours set", songCount(album.songs)]) {
+                            lines: [DayPlan(alarms: controller.alarms).hours(of: id) ?? "No hours set", songCount(album.songs)]
+                                + ownSilence(controller.albumSettings[id], songs: album.songs, controller: controller),
+                            credit: (album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") }, album.artwork)) {
                 Text(album.title)
                     .role(.title)
                     .foregroundStyle(Theme.text)
@@ -181,7 +203,11 @@ struct AlbumCollection: View {
                         Divider()
                         Button("Choose cover…") { router.coverFor = .album(id) }
                         Button("Start at…") { router.alarm = .new(.album(id)) }
-                        SilenceChoices(chosen: controller.albumSettings[id]) { controller.albumSettings[id] = $0 }
+                        SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.albumSettings[id] = $0 }
+                        if album.artist != "Various Artists" {
+                            Divider()
+                            Button("Go to \(album.artist)") { navigate(.artist(album.artist)) }
+                        }
                     }
                 }
             } songs: { narrow in
@@ -226,7 +252,9 @@ struct YourCollection: View {
             let missing = playlist.paths.count - songs.count
             CollectionFrame(cover: cover, empty: isEmpty, dropTargeted: isEmpty && target == 0,
                             lines: isEmpty ? ["Nothing in it yet"] : [DayPlan(alarms: controller.alarms).hours(of: pid) ?? "No hours set",
-                                                                      songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")]) {
+                                                                      songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")]
+                                + ownSilence(isEmpty ? nil : playlist.gaps, songs: songs, controller: controller),
+                            credit: (Controller.coverURL(forPlaylist: pid), controller.playlistCovers[pid])) {
                 title(playlist)
             } actions: {
                 if !isEmpty {
@@ -388,7 +416,7 @@ struct YourCollection: View {
             Button("Rename") { startRename(playlist) }
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
             Button("Start at…") { router.alarm = .new(.playlist(pid)) }
-            SilenceChoices(chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
+            SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {

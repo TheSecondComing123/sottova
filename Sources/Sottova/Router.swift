@@ -175,12 +175,21 @@ struct SottovaCommands: Commands {
                 .keyboardShortcut("]")
                 .disabled(router.forward.isEmpty)
             Divider()
+            #if NEWLOOK
+            Button("Now") { router.go(to: .home) }.keyboardShortcut("1")
+            Button("Your day") { router.go(to: .alarms) }.keyboardShortcut("2")
+            Button("Songs") { router.go(to: .songs) }.keyboardShortcut("3")
+            Button("Free music") { router.go(to: .shelf) }.keyboardShortcut("4")
+            Button("Collections") { router.go(to: .collections) }.keyboardShortcut("5")
+            Button("Names") { router.go(to: .artists) }.keyboardShortcut("6")
+            #else
             Button("Home") { router.go(to: .home) }.keyboardShortcut("1")
             Button("Songs") { router.go(to: .songs) }.keyboardShortcut("2")
             Button("Collections") { router.go(to: .collections) }.keyboardShortcut("3")
             Button("Artists") { router.go(to: .artists) }.keyboardShortcut("4")
             Button("Your day") { router.go(to: .alarms) }.keyboardShortcut("5")
             Button("Free music") { router.go(to: .shelf) }.keyboardShortcut("6")
+            #endif
             Divider()
             Button("Search") {
                 openWindow(id: "main")

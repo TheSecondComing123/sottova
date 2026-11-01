@@ -27,7 +27,7 @@ struct DayPage: View {
             let plan = controller.dayPlan(now: now)
             PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
                 HStack(alignment: .center) {
-                    Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
+                    Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader).offset(y: -2)
                     Spacer(minLength: 16)
                     ThemeButton(title: "New", icon: .plus, iconWeight: .line) { router.alarm = .new(nil) }
                 }
@@ -46,9 +46,11 @@ struct DayPage: View {
     /// The row the Mac can't wake for: only the very next one, as the days after are filled in as they come closer.
     private func cantWake(now: Date) -> Alarm.ID? {
         #if SHOT
+        // the real schedule says nothing about the copy's rows
         guard UserDefaults.standard.bool(forKey: "shotCantWake") else { return nil }
-        #endif
+        #else
         guard wake.nextMissing(for: controller.alarms, now: now) else { return nil }
+        #endif
         return controller.alarms.filter { $0.on && !$0.whileHere }
             .compactMap { alarm in alarm.next(after: now).map { (alarm.id, $0) } }
             .min { $0.1 < $1.1 }?.0
@@ -77,13 +79,16 @@ struct DayPage: View {
             }
             ForEach(Array(rail.labels.enumerated()), id: \.offset) { _, label in
                 RailTime(label: label, alarm: controller.alarms.first { $0.id == label.row })
-                    .offset(y: label.y - 9)
+                    // an 18 pt line sits its small type higher than the mock's
+                    .offset(y: label.y - 9 + (label.kind == .row || label.kind == .now ? 1 : 2))
             }
-            ForEach(Array(rail.gaps.enumerated()), id: \.offset) { _, gap in
-                Text("\(gap.text) Drag a collection here.")
-                    .role(.body)
-                    .foregroundStyle(Theme.faint)
-                    .offset(x: 106, y: gap.top)
+            if drop == nil {
+                ForEach(Array(rail.gaps.enumerated()), id: \.offset) { _, gap in
+                    Text("\(gap.text) Drag a collection here.")
+                        .role(.body)
+                        .foregroundStyle(Theme.faint)
+                        .offset(x: 106, y: gap.top + 1)
+                }
             }
             if rail.marks.isEmpty {
                 Text(controller.alarms.isEmpty ? "Nothing on your day. Drag a collection onto an hour." : "Nothing on today. Drag a collection onto an hour.")
@@ -119,7 +124,7 @@ struct DayPage: View {
                 .fontWeight(.medium)
                 .foregroundStyle(Theme.primary)
                 .frame(width: 60, alignment: .trailing)
-                .offset(y: -9)
+                .offset(y: -8)
             VStack(alignment: .leading, spacing: 0) {
                 Text(name).role(.row).foregroundStyle(Theme.text)
                 Text(label.span).role(.body).foregroundStyle(Theme.muted)
@@ -163,7 +168,7 @@ struct DayPage: View {
     @ViewBuilder
     private func what(_ plan: DayPlan, now: Date) -> some View {
         if !played.isEmpty {
-            Text("What played").role(.body).fontWeight(.semibold).foregroundStyle(Theme.text).padding(.top, 18).padding(.bottom, 4)
+            Text("What played").role(.body).fontWeight(.semibold).foregroundStyle(Theme.text).padding(.top, 19).padding(.bottom, 4)
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 40) {
                     ForEach(Array(stride(from: 0, to: played.count, by: 3)), id: \.self) { start in
@@ -274,7 +279,7 @@ private struct DayRow: View {
                 .frame(width: 14, height: 14)
                 .padding(.top, 4)
                 .frame(width: 22, alignment: .topLeading)
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
                 Button { navigate(route) } label: {
                     Text(alarm.name).role(.row).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
                 }
@@ -359,7 +364,7 @@ private struct Tick: ToggleStyle {
         Button { configuration.isOn.toggle() } label: {
             ZStack {
                 if configuration.isOn {
-                    Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.muted)
+                    TickMark().stroke(Theme.muted, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)).frame(width: 12, height: 12)
                 } else {
                     RoundedRectangle(cornerRadius: 3.5).strokeBorder(Theme.frame, lineWidth: 1)
                 }
@@ -369,6 +374,17 @@ private struct Tick: ToggleStyle {
         }
         .buttonStyle(.plain)
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
+    }
+}
+
+/// From the mock, whose 12 pt check is lighter than any icon's.
+private struct TickMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: 2.5, y: 6.4))
+            path.addLine(to: CGPoint(x: 5, y: 8.8))
+            path.addLine(to: CGPoint(x: 9.6, y: 3.2))
+        }
     }
 }
 

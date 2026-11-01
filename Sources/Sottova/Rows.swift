@@ -434,6 +434,11 @@ extension MenuEntry {
         if gaps == "Custom" {
             choices.append(.item("Custom", checked: true, enabled: false) {})
         }
+        #if NEWLOOK
+        let choicesName = "Silence"
+        #else
+        let choicesName = "Gaps"
+        #endif
         var goToArtist: [MenuEntry] = [.item("Go to artist") { navigate(.artist(album.artist)) }]
         #if NEWLOOK
         // a name opens Songs filtered, and no song is tagged with Catalog's word for a compilation
@@ -448,7 +453,7 @@ extension MenuEntry {
             .item("Choose cover…") { router.coverFor = .album(album.id) },
             .item("Start at…") { router.alarm = .new(.album(album.id)) },
             .item("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } },
-            .submenu("Gaps", choices),
+            .submenu(choicesName, choices),
         ]
     }
 

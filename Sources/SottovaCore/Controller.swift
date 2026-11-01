@@ -2363,7 +2363,12 @@ extension Controller {
             row.minutes = 60
             addAlarm(row)
         }
-        if defaults.bool(forKey: "shotRotates"), let row = alarms.first(where: { $0.name == "Lauds" }) { changeAlarm(row.id) { ($0.rotates, $0.parts) = (true, 2) } }
+        // the rows as the mock has them
+        if defaults.bool(forKey: "shotMock") {
+            if let row = alarms.first(where: { $0.name == "Lauds" }) { changeAlarm(row.id) { ($0.rotates, $0.parts, $0.minutes) = (true, 2, 69) } }
+            if let row = alarms.first(where: { $0.name == "Overworld" }) { changeAlarm(row.id) { $0.heedsCalendar = true } }
+            if let row = alarms.first(where: { $0.name == "Compline" }) { changeAlarm(row.id) { $0.rotates = true } }
+        }
         if defaults.bool(forKey: "shotPlayed"), let storage {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601

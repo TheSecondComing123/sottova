@@ -66,6 +66,15 @@ struct SottovaApp: App {
         }
     }
 
+    @ViewBuilder private var settings: some View {
+        #if NEWLOOK
+        SettingsView(controller: controller) { themeVersion += 1 }
+            .id(themeVersion)
+        #else
+        SettingsView(controller: controller)
+        #endif
+    }
+
     var body: some Scene {
         Window("Sottova", id: "main") {
             MainWindow()
@@ -99,7 +108,7 @@ struct SottovaApp: App {
         #endif
 
         Settings {
-            SettingsView(controller: controller)
+            settings
                 // the rail runs up under the traffic lights, as the main window's sidebar does
                 .toolbar(removing: .title)
                 .toolbarBackground(.hidden, for: .windowToolbar)
@@ -136,7 +145,12 @@ private struct Keepalive: View {
             .frame(width: 1, height: 1)
             .onAppear {
                 AppDelegate.showMain = { openWindow(id: "main"); NSApp.activate() }
-                AppDelegate.showSettings = { openSettings(); NSApp.activate() }
+                AppDelegate.showSettings = {
+                    openSettings()
+                    #if !SHOT
+                    NSApp.activate()
+                    #endif
+                }
                 // no activate: the guard's `open -g` stays in the background
                 AppDelegate.openAtLaunch = { openWindow(id: "main") }
                 AppDelegate.launchWindow()

@@ -144,8 +144,13 @@ struct AlarmSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
+            #if NEWLOOK
+            let unnamed = "New row"
+            #else
+            let unnamed = "New alarm"
+            #endif
             Text(kind == .whileHere ? name.map { "Play \($0) while you're here" } ?? "Music while you're here"
-                                    : name.map { "Start \($0) at…" } ?? "New alarm")
+                                    : name.map { "Start \($0) at…" } ?? unnamed)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
@@ -207,7 +212,12 @@ struct AlarmSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(QuietButton())
-                Button(editing ? "Save" : kind == .whileHere ? "Set hours" : "Set alarm") {
+                #if NEWLOOK
+                let setting = "Set"
+                #else
+                let setting = "Set alarm"
+                #endif
+                Button(editing ? "Save" : kind == .whileHere ? "Set hours" : setting) {
                     guard let alarm else { return }
                     if editing { controller.changeAlarm(alarm.id) { $0.setUserFields(from: alarm) } } else { controller.addAlarm(alarm) }
                     dismiss()
@@ -225,8 +235,13 @@ struct AlarmSheet: View {
         }
         .padding(24)
         .frame(width: 440)
+        #if NEWLOOK
+        .background(Theme.sidebar)
+        .presentationBackground(Theme.sidebar)
+        #else
         .background(Theme.background)
         .presentationBackground(Theme.background)
+        #endif
         .animation(Theme.quick, value: kind)
         .onChange(of: kind) { old, new in
             // a new one moves to what suits the other kind, except where you've already changed something

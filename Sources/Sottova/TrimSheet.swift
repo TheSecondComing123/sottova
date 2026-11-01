@@ -71,8 +71,13 @@ struct TrimSheet: View {
         }
         .padding(24)
         .frame(width: 640)
+        #if NEWLOOK
+        .background(Theme.sidebar)
+        .presentationBackground(Theme.sidebar)
+        #else
         .background(Theme.background)
         .presentationBackground(Theme.background)
+        #endif
         .task { await load() }
         .onDisappear {
             preview?.stop()
