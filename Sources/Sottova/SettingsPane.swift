@@ -148,6 +148,13 @@ struct SettingsView: View {
                 }
             }
             .modifier(SettingsRow())
+            HStack(spacing: 16) {
+                label("Don't repeat any of the last")
+                Spacer(minLength: 0)
+                ValueStepper(value: Binding(get: { Double(controller.settings.avoidLastN) }, set: { controller.settings.avoidLastN = Int($0) }),
+                             range: 0...50, unit: "songs")
+            }
+            .modifier(SettingsRow())
             Toggle(isOn: $controller.keepsMacAwake) {
                 label("Keep the Mac awake during silence", detail: "Sound stops between songs, so otherwise the Mac can sleep in the middle of one.")
             }

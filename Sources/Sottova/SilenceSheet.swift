@@ -63,8 +63,7 @@ struct SilenceSheet: View {
             .disabled(draft.crossfade)
             .opacity(draft.crossfade ? 0.5 : 1)
             row("Fade in") { length($fadeIn, .fadeIn, unit: 1) }
-            // a preset's comes from where it started; a collection's own is all it has
-            if edit.collection != nil { row("Fade out") { length($fadeOut, .fadeOut, unit: 1) } }
+            row("Fade out") { length($fadeOut, .fadeOut, unit: 1) }
             row("Overlap") { overlap }
             HStack(spacing: 8) {
                 if let name = edit.replacing {
