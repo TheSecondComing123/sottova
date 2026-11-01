@@ -171,4 +171,17 @@ struct DayPlanTests {
         #expect(tomorrow.missedToday(row) == nil)
         #expect(tomorrow.quiet().foot == nil)
     }
+
+    @Test func backToBackRowsFollowEachOther() {
+        var next = compline
+        next.hour = 19
+        #expect(plan([overworld, next], date(2, 15, 40)).foot(sounding: overworld) == "Overworld until 7, then Compline at 7.")
+    }
+
+    @Test func twoRowsStartingTogetherDontBothClaimTheTime() {
+        var twin = overworld
+        twin.name = "Twin"
+        let notes = plan([overworld, twin], date(2, 12)).rows.map(\.overlapNote)
+        #expect(notes.compactMap { $0 }.count == 1)
+    }
 }

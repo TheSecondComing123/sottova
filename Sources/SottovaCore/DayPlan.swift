@@ -51,7 +51,7 @@ public struct DayPlan: Sendable {
         }.sorted { $0.start < $1.start }
         let on = spans.filter(\.alarm.on)
         rows = spans.map { span in
-            let earlier = on.last { $0.alarm.id != span.alarm.id && $0.start <= span.start && span.start < $0.end }
+            let earlier = on.prefix { $0.alarm.id != span.alarm.id }.last { span.start < $0.end }
             return Row(alarm: span.alarm, start: span.start, end: span.end,
                        overlapNote: span.alarm.on ? earlier.map { "Overlaps \($0.alarm.name). This one plays, \($0.alarm.name) waits." } : nil)
         }
@@ -92,7 +92,8 @@ public struct DayPlan: Sendable {
         let end = row.window(containing: now, calendar: calendar)?.end
         let head = end.map { "\(row.name) until \(time($0))" } ?? "\(row.name) at \(Self.time(hour: row.hour, minute: row.minute, twelveHour: twelveHour))"
         let after = end ?? now
-        guard let next = following(after: after) else { return head + "." }
+        // a second back, so one starting as this ends counts
+        guard let next = following(after: after - 1) else { return head + "." }
         if !calendar.isDate(next.at, inSameDayAs: after) {
             return "\(head). Then nothing until \(next.alarm.name) at \(time(next.at))\(dayWord(next.at))."
         }
@@ -172,8 +173,8 @@ public struct DayPlan: Sendable {
 extension Controller {
     /// The day as of `now`; a row without an end is as long as its collection.
     public func dayPlan(now: Date = .now) -> DayPlan {
-        DayPlan(alarms: alarms, now: now, lengths: Dictionary(uniqueKeysWithValues: alarms.filter { $0.minutes == nil }.map { alarm in
+        DayPlan(alarms: alarms, now: now, lengths: Dictionary(alarms.filter { $0.minutes == nil }.map { alarm in
             (alarm.id, rowSongs(alarm).reduce(0) { $0 + $1.duration })
-        }))
+        }, uniquingKeysWith: { first, _ in first }))
     }
 }
