@@ -698,6 +698,31 @@ public final class Controller {
         alarmsChanged()
     }
 
+    // MARK: What the screens say
+
+    /// The row this music is for: an hour while it has the music, or the alarm that started it, by the time it went
+    /// off, so it survives a relaunch. A one-off is gone once fired, so it has none.
+    public var soundingRow: Alarm? {
+        guard status != .idle else { return nil }
+        if let hourPlaying { return alarms.first { $0.id == hourPlaying } }
+        guard fromAlarm, let alarmDue else { return nil }
+        return alarms.first { !$0.whileHere && $0.lastFired == alarmDue }
+    }
+
+    /// In a gap, paused or not. Like the gain these change with the ticks and aren't observed, so views poll them.
+    public var inSilence: Bool { machine.restRemaining != nil }
+    /// An alarm is still coming up to its volume.
+    public var rising: Bool { machine.rise != nil }
+    /// The sleep timer has started bringing it down.
+    public var easing: Bool {
+        guard case .timer(let left, let fade)? = machine.sleep else { return false }
+        return left < fade
+    }
+    /// A piece is held up by a device that won't start: the status says playing, the speakers say otherwise.
+    public var waitingForDevice: Bool { retrying != nil }
+    /// The album or playlist this piece came from; nil for the shuffler's pick or a mix of albums.
+    public var playingFrom: String? { status == .idle ? nil : currentSource }
+
     // MARK: Hours
 
     /// The alarm that plays while you're at the Mac whose collection is playing; nil once anything else is played.
@@ -710,6 +735,7 @@ public final class Controller {
     /// The row whose part the next piece to start uses up, and the time it's for.
     @ObservationIgnored private var partDue: (id: Alarm.ID, time: Date)?
     @ObservationIgnored private var lastHourCheck = Date.distantPast
+    @ObservationIgnored private var currentSource: String?
     /// The stop after this piece is the hour's, not yours, so whatever you play next isn't cut short by it.
     @ObservationIgnored private var hourEnding = false
     /// Reads the Mac for a reason to wait; tests put their own in.
@@ -987,6 +1013,8 @@ public final class Controller {
         var elapsed: Double?
         var restLeft: Double?
         var source: String?
+        /// Where the piece came from, gaps of its own or not. `source` is only for those that have them.
+        var playingFrom: String?
         var upNext: [Entry]
         /// The hour this was playing for, if any.
         var hour: UUID?
@@ -1028,6 +1056,7 @@ public final class Controller {
         state.hour = hourPlaying
         (state.sleep, state.rise, state.hourEnding, state.paused) = (machine.sleep, machine.rise, hourEnding, machine.paused && resuming == nil && !tryingOverSleep)
         state.alarmDue = alarmDue
+        state.playingFrom = currentSource
         (state.ownVolume, state.rowVolume) = (ownVolume, rowVolume)
         do {
             try JSONEncoder().encode(state).write(to: url, options: .atomic)
@@ -1067,6 +1096,7 @@ public final class Controller {
         }
         hourEnding = state.hourEnding ?? false
         useAlbumSettings(for: state.source)
+        currentSource = state.playingFrom ?? state.source
         self.file = file
         if let path = state.path, let fileURL {
             current = catalog.songsByID[path]
@@ -1197,6 +1227,7 @@ public final class Controller {
         save(playlists[index])
         repointAlarms(from: id, to: url.path)
         upNext = upNext.map { $0.source == id ? QueueEntry(path: $0.path, source: url.path) : $0 }
+        if currentSource == id { currentSource = url.path }
         if playingAlbum == id {
             playingAlbum = url.path
         }
@@ -1379,10 +1410,12 @@ public final class Controller {
         guard !upNext.isEmpty || refillHour() else {
             useAlbumSettings(for: nil)
             origin = nil
+            currentSource = nil
             return nil
         }
         let entry = upNext.removeFirst()
         useAlbumSettings(for: entry.source)
+        currentSource = entry.source
         shuffler.note(entry.path)
         return entry.path
     }

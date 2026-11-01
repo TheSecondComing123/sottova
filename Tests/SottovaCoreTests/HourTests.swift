@@ -254,6 +254,14 @@ struct HourTests {
         #expect(c.alarms.isEmpty)
     }
 
+    @Test func theScreensCanSeeTheHourThatHasTheMusic() async throws {
+        let (c, album) = try await controller()
+        let row = open(c, album)
+        #expect(c.soundingRow == nil)
+        c.checkHours()
+        #expect(c.soundingRow?.id == row.id)
+    }
+
     @Test func anHourInOrderPlaysInOrder() async throws {
         let (c, album) = try await controller(songs: 3)
         var alarm = open(c, album)

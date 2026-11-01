@@ -1093,4 +1093,71 @@ struct AlarmRunTests {
         #expect(c.status == .idle)
         #expect(c.alarms.first?.lastFired == nil)
     }
+
+    @Test func theScreensCanSeeTheAlarmThatsRising() async throws {
+        let (c, album, _) = try await controller()
+        let row = alarm(album)
+        c.addAlarm(row)
+        #expect(c.soundingRow == nil && !c.rising && c.playingFrom == nil)
+        c.fire(row.id, due: .now)
+        #expect(c.soundingRow?.id == row.id)
+        #expect(c.rising)
+        #expect(c.playingFrom == album.id)
+        c.play(album.songs)
+        #expect(c.soundingRow == nil)
+    }
+
+    @Test func theAlarmsRowAndWhereItCameFromComeBackAfterARelaunch() async throws {
+        let storage = try temp()
+        let (first, album, _) = try await controller(storage: storage)
+        let row = alarm(album)
+        first.addAlarm(row)
+        first.fire(row.id, due: .now)
+        first.advance(0.2)
+        first.quitting()
+        let (second, _, _) = try await controller(storage: storage)
+        second.loadAlarms()
+        second.restoreResume()
+        #expect(second.soundingRow?.id == row.id)
+        #expect(second.playingFrom == album.id)
+    }
+
+    @Test func silenceCountsPausedOrNotAndEasingOnlyOnceItStarts() async throws {
+        let (c, album, _) = try await controller(songs: 2)
+        var settings = c.settings
+        (settings.gapMin, settings.gapMax) = (5, 5)
+        c.settings = settings
+        c.play(album.songs)
+        #expect(!c.inSilence)
+        for _ in 0..<300 where !c.inSilence { c.advance(0.01) }
+        #expect(c.inSilence && c.status == .resting)
+        c.toggle()
+        #expect(c.inSilence && c.status == .paused)
+        c.play(album.songs)
+        c.sleep(minutes: 30)
+        #expect(!c.easing)
+        c.sleep(minutes: 1)
+        #expect(!c.easing)
+        c.advance(0.5)
+        #expect(c.easing)
+    }
+
+    @Test func theScreensCanSeeAPieceHeldUpByTheDevice() async throws {
+        let (c, album, _) = try await controller()
+        c.startEngine = { _ in throw CocoaError(.featureUnsupported) }
+        c.retryWait = .seconds(60)
+        c.play(album.songs)
+        #expect(c.waitingForDevice)
+        #expect(c.status == .playing)
+        c.startEngine = { try $0.start() }
+        c.play(album.songs)
+        #expect(!c.waitingForDevice)
+    }
+
+    @Test func aMixOfAlbumsAndTheShufflersPickComeFromNowhere() async throws {
+        let (c, album, _) = try await controller()
+        let other = try #require(c.catalog.albums.first { $0.id != album.id })
+        c.play(album.songs + other.songs)
+        #expect(c.playingFrom == nil)
+    }
 }
