@@ -78,8 +78,8 @@ struct SottovaApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 800)
         #if NEWLOOK
-        // with a scene marked below, one left automatic doesn't open
-        .defaultLaunchBehavior(.presented)
+        // the keepalive opens it, as whether this is a login isn't known yet when scenes are read
+        .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
         #endif
         // otherwise every sottova:// link opens another window
@@ -134,6 +134,9 @@ private struct Keepalive: View {
             .onAppear {
                 AppDelegate.showMain = { openWindow(id: "main"); NSApp.activate() }
                 AppDelegate.showSettings = { openSettings(); NSApp.activate() }
+                // no activate: the guard's `open -g` stays in the background
+                AppDelegate.openAtLaunch = { openWindow(id: "main") }
+                AppDelegate.launchWindow()
             }
     }
 
@@ -162,10 +165,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var showMain: () -> Void = {}
     @MainActor static var showSettings: () -> Void = {}
     @MainActor static var router: Router?
+    @MainActor static var openAtLaunch: (() -> Void)?
+    /// Set once launching is done; the launch event isn't readable any sooner.
+    @MainActor private static var atLogin: Bool?
+
+    /// A login starts in the menu bar, as Settings says. Needs both the keepalive and the launch event, in either order.
+    @MainActor static func launchWindow() {
+        guard let atLogin, let open = openAtLaunch else { return }
+        openAtLaunch = nil
+        if !atLogin { open() }
+    }
+
     @MainActor static var statusMenu: StatusMenu?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let event = NSAppleEventManager.shared().currentAppleEvent
         MainActor.assumeIsolated {
+            Self.atLogin = event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+            Self.launchWindow()
             if let controller = Self.controller, let router = Self.router { Self.statusMenu = StatusMenu(controller: controller, router: router) }
         }
     }
