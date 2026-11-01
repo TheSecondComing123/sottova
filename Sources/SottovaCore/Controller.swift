@@ -97,6 +97,10 @@ public final class Controller {
     static let resumeWithin: TimeInterval = 60 * 60
     /// An alarm started what's playing: when its music ends it stops, with nobody there to press stop.
     @ObservationIgnored private var fromAlarm = false
+    /// When that alarm was for.
+    @ObservationIgnored private var alarmDue: Date?
+    /// The Mac went to sleep with an alarm still after the device: the wake decides whether it goes on.
+    @ObservationIgnored private var tryingOverSleep = false
     /// Off when alarms.json can't be read or moved, so saving doesn't overwrite it.
     @ObservationIgnored private var alarmsWritable = true
     @ObservationIgnored private var alarmsLoaded = false
@@ -353,6 +357,7 @@ public final class Controller {
         releaseHour()
         giveVolumeBack()
         fromAlarm = row != nil
+        alarmDue = row?.time
         partDue = row
         origin = Origin(key: Origin.key(of: songs, source: source), shuffled: shuffled)
         let source = source ?? Self.source(of: songs)
@@ -970,6 +975,7 @@ public final class Controller {
         /// What it was started from, so that page's play button still knows.
         var origin: Origin?
         var fromAlarm: Bool?
+        var alarmDue: Date?
         var sleep: Machine.Sleep?
         var rise: Double?
         var hourEnding: Bool?
@@ -1002,7 +1008,8 @@ public final class Controller {
         }
         state.upNext = upNext.map { ResumeState.Entry(path: $0.path, source: $0.source) }
         state.hour = hourPlaying
-        (state.sleep, state.rise, state.hourEnding, state.paused) = (machine.sleep, machine.rise, hourEnding, machine.paused && resuming == nil)
+        (state.sleep, state.rise, state.hourEnding, state.paused) = (machine.sleep, machine.rise, hourEnding, machine.paused && resuming == nil && !tryingOverSleep)
+        state.alarmDue = alarmDue
         (state.ownVolume, state.rowVolume) = (ownVolume, rowVolume)
         do {
             try JSONEncoder().encode(state).write(to: url, options: .atomic)
@@ -1028,6 +1035,7 @@ public final class Controller {
         upNext = state.upNext.map { QueueEntry(path: $0.path, source: $0.source) }
         origin = state.origin
         fromAlarm = state.fromAlarm ?? false
+        alarmDue = state.alarmDue
         // still the hour's while its window is open; past it, the next check ends it like any closing window
         hourPlaying = state.hour
         if state.paused != true, let hour = alarms.first(where: { $0.id == state.hour }), hour.lastFired != nil,
@@ -1531,8 +1539,18 @@ public final class Controller {
         }
     }
 
+    /// An alarm that hasn't got its sound yet, or has lost it, and is still after the device.
+    private var alarmTrying: Bool {
+        fromAlarm && (resuming != nil || retrying != nil || tryingOverSleep)
+    }
+
     public func systemWillSleep(now: Date = .now) {
+        tryingOverSleep = alarmTrying
         endResuming()
+        if tryingOverSleep {
+            command(.pause)
+            return
+        }
         guard status == .playing || status == .resting else { return }
         // closing the lid with a sleep timer set means stop, not resume in the morning
         if machine.sleep != nil {
@@ -1546,6 +1564,19 @@ public final class Controller {
     public func systemDidWake(now: Date = .now) {
         // a drive or a share is often back by now, and coming back doesn't always tell the watcher
         if library.entries.values.contains(where: { $0.unreachable == true }) { rescan() }
+        if tryingOverSleep {
+            tryingOverSleep = false
+            guard fromAlarm, status == .paused else { return }
+            if let alarmDue, now.timeIntervalSince(alarmDue) <= Self.alarmLateness {
+                // failing again here starts the trying again
+                command(.resume)
+            } else {
+                if case .loading = machine.phase { send(.stop) }
+                problem = "the mac slept past the alarm's time while it waited for audio output, so it gave up"
+                playbackProblem = problem
+            }
+            return
+        }
         guard let since = pausedForSleep else { return }
         pausedForSleep = nil
         if now.timeIntervalSince(since) < Self.resumeWithin { command(.resume) }
@@ -1634,6 +1665,8 @@ public final class Controller {
             engineFailures = 0
             hourEnding = false
             fromAlarm = false
+            alarmDue = nil
+            tryingOverSleep = false
             partDue = nil
             giveVolumeBack()
         }

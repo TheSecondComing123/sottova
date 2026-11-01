@@ -931,4 +931,86 @@ struct AlarmRunTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(try published(storage) == "paused")
     }
+
+    /// An alarm whose device went away mid-piece, trying to go on.
+    private func tryingToGoOn(_ album: Album, _ c: Controller, _ engine: AVAudioEngine, due: Date) async throws {
+        c.retryWait = .milliseconds(5)
+        let row = alarm(album)
+        c.addAlarm(row)
+        c.fire(row.id, due: due)
+        failing(c)
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
+        for _ in 0..<50 where c.status != .paused { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(c.status == .paused)
+    }
+
+    @Test func aSleepDoesntEndAnAlarmsTryingWhileItsStillOnTime() async throws {
+        let (c, album, engine) = try await controller()
+        let due = Date.now
+        try await tryingToGoOn(album, c, engine, due: due)
+        c.systemWillSleep(now: due + 60)
+        // the device still isn't there at the wake, and comes back a few tries later
+        failing(c, tries: 5)
+        c.systemDidWake(now: due + 240)
+        for _ in 0..<400 where c.status != .playing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(c.status == .playing)
+    }
+
+    @Test func aWakePastAnAlarmsTimeLeavesItPausedAndSaysSo() async throws {
+        let (c, album, engine) = try await controller()
+        let due = Date.now
+        try await tryingToGoOn(album, c, engine, due: due)
+        c.systemWillSleep(now: due + 60)
+        c.startEngine = { try $0.start() }
+        c.systemDidWake(now: due + Controller.alarmLateness + 1)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(c.status == .paused)
+        #expect(c.problem?.contains("slept past") == true)
+    }
+
+    /// Still on its first piece, and with a length of its own: a sleep timer's lid-closed stop isn't for this.
+    @Test func aSleepDoesntEndAnAlarmWaitingToStart() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(5)
+        var row = alarm(album)
+        row.minutes = 60
+        c.addAlarm(row)
+        failing(c)
+        let due = Date.now
+        c.fire(row.id, due: due)
+        c.systemWillSleep(now: due + 60)
+        #expect(c.status == .paused)
+        c.startEngine = { try $0.start() }
+        c.systemDidWake(now: due + 240)
+        for _ in 0..<400 where c.machine.phase == .loading || c.status != .playing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(c.status == .playing)
+        #expect(c.current != nil)
+    }
+
+    @Test func aWakePastAnAlarmsTimeStopsOneThatNeverStarted() async throws {
+        let (c, album, _) = try await controller()
+        c.retryWait = .milliseconds(5)
+        let row = alarm(album)
+        c.addAlarm(row)
+        failing(c)
+        let due = Date.now
+        c.fire(row.id, due: due)
+        c.systemWillSleep(now: due + 60)
+        c.systemDidWake(now: due + Controller.alarmLateness + 1)
+        #expect(c.status == .idle)
+        #expect(c.problem?.contains("slept past") == true)
+    }
+
+    /// The Mac restarted in that sleep: it's still the alarm's, and still knows when it was due.
+    @Test func anAlarmTryingOverASleepGoesOnAfterACrash() async throws {
+        let storage = try temp()
+        let (first, album, engine) = try await controller(storage: storage)
+        let due = Date.now
+        try await tryingToGoOn(album, first, engine, due: due)
+        first.systemWillSleep(now: due + 60)
+        let resume = try JSONDecoder().decode(Controller.ResumeState.self, from: Data(contentsOf: storage.appending(path: "resume.json")))
+        #expect(resume.alarmDue == due)
+        let again = try await relaunched(storage)
+        #expect(again.status == .playing)
+    }
 }
