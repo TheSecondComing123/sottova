@@ -42,14 +42,18 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         sub.font = .systemFont(ofSize: 13)
         sub.textColor = .secondaryLabelColor
         sub.isHidden = screen.sub.isEmpty
-        let stack = NSStackView(views: [title, sub])
+        let problem = NSTextField(wrappingLabelWithString: controller.problem ?? "")
+        problem.font = .systemFont(ofSize: 13)
+        problem.isHidden = controller.problem == nil
+        let stack = NSStackView(views: [title, sub, problem])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 0
         stack.edgeInsets = NSEdgeInsets(top: 2, left: 16, bottom: 2, right: 12)
         let width: CGFloat = 300
-        for label in [title, sub] { label.widthAnchor.constraint(lessThanOrEqualToConstant: width - 28).isActive = true }
+        for label in [title, sub, problem] { label.widthAnchor.constraint(lessThanOrEqualToConstant: width - 28).isActive = true }
         sub.preferredMaxLayoutWidth = width - 28
+        problem.preferredMaxLayoutWidth = width - 28
         stack.frame.size = NSSize(width: width, height: stack.fittingSize.height)
         let item = NSMenuItem()
         item.view = stack

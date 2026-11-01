@@ -395,6 +395,7 @@ struct YourCollection: View {
                 .accessibilityLabel("collection name")
                 .onSubmit(commitRename)
                 .onExitCommand(perform: endRename)
+                .onDisappear { router.typing = false }
                 .onChange(of: typing) { _, focused in
                     router.typing = focused
                     if !focused { commitRename() }
@@ -479,6 +480,7 @@ private struct PartHeading: View {
                     .focused($typing)
                     .onSubmit(commit)
                     .onExitCommand(perform: end)
+                    .onDisappear { router.typing = false }
                     .onChange(of: typing) { _, focused in
                         router.typing = focused
                         if !focused { commit() }
