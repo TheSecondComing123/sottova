@@ -22,6 +22,10 @@ struct SottovaApp: App {
     @State private var router = Router()
 
     init() {
+        #if NEWLOOK
+        // a launch with saved state, even an old build's, presents only what was saved: no keepalive, so nothing reopens
+        UserDefaults.standard.register(defaults: ["ApplePersistenceIgnoreState": true])
+        #endif
         let controller = controller
         AppDelegate.controller = controller
         Artwork.store = controller.artwork
@@ -68,6 +72,11 @@ struct SottovaApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 800)
+        #if NEWLOOK
+        // with a scene marked below, one left automatic doesn't open
+        .defaultLaunchBehavior(.presented)
+        .restorationBehavior(.disabled)
+        #endif
         // otherwise every sottova:// link opens another window
         .handlesExternalEvents(matching: [])
         .commands { SottovaCommands(controller: controller, router: router) }
@@ -92,12 +101,67 @@ struct SottovaApp: App {
                 #endif
         }
         .windowResizability(.contentSize)
+        #if NEWLOOK
+        .restorationBehavior(.disabled)
+        #endif
+
+        #if NEWLOOK
+        // a suppressed launch runs no views in the main window, so something else has to hold what can reopen it
+        Window("", id: "keepalive") { Keepalive() }
+            .windowStyle(.plain)
+            .defaultLaunchBehavior(.presented)
+            .restorationBehavior(.disabled)
+            .commandsRemoved()
+        #endif
     }
 }
+
+#if NEWLOOK
+private struct Keepalive: View {
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        HidesWindow()
+            .frame(width: 1, height: 1)
+            .onAppear {
+                AppDelegate.showMain = { openWindow(id: "main"); NSApp.activate() }
+                AppDelegate.showSettings = { openSettings(); NSApp.activate() }
+            }
+    }
+
+    private struct HidesWindow: NSViewRepresentable {
+        func makeNSView(context: Context) -> Hider { Hider() }
+        func updateNSView(_ view: Hider, context: Context) {}
+    }
+
+    private final class Hider: NSView {
+        override func viewDidMoveToWindow() {
+            guard let window else { return }
+            window.alphaValue = 0
+            window.ignoresMouseEvents = true
+            window.isExcludedFromWindowsMenu = true
+            DispatchQueue.main.async { window.orderOut(nil) }
+        }
+    }
+}
+#endif
 
 /// sottova:// links arrive here; SwiftUI's onOpenURL needs a window scene, and the panel isn't one until opened.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var controller: Controller?
+    #if NEWLOOK
+    /// Work from anywhere, with or without a window open, unlike SwiftUI's environment actions.
+    @MainActor static var showMain: () -> Void = {}
+    @MainActor static var showSettings: () -> Void = {}
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ application: NSApplication) -> Bool { false }
+
+    func applicationShouldHandleReopen(_ application: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows { MainActor.assumeIsolated { Self.showMain() } }
+        return false
+    }
+    #endif
 
     func application(_ application: NSApplication, open urls: [URL]) {
         urls.forEach { Self.controller?.open($0) }
