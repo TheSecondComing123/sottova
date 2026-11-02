@@ -15,7 +15,8 @@ struct ShotReady: ViewModifier {
             if defaults.string(forKey: "shotAppearance") == "light" { NSApp.appearance = NSAppearance(named: .aqua) }
             try? await controller.shotEnter(defaults.string(forKey: "shotState") ?? "idle",
                                             covers: defaults.string(forKey: "shotCovers").map { URL(filePath: $0) })
-            // before the route: resized during a page's transition, the window's width runs away and AppKit throws
+            // before the route: resized in the same turn as a withAnimation, SwiftUI's updateAnimatedWindowSize runs the
+            // window's width away until AppKit throws. Nothing but this harness resizes from code
             let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
             let window = NSApp.windows.first { $0.title == "Sottova" }
             let height = defaults.object(forKey: "shotHeight") != nil ? defaults.double(forKey: "shotHeight") : 800
