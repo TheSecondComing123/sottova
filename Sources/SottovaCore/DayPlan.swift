@@ -152,7 +152,7 @@ public struct DayPlan: Sendable {
         let foot = { (next: (alarm: Alarm, at: Date)) in wakeScheduled && !next.alarm.whileHere ? "The Mac will wake for it." : nil }
         // the sidebar reads the same windows, so this can't say nothing's on while it says "till 9"
         if let open = alarms.filter(\.on).compactMap({ alarm in alarm.window(containing: now, calendar: calendar).map { (alarm.name, $0.end) } }).max(by: { $0.1 < $1.1 }) {
-            let next = following(after: open.1 - 1)
+            let next = following(after: now)
             return Quiet(headline: open.0, line: "till \(time(open.1)), not playing", foot: next.flatMap(foot), next: next.map(nextLine))
         }
         guard let next = following(after: now) else {

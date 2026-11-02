@@ -65,6 +65,11 @@ struct DayPlanTests {
         let after = plan([lauds, compline], date(2, 20, 30)).quiet(wakeScheduled: true)
         #expect(after.next == "Lauds at 7:02 tomorrow")
         #expect(after.foot == "The Mac will wake for it.")
+        // a row starting inside the open hour comes before one after it
+        #expect(plan([overworld, compline, lauds], date(2, 15, 30)).quiet().next == "Compline at 8")
+        var inside = compline
+        inside.hour = 17
+        #expect(plan([overworld, inside], date(2, 15, 30)).quiet().next == "Compline at 5")
         // an hour that's off is no window, and past it the next row has the page
         var off = compline
         off.on = false

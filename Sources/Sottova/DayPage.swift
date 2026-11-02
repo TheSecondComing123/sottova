@@ -156,7 +156,7 @@ struct DayPage: View {
             ForEach(rail.marks) { mark in
                 let height = mark.block.upperBound - mark.block.lowerBound
                 DayRow(alarm: mark.alarm, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
-                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines((pieces[mark.id] ?? []).map(\.text), width: blockWidth - 63)), sounding: sounding == mark.id)
+                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines((pieces[mark.id] ?? []).map(\.text), width: blockWidth - 67)), sounding: sounding == mark.id)
                     .frame(height: height)
                     .padding(.leading, DayLayout.blockLeft)
                     .offset(y: mark.block.lowerBound)
