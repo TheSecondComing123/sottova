@@ -4,61 +4,87 @@
 
 <h1 align="center">sottova</h1>
 
-<p align="center">a music player for macOS that leaves silence between the songs.</p>
-
 <p align="center">
-  <a href="#build-it">build it</a> ·
-  <a href="#scripting">scripting</a> ·
-  <a href="#what-it-changes-on-your-mac">what it changes on your mac</a> ·
-  <a href="LICENSE">GPL-3.0</a>
+  a soundtrack for your mac.<br>
+  your own music, on a schedule, with real silence between the songs.
 </p>
 
-![sottova's home page: the piece that's playing with its fade drawn under the title, then recently played and albums](docs/screenshot.png)
+<p align="center">
+  <a href="#build-it"><b>build it</b></a> ·
+  <a href="#scripting"><b>scripting</b></a> ·
+  <a href="#what-it-changes-on-your-mac"><b>what it changes on your mac</b></a> ·
+  <a href="LICENSE"><b>GPL-3.0</b></a>
+</p>
 
-sottova plays your own music the way Minecraft plays its soundtrack. each track rises out of silence, falls back into it, and then there's quiet for a while before the next one. you pick how long the quiet lasts.
+![sottova's now page: a large painting as the cover, with the song's title beside it](docs/now.png)
 
-silence is the point, not a bug. a playlist that never stops turns into wallpaper. a track that shows up after ten minutes of nothing gets heard.
+## what it is
 
-it's a full window for browsing (songs, albums, artists, composers, playlists) and a small panel in the menu bar for when you only want the music.
+sottova plays your music the way Minecraft plays its soundtrack. a song rises out of silence, falls back into it, and then nothing plays for a while. you choose how long.
 
-- **requires** macOS 26 Tahoe or later
-- **plays** your own files only. no streaming, no account
+a playlist that never stops turns into wallpaper. a song that arrives after ten minutes of quiet gets heard.
 
-## what it does
+you can also give music a place in your day: a collection that wakes you at 7:02, one that plays at your desk in the afternoon, one that winds down at 8.
 
-- plays any folders of local music (mp3, aac, alac, flac, wav, aiff and ogg) and watches them for new files
-- fades every track in from silence and back out, then waits a random gap between your shortest and longest
-- levels every track to the same loudness (−18 LUFS, peaks under −1 dBTP), measured once per file with [libebur128](https://github.com/jiixyj/libebur128)
-- shuffles without repeats: every track plays once before any repeats, and never one of the last 10
-- keeps the Mac awake during gaps (the audio engine is off then, so nothing else would), pauses on sleep and resumes after
-- shows up in Now Playing, and the media keys and the scrubber work
-- gives an album or a playlist its own gaps: Compline plays with ten-minute silences, then hands back to yours
-- playlists are `.m3u8` files in `~/Music/Sottova Playlists`, so other players can open them; folders of mixed performers can become playlists in one click
-- a queue you can reorder, a sleep timer that eases the music down over its last three minutes, and click-to-seek that fades back in instead of starting loud
-- reopens paused where you left off, in the piece or in the silence
-- composer pages list each work in catalog order with every recording of it
-- covers from a file or from public-domain paintings (the Met, the Art Institute of Chicago, Cleveland), credited inside the jpeg
-- alarms: an album or playlist starts itself at a time you set, once or on chosen days, at its own volume
-- trim: drag where a track really starts and ends to skip a spoken intro or applause; the file isn't touched
-- three palettes: Monochrome, Catppuccin and Gruvbox, in light and dark
+- **needs** macOS 26 Tahoe or later
+- **plays** your own files, with no streaming and no account
+- **stays** on your Mac, with no analytics
 
-## presets
+## your day
+
+![your day: three rows on a timeline, the one playing now shown with a wide painting](docs/day.png)
+
+- **set a time.** a collection starts itself once or on the days you pick, at its own volume, and can stop after a while
+- **it wakes the Mac.** sottova schedules a system wake two minutes before each timed row
+- **or only while you're here.** a row can play just while you're at the Mac, and wait while other audio is playing or your calendar has something on
+- **it moves on.** a collection split into parts can play the next part each time
+
+## the silence
 
 | preset | gap | fade in / out |
 | --- | --- | --- |
 | Minecraft | 10–20 min | 6 s / 8 s |
 | Sparse | 3–8 min | 6 s / 8 s |
 | Short | 30 s–2 min | 4 s / 6 s |
-| Continuous | none, 4 s equal-power crossfade | 3 s / 3 s |
+| Breath | 2–15 s | 3 s / 4 s |
+| Continuous | none, 4 s crossfade | 3 s / 3 s |
 
-Minecraft's own delay between overworld tracks is 10 to 20 minutes. change the gaps or fades and the preset becomes Custom; loudness is separate (−14, −18 or −23 LUFS).
+Minecraft's own delay between overworld tracks is 10 to 20 minutes. set your own gaps and fades, save them as a preset, or give one album or collection its own silence.
+
+## your library
+
+![a collection page: a painting, play and shuffle buttons, and songs grouped into named parts](docs/collection.png)
+
+- plays folders of mp3, aac, alac, flac, wav, aiff and ogg, and watches them for new files
+- levels every song to the same loudness (−18 LUFS by default, peaks under −1 dBTP), measured once per file
+- shuffles without repeats: everything plays once before anything comes round again
+- collections are `.m3u8` files in `~/Music/Sottova Playlists`, so other players can open them, and you can split them into named parts
+- covers from a file, or from public-domain paintings at the Met, the Art Institute of Chicago and Cleveland
+- a queue, a sleep timer that eases the music down, and seeking that fades back in instead of starting loud
+- trim where a song really starts and ends to skip a spoken intro or applause, without touching the file
+- Now Playing, media keys and a menu bar menu all work
+- reopens where you left off, in the song or in the silence
+
+## free music
+
+![the free music page: ten albums with their artist, license and size, each with a download button](docs/free.png)
+
+no music yet? download a set of openly licensed albums in one click, like Kimiko Ishizaka's Open Goldberg Variations (CC0). each one lands in `~/Music/Sottova Library` as plain mp3s with its cover and a `credits.txt`.
+
+## make it yours
+
+![compline in the gruvbox light palette](docs/light.png)
+
+Monochrome, Catppuccin, Everforest, Flexoki, Gruvbox, Kanagawa, Nord, Rosé Pine and Tokyo Night, in light or dark where the palette has both.
 
 ## build it
 
-there's no signed release yet, so build it yourself. it needs Xcode 26.
+there's no signed release yet, so build it yourself. you need Xcode 26.
 
 ```sh
-scripts/run.sh        # debug build, opens from the menu bar
+git clone https://github.com/TheSecondComing123/sottova.git
+cd sottova
+scripts/run.sh        # debug build, then opens it
 scripts/release.sh    # release zip in .build/release
 ```
 
@@ -94,30 +120,30 @@ sketchybar --add event sottova_status com.alanbagel.sottova.status \
            --subscribe sottova sottova_status
 ```
 
-## files
+## your files
 
 everything sits in `~/Library/Application Support/Sottova`, as plain files:
 
 - `library.json`: watched folders and the loudness of every file
 - `profile.json`: your settings, plus the albums that have their own gaps
 - `resume.json`: where playback was when you quit
-- `plays.jsonl`: one line per track played, with the gap after it
-- `alarms.json`: your alarms
-- `trims.json`: where each trimmed track starts and ends
+- `plays.jsonl`: one line per song played, with the gap after it
+- `alarms.json`: your rows
+- `trims.json`: where each trimmed song starts and ends
 - `status.json`: the current state
 
-nothing leaves your Mac. there's no account and no analytics. the only network access is the painting search, and only while that sheet is open.
+sottova only goes online for the painting search while that sheet is open, and for free music when you ask for a download (archive.org only). calendar access is optional, and it only looks at what's on right now.
 
 ## what it changes on your Mac
 
-alarms need the Mac awake, so sottova schedules a system wake two minutes before each one with `pmset`. scheduling a wake needs root. the first time you save an alarm, sottova asks for your password once and adds this rule:
+waking the Mac needs root, because sottova schedules wakes with `pmset`. the first time you save a timed row, it asks for your password once and adds this rule:
 
 ```
 /etc/sudoers.d/sottova-2
 <you> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron [0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9] [0-9][0-9]?[0-9][0-9]?[0-9][0-9]
 ```
 
-it lets sottova add a wake at a date and time, and nothing else, without asking again. it's checked with `visudo` before it goes in. wakes are kept two weeks ahead, topped up at launch and whenever the Mac wakes. cancel the password prompt and alarms only play when the Mac is already awake.
+it lets sottova add a wake at a date and time, and nothing else, without asking again. it's checked with `visudo` before it goes in. wakes are kept two weeks ahead, topped up at launch and whenever the Mac wakes. cancel the prompt and rows only play when the Mac is already awake.
 
 to undo it:
 
@@ -133,7 +159,9 @@ sottova is a music player. it makes no claims about sleep, focus, stress or heal
 
 ## license
 
-copyright (C) 2026 TheSecondComing123. GPL-3.0, see `LICENSE`.
+copyright (C) 2026 TheSecondComing123. GPL-3.0, see [`LICENSE`](LICENSE).
 
 - [libebur128](https://github.com/jiixyj/libebur128) in `Sources/CEbur128`: MIT, see its `LICENSE`
 - [Phosphor](https://phosphoricons.com) icons in `Support/Icons`: MIT, see its `LICENSE`
+- palette colors in `Support/Themes` come from their projects; each file names its source
+- free music downloads keep their own licenses, listed on the page and in each `credits.txt`
