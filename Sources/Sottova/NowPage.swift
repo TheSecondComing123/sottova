@@ -56,14 +56,14 @@ struct NowPage: View {
             ZStack(alignment: .topLeading) {
                 NowCover(motion: motion, layout: layout, shown: shown, album: controller.current?.album, dragging: router.droppingMusic)
                 VStack(alignment: bare ? .center : .leading, spacing: 12) {
-                    NowText(motion: motion, width: width, centered: bare, dragging: router.droppingMusic, act: act,
+                    NowText(motion: motion, width: width, size: bare ? Role.title.size : layout.titleSize(motion.screen.title, shown: shown), centered: bare, dragging: router.droppingMusic, act: act,
                             choose: controller.chooseFolders, freeMusic: { navigate(.shelf) })
                     foot
                 }
                 .multilineTextAlignment(bare ? .center : .leading)
-                .frame(width: width, height: bare ? layout.height : under ? layout.height - bottom - 16 : bottom + 5,
-                       alignment: bare ? .center : under ? .topLeading : .bottomLeading)
-                .offset(x: bare ? (layout.width - width) / 2 : layout.textLeft(shown), y: under ? bottom + 16 : 0)
+                .frame(width: width, height: bare ? layout.height : under ? layout.height - bottom - 16 : shown,
+                       alignment: bare ? .center : under ? .topLeading : .leading)
+                .offset(x: bare ? (layout.width - width) / 2 : layout.textLeft(shown), y: under ? bottom + 16 : bare ? 0 : bottom - shown)
             }
         }
         .task(id: key) { await follow() }
@@ -270,6 +270,7 @@ private struct NowCover: View {
 private struct NowText: View {
     let motion: NowMotion
     let width: CGFloat
+    let size: CGFloat
     let centered: Bool
     let dragging: Bool
     let act: (NowScreen.Action) -> Void
@@ -282,10 +283,12 @@ private struct NowText: View {
         VStack(alignment: centered ? .center : .leading, spacing: 0) {
             let title = firstRun && dragging ? "Let go to add it" : screen.title
             Text(title)
-                .role(.title)
+                .font(.system(size: size, weight: Role.title.weight))
+                .lineHeight(.exact(points: (size * Role.title.line / Role.title.size).rounded()))
+                .kerning(-0.011 * size)
                 .foregroundStyle(Theme.text)
                 .lineLimit(4)
-                .frame(width: min(width, Balance.width(title, in: width)), alignment: centered ? .center : .leading)
+                .frame(width: min(width, Balance.width(title, in: width, size: size)), alignment: centered ? .center : .leading)
             if firstRun || !screen.sub.isEmpty {
                 ZStack(alignment: .topLeading) {
                     if firstRun {
@@ -330,10 +333,10 @@ private struct NowText: View {
 private enum Balance {
     private static var cache: [String: CGFloat] = [:]
 
-    static func width(_ text: String, in width: CGFloat) -> CGFloat {
-        let key = "\(width) \(text)"
+    static func width(_ text: String, in width: CGFloat, size: CGFloat) -> CGFloat {
+        let key = "\(width) \(size) \(text)"
         if let hit = cache[key] { return hit }
-        let attributed = NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: Role.title.size, weight: .medium), .kern: -0.352])
+        let attributed = NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: size, weight: .medium), .kern: -0.011 * size])
         let height = { (w: CGFloat) in attributed.boundingRect(with: CGSize(width: w, height: 10_000), options: .usesLineFragmentOrigin).height }
         let lines = height(width)
         var (low, high) = (CGFloat(1), width)

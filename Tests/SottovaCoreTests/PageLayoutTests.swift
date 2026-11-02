@@ -113,6 +113,18 @@ struct PageLayoutTests {
         #expect(layout.day.narrow == dayNarrow)
     }
 
+    @Test func aShortTitleGrowsWithTheCoverAndALongOneStillFits() {
+        let now = NowLayout(width: 1000, height: 725)
+        let side = now.side
+        #expect(now.titleSize("Waiting", shown: side) >= 64)
+        let long = "The road we use to travel when we were kids"
+        let size = now.titleSize(long, shown: side)
+        #expect(size < now.titleSize("Waiting", shown: side))
+        #expect(size >= 32)
+        #expect(size * 0.56 * Double(long.count) / now.textWidth(side) <= 4.01 || size == 32)
+        #expect(NowLayout(width: 500, height: 900).titleSize("Waiting", shown: 400) == 32)
+    }
+
     @Test func thresholdsFallWhereThePagesExpect() {
         #expect(PageLayout(windowWidth: 1039, pageHeight: 748).sidebar == 176)
         #expect(PageLayout(windowWidth: 1040, pageHeight: 748).sidebar == 216)

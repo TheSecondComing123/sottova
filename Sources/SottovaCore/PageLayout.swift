@@ -57,6 +57,15 @@ public struct NowLayout: Equatable, Sendable {
     public func textLeft(_ shown: Double) -> Double { stacked ? margin : left(shown) + shown + gap }
     public func textWidth(_ shown: Double) -> Double { stacked ? bareTextWidth : min(456, width - textLeft(shown) - margin) }
     public var bareTextWidth: Double { min(560, width - 2 * margin) }
+
+    /// The title beside a large cover grows with it, as far as its longest word and four lines allow.
+    public func titleSize(_ title: String, shown: Double) -> Double {
+        guard !stacked else { return 32 }
+        let room = textWidth(shown)
+        let word = title.split(separator: " ").map(\.count).max() ?? 1
+        let fit = min(room / (0.6 * Double(word)), room * 4 / (0.56 * Double(max(title.count, 1))))
+        return max(32, min(fit, shown * 0.11, 84)).rounded()
+    }
 }
 
 /// Your day: the rail, with New, Other days and What played beside it or, narrow, around it. The rail takes what they leave.
