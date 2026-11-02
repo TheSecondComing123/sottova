@@ -23,6 +23,9 @@ struct MainWindow: View {
 
             VStack(spacing: 0) {
                 TitleBar(narrow: narrow, toggleQueue: toggleQueue)
+                    // over the page: a ScrollView's backing view reaches up through this band and takes its clicks,
+                    // refusing the one that brings an inactive window forward
+                    .zIndex(1)
                 page.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .overlay(alignment: .top) { Hairline() }
