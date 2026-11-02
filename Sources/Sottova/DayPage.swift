@@ -530,59 +530,6 @@ private struct RowTick: View {
     }
 }
 
-/// One word of a row's line: most open a native menu that fits what they say.
-private struct RowWord: View {
-    let alarm: Alarm
-    let piece: DayPlan.Piece
-    @Environment(Controller.self) private var controller
-
-    var body: some View {
-        switch piece.word {
-        case nil:
-            Text(piece.text).role(.body)
-        case .playNow:
-            ThemeLink(text: piece.text, underlined: true) { controller.playNow(alarm) }.role(.body)
-        case .wake:
-            ThemeLink(text: piece.text, underlined: true) { SystemWake.shared.schedule(for: controller.alarms) }.role(.body)
-        case .days?:
-            WordMenu(text: piece.text, on: alarm.on) { DayWords(alarm: alarm, change: change) }
-        case .kind?:
-            WordMenu(text: piece.text, on: alarm.on) { KindWords(alarm: alarm, change: change) }
-        case .order?:
-            WordMenu(text: piece.text, on: alarm.on) { OrderWords(alarm: alarm, change: change) }
-        case .volume?:
-            WordMenu(text: piece.text, on: alarm.on) { VolumeWords(alarm: alarm, change: change) }
-        case .calendar?:
-            WordMenu(text: piece.text, on: alarm.on) {
-                Toggle("Unless my calendar is busy", isOn: calendarBinding(true))
-                Toggle("Whatever my calendar says", isOn: calendarBinding(false))
-            }
-        case .part?:
-            WordMenu(text: piece.text, on: alarm.on) {
-                let parts = controller.partChoices(for: alarm)
-                ForEach(Array(parts.names.enumerated()), id: \.offset) { index, name in
-                    Toggle(name.prefix(1).uppercased() + name.dropFirst(), isOn: Binding(get: { parts.next == index }, set: { _ in change { $0.nextPart = index } }))
-                }
-                Divider()
-                OrderWords(alarm: alarm, change: change)
-            }
-        }
-    }
-
-    private func calendarBinding(_ heeds: Bool) -> Binding<Bool> {
-        Binding(get: { alarm.heedsCalendar == heeds }, set: { _ in
-            change { $0.heedsCalendar = heeds }
-            if heeds { Task { await Presence.askForCalendars() } }
-        })
-    }
-
-    /// No password from here: a Mac that can't wake says so on the row, with the link that asks.
-    private func change(_ edit: (inout Alarm) -> Void) {
-        controller.changeAlarm(alarm.id, edit)
-        SystemWake.shared.renew(for: controller.alarms)
-    }
-}
-
 /// What a row does, for its right click and its dots: an off attribute with no word of its own stays in reach here.
 @MainActor
 private struct RowActions {
@@ -598,7 +545,7 @@ private struct RowActions {
                 .item(alarm.on ? "Turn off" : "Turn on") { change { $0.on = !alarm.on } },
                 .divider,
                 .item("Starts by itself", checked: !alarm.whileHere) { change { $0.whileHere = false } },
-                .item("While you're at the Mac", checked: alarm.whileHere) { change(Self.whileHere) },
+                .item("While you're at the Mac", checked: alarm.whileHere) { change(KindWords.whileHere) },
                 .item("Unless my calendar is busy", checked: alarm.heedsCalendar) {
                     let on = !alarm.heedsCalendar
                     change { $0.heedsCalendar = on }
@@ -607,12 +554,6 @@ private struct RowActions {
                 .divider,
                 .item("Delete") { controller.removeAlarm(alarm.id) },
             ]
-    }
-
-    /// A stretch of the day has to end.
-    static func whileHere(_ row: inout Alarm) {
-        row.whileHere = true
-        row.minutes = row.minutes ?? 60
     }
 
     private func change(_ edit: (inout Alarm) -> Void) {
@@ -671,122 +612,6 @@ private struct TickMark: Shape {
             path.addLine(to: CGPoint(x: 5, y: 8.8))
             path.addLine(to: CGPoint(x: 9.6, y: 3.2))
         }
-    }
-}
-
-/// One clickable word of a row's line, opening a native menu.
-private struct WordMenu<Content: View>: View {
-    let text: String
-    let on: Bool
-    @ViewBuilder let content: Content
-    @State private var hovering = false
-
-    var body: some View {
-        Menu {
-            content
-        } label: {
-            Text(text)
-                .underline(color: Theme.faint)
-                .role(.body)
-                // a Menu's label doesn't inherit the row's foreground
-                .foregroundStyle(hovering ? Theme.text : on ? Theme.muted : Theme.faint)
-                .background { RoundedRectangle(cornerRadius: 4).fill(hovering ? Theme.selection : .clear).padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: -4)) }
-        }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .onHover { hovering = $0 }
-    }
-}
-
-private struct OrderWords: View {
-    let alarm: Alarm
-    let change: ((inout Alarm) -> Void) -> Void
-
-    var body: some View {
-        Toggle("In order", isOn: Binding(get: { !alarm.shuffled }, set: { _ in change { $0.shuffled = false } }))
-        Toggle("Shuffled", isOn: Binding(get: { alarm.shuffled }, set: { _ in change { $0.shuffled = true } }))
-        Divider()
-        Toggle("One part at a time", isOn: Binding(get: { alarm.rotates }, set: { on in change { $0.rotates = on } }))
-    }
-}
-
-private struct DayWords: View {
-    let alarm: Alarm
-    let change: ((inout Alarm) -> Void) -> Void
-    private let choices: [(String, Set<Int>)] = [("Once", []), ("Weekdays", [2, 3, 4, 5, 6]), ("Weekends", [1, 7]), ("Every day", Set(1...7))]
-
-    var body: some View {
-        ForEach(choices, id: \.0) { name, days in
-            Toggle(name, isOn: Binding(get: { alarm.weekdays == days }, set: { _ in change { $0.weekdays = days } }))
-        }
-    }
-}
-
-private struct KindWords: View {
-    let alarm: Alarm
-    let change: ((inout Alarm) -> Void) -> Void
-
-    var body: some View {
-        Toggle("Starts by itself", isOn: Binding(get: { !alarm.whileHere }, set: { _ in change { $0.whileHere = false } }))
-        Toggle("While you're at the Mac", isOn: Binding(get: { alarm.whileHere }, set: { _ in change(RowActions.whileHere) }))
-    }
-}
-
-private struct VolumeWords: View {
-    let alarm: Alarm
-    let change: ((inout Alarm) -> Void) -> Void
-    private let levels = [0.1, 0.15, 0.25, 0.5, 0.75, 1]
-
-    var body: some View {
-        Toggle("The speaker's volume", isOn: Binding(get: { alarm.volume == nil }, set: { _ in change { $0.volume = nil } }))
-        Divider()
-        ForEach(levels.contains(alarm.volume ?? 0.1) ? levels : (levels + [alarm.volume ?? 0.1]).sorted(), id: \.self) { level in
-            Toggle("\(Int((level * 100).rounded()))%", isOn: Binding(get: { alarm.volume == level }, set: { _ in change { $0.volume = level } }))
-        }
-    }
-}
-
-/// Words left to right, spaced, wrapping between them; one too long for a line wraps inside itself.
-private struct WordFlow: Layout {
-    private static let spacing: CGFloat = 10
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let placed = place(subviews, width: proposal.width ?? .infinity)
-        return CGSize(width: placed.map { $0.x + $0.size.width }.max() ?? 0, height: placed.map { $0.y + $0.size.height }.max() ?? 0)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (subview, spot) in zip(subviews, place(subviews, width: bounds.width)) {
-            subview.place(at: CGPoint(x: bounds.minX + spot.x, y: bounds.minY + spot.y), proposal: ProposedViewSize(spot.size))
-        }
-    }
-
-    private func place(_ subviews: Subviews, width: CGFloat) -> [(x: CGFloat, y: CGFloat, size: CGSize)] {
-        var (x, y, tallest): (CGFloat, CGFloat, CGFloat) = (0, 0, 0)
-        return subviews.map { subview in
-            let size = subview.sizeThatFits(ProposedViewSize(width: width.isFinite ? width : nil, height: nil))
-            if x > 0, x + size.width > width { (x, y, tallest) = (0, y + tallest, 0) }
-            defer {
-                x += size.width + Self.spacing
-                tallest = max(tallest, size.height)
-            }
-            return (x, y, size)
-        }
-    }
-
-    /// How many lines these words take at `width`, for a row to leave them room before it's laid out.
-    static func lines(_ words: [String], width: Double) -> Int {
-        let font = [NSAttributedString.Key.font: NSFont.systemFont(ofSize: Role.body.size)]
-        var (x, lines) = (0.0, 1)
-        for word in words {
-            let size = Double(ceil((word as NSString).size(withAttributes: font).width))
-            if x > 0, x + size > width { (x, lines) = (0, lines + 1) }
-            lines += max(0, Int(size / width))
-            x += size.truncatingRemainder(dividingBy: width) + Double(spacing)
-        }
-        return lines
     }
 }
 
