@@ -436,9 +436,13 @@ struct AlarmRunTests {
 
     @Test func musicYouStartedStaysPausedAfterADeviceChange() async throws {
         let (c, album, engine) = try await controller()
+        c.retryWait = .milliseconds(5)
         c.play(album.songs)
         NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
-        try await Task.sleep(for: .milliseconds(1500))
+        for _ in 0..<500 where c.status != .paused { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(c.status == .paused)
+        // long enough for an alarm's retry to have started it again, which this mustn't
+        try await Task.sleep(for: .milliseconds(50))
         #expect(c.status == .paused)
     }
 
