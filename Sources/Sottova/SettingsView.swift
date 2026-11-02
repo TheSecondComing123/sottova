@@ -234,7 +234,7 @@ private struct CalendarRow: View {
                 }
                 .modifier(SettingsRow())
             case .notDetermined:
-                ask("Calendars that count as busy", help: "Rows can wait for meetings once you allow it.", button: "Allow") {
+                ask("Calendars that count as busy", help: "Rows can wait while your calendar is busy once you allow it.", button: "Allow") {
                     Task {
                         await Presence.askForCalendars()
                         refresh()
@@ -244,7 +244,7 @@ private struct CalendarRow: View {
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Sottova can't read your calendars").role(.body).foregroundStyle(Theme.text)
-                        Text("Rows can't wait for meetings until you allow it.").role(.small).foregroundStyle(Theme.muted)
+                        Text("Rows can't wait for a busy calendar until you allow it.").role(.small).foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 0)
                     ThemeButton(title: "Open Privacy settings") {

@@ -167,7 +167,7 @@ struct AlarmSheet: View {
                 .buttonStyle(.plain)
             }
             Strip(selection: $kind)
-                .help(kind == .whileHere ? "waits while you're away, on a call\(heedsCalendar ? ", playing something else or busy on your calendar" : " or playing something else")" : "wakes the Mac and plays, wherever you are")
+                .help(kind == .whileHere ? "waits while you're away, on a call\(heedsCalendar ? ", playing something else, or your calendar is busy" : " or playing something else")" : "wakes the Mac and plays, wherever you are")
             when
             Strip(selection: $repeats)
             settings
