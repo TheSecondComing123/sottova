@@ -19,7 +19,7 @@ struct QueuePanel: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 5)
             if controller.upNext.isEmpty {
-                Text("Nothing queued. Drop songs here, or right-click one and pick Play next.")
+                Text("Nothing queued. Drop songs here.")
                     .role(.body)
                     .foregroundStyle(Theme.faint)
                     .padding(.horizontal, 14)
@@ -47,12 +47,6 @@ struct QueuePanel: View {
                 .scrollContentBackground(.hidden)
                 .animation(Theme.quick, value: controller.upNext)
                 .frame(height: min(CGFloat(controller.upNext.count) * Self.rowHeight, 500))
-                Text("Drag to change the order.")
-                    .role(.body)
-                    .foregroundStyle(Theme.faint)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 9)
-                    .padding(.bottom, 2)
             }
         }
         .padding(.top, 13)

@@ -176,7 +176,7 @@ struct AlbumCollection: View {
     var body: some View {
         if let album = controller.catalog.albumsByID[id] {
             CollectionFrame(cover: album.artwork, empty: false,
-                            lines: [DayPlan(alarms: controller.alarms).hours(of: id) ?? "No hours set", songCount(album.songs)]
+                            lines: [DayPlan(alarms: controller.alarms).hours(of: id), songCount(album.songs)].compactMap { $0 }
                                 + ownSilence(controller.albumSettings[id], songs: album.songs, controller: controller),
                             credit: (album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") }, album.artwork)) {
                 Text(album.title)
@@ -243,8 +243,7 @@ struct YourCollection: View {
             let isEmpty = playlist.paths.isEmpty
             let missing = playlist.paths.count - songs.count
             CollectionFrame(cover: cover, empty: isEmpty, dropTargeted: isEmpty && target == 0,
-                            lines: isEmpty ? ["Nothing in it yet"] : [DayPlan(alarms: controller.alarms).hours(of: pid) ?? "No hours set",
-                                                                      songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")]
+                            lines: isEmpty ? [] : [DayPlan(alarms: controller.alarms).hours(of: pid), songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")].compactMap { $0 }
                                 + ownSilence(isEmpty ? nil : playlist.gaps, songs: songs, controller: controller),
                             credit: (Controller.coverURL(forPlaylist: pid), controller.playlistCovers[pid])) {
                 title(playlist)
