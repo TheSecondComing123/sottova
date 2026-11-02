@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SottovaCore
 
@@ -5,9 +6,12 @@ import SottovaCore
 struct FreeMusicPage: View {
     @Environment(Controller.self) private var controller
     private let shelf = ShelfDownload.shelf
+    @State private var width: CGFloat = 1024
+    private static let titleWidth = (Shelf.sets.map { ($0.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium)]).width }.max() ?? 0).rounded(.up)
 
     var body: some View {
-        PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
+        let margin: CGFloat = width < 860 ? 32 : 40
+        PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: margin)) {
             Text("Free music")
                 .role(.title)
                 .offset(y: -2)
@@ -20,6 +24,7 @@ struct FreeMusicPage: View {
                 .foregroundStyle(Theme.faint)
                 .padding(.top, 16)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 
     private func row(_ set: ShelfSet) -> some View {
@@ -31,7 +36,7 @@ struct FreeMusicPage: View {
                 .fontWeight(.medium)
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
-                .layoutPriority(1)
+                .frame(width: Self.titleWidth, alignment: .leading)
             Text("\(set.creator), \(set.license), \(Self.size(set.megabytes))")
                 .role(.body)
                 .foregroundStyle(Theme.muted)
