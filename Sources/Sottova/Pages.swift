@@ -4,6 +4,7 @@ import SottovaCore
 
 struct PageScroll<Content: View>: View {
     var insets = EdgeInsets(top: 12, leading: 32, bottom: 24, trailing: 32)
+    var maxWidth: CGFloat = 1440
     @ViewBuilder let content: Content
     @Environment(Router.self) private var router
     @State private var position = ScrollPosition(edge: .top)
@@ -14,7 +15,7 @@ struct PageScroll<Content: View>: View {
                 content
             }
             // capped so a wide window doesn't spread a song's columns a screen apart
-            .frame(maxWidth: 1440, alignment: .leading)
+            .frame(maxWidth: maxWidth, alignment: .leading)
             .padding(insets)
             .overlayScrollers()
         }

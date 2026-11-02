@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import SottovaCore
 
-/// Your day: the rows to scale down a rail, today's words beside them, what played to their right, or below when narrow.
+/// Your day: the rows to scale down a rail, with what's not on it beside it, or around it when narrow.
 struct DayPage: View {
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -14,7 +14,6 @@ struct DayPage: View {
     private var wake = SystemWake.shared
 
     private var layout: DayLayout { page.day }
-    private var narrow: Bool { layout.narrow }
 
     private func now(_ date: Date) -> Date {
         #if SHOT
@@ -29,23 +28,18 @@ struct DayPage: View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = now(context.date)
             let plan = controller.dayPlan(now: now, wholeDay: droppingHere)
-            PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
-                if narrow {
+            PageScroll(insets: EdgeInsets(top: layout.insets.top, leading: layout.margin, bottom: layout.insets.bottom, trailing: layout.margin), maxWidth: .infinity) {
+                if oneColumn(plan) {
                     newButton.frame(maxWidth: .infinity, alignment: .trailing).padding(.bottom, 14)
-                    day(plan, now: now)
-                    if !played.isEmpty {
-                        playedList(plan)
-                    }
+                    day(plan)
+                    others(plan, now: now)
+                    playedList(plan)
                 } else {
-                    HStack(alignment: .top, spacing: 40) {
-                        // the first row's name level with What played
-                        VStack(alignment: .leading, spacing: 0) { day(plan, now: now) }.padding(.top, 11)
+                    HStack(alignment: .top, spacing: DayLayout.gap) {
+                        // the first block level with New
+                        VStack(alignment: .leading, spacing: 0) { day(plan) }.padding(.top, 8)
                         VStack(alignment: .leading, spacing: 0) {
-                            HStack {
-                                Spacer(minLength: 16)
-                                newButton
-                            }
-                            .padding(.bottom, 4)
+                            newButton.frame(maxWidth: .infinity, alignment: .trailing)
                             others(plan, now: now)
                             playedList(plan)
                         }
@@ -65,21 +59,24 @@ struct DayPage: View {
         return controller.alarms.filter { !today.contains($0.id) }.sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
     }
 
+    private func oneColumn(_ plan: DayPlan) -> Bool {
+        layout.oneColumn(others: rest(plan).count, played: played.count)
+    }
+
     private func hourHeight(_ plan: DayPlan) -> Double {
-        layout.hourHeight(span: plan.span, others: 0, played: played.count)
+        layout.hourHeight(span: plan.span, others: rest(plan).count, played: played.count)
     }
 
     private var newButton: some View {
-        ThemeButton(title: "New", icon: .plus, iconWeight: .line) { router.alarm = .new(nil) }
+        ThemeButton(title: "New…", icon: .plus, iconWeight: .line) { router.alarm = .new(nil) }
     }
 
     @ViewBuilder
-    private func day(_ plan: DayPlan, now: Date) -> some View {
+    private func day(_ plan: DayPlan) -> some View {
         if let failure = wake.failure {
             Text(failure).role(.small).foregroundStyle(Theme.text).padding(.bottom, 16)
         }
         rail(plan)
-        if narrow { others(plan, now: now) }
     }
 
     /// Over the rail with a collection, every hour is a place to land.
@@ -105,10 +102,17 @@ struct DayPage: View {
 
     private func rail(_ plan: DayPlan) -> some View {
         let scale = hourHeight(plan)
-        let rail = plan.rail(hourHeight: scale)
         let waiting = controller.status == .paused ? nil : controller.hold
         let sounding = controller.soundingRow?.id
         let unwoken = cantWake(now: nowDate)
+        let pieces = Dictionary(uniqueKeysWithValues: plan.rows.map { row in
+            let rising = sounding == row.id && controller.rising && controller.status != .paused
+            return (row.id, plan.line(for: row, nextPart: nextPart(row.alarm), rising: rising, waiting: sounding == row.id ? waiting : nil, cantWake: unwoken == row.id))
+        })
+        // room beside a painting at its usual size, and more than enough beside a larger one in a tall block
+        let blockWidth = layout.blockWidth(oneColumn: oneColumn(plan))
+        let room = blockWidth - 12 - 23 - 72 - 12 - 28
+        let rail = plan.rail(hourHeight: scale, lines: pieces.mapValues { WordFlow.lines($0.map(\.text), width: room) })
         var drop = dropHour.map { ($0, controller.alarmName(of: router.draggingCollection ?? "")) }
         #if SHOT
         if let shot = router.shotDrop { drop = (shot.hour, shot.name) }
@@ -142,26 +146,20 @@ struct DayPage: View {
                             ThemeLink(text: "Add some music", underlined: true) { router.go(to: .home) }
                         }
                     } else {
-                        Text(controller.alarms.isEmpty ? "Nothing on your day. Drag a collection onto an hour." : "Nothing on today. Drag a collection onto an hour.")
+                        Text("Drag a collection onto an hour")
                     }
                 }
                 .role(.body)
                 .foregroundStyle(Theme.muted)
-                .offset(x: 106, y: 112)
+                .offset(x: DayLayout.blockLeft, y: rail.height / 2 - 9)
             }
-            ForEach(Array(rail.marks.enumerated()), id: \.element.id) { index, mark in
-                let row = plan.rows.first { $0.id == mark.id }!
-                let top = mark.block.lowerBound
-                let blockHeight = mark.block.upperBound - mark.block.lowerBound
-                let rising = sounding == mark.id && controller.rising && controller.status != .paused
-                DayRow(alarm: mark.alarm, pieces: plan.line(for: row, nextPart: nextPart(mark.alarm), rising: rising,
-                                                            waiting: sounding == mark.id ? waiting : nil, cantWake: unwoken == mark.id))
-                    .padding(EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .frame(height: blockHeight, alignment: .topLeading)
-                    .background(sounding == mark.id ? Theme.primary.opacity(0.1) : Theme.selection.opacity(mark.alarm.on ? 1 : 0.4), in: .rect(cornerRadius: Radius.small))
-                    .padding(.leading, 90)
-                    .offset(y: top)
+            ForEach(rail.marks) { mark in
+                let height = mark.block.upperBound - mark.block.lowerBound
+                DayRow(alarm: mark.alarm, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
+                       painting: layout.painting(block: height, blockWidth: blockWidth), sounding: sounding == mark.id)
+                    .frame(height: height)
+                    .padding(.leading, DayLayout.blockLeft)
+                    .offset(y: mark.block.lowerBound)
             }
             if let (hour, name) = drop {
                 dropRow(plan: plan, hour: hour, name: name, scale: scale)
@@ -196,7 +194,7 @@ struct DayPage: View {
             .frame(height: 2 * scale, alignment: .topLeading)
             .background(Theme.primary.opacity(0.1), in: .rect(cornerRadius: Radius.small))
             .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1) }
-            .padding(.leading, 98)
+            .padding(.leading, DayLayout.blockLeft)
         }
         .offset(y: top)
         .allowsHitTesting(false)
@@ -209,17 +207,11 @@ struct DayPage: View {
     /// Rows not on today: they have no place on the rail, and would otherwise be out of reach for a day.
     @ViewBuilder
     private func others(_ plan: DayPlan, now: Date) -> some View {
-        let today = Set(plan.rows.map(\.id))
-        let rest = controller.alarms.filter { !today.contains($0.id) }.sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
+        let rest = rest(plan)
         if !rest.isEmpty {
-            Text("Other days").role(.body).fontWeight(.semibold).foregroundStyle(Theme.text).padding(.top, 18).padding(.bottom, 8)
+            heading("Other days").padding(.top, 24).padding(.bottom, 6)
             ForEach(rest) { alarm in
-                HStack(alignment: .top, spacing: 23) {
-                    RailTime(label: DayPlan.Rail.Label(text: DayPlan.startText(alarm), y: 0, kind: alarm.on ? .row : .off, row: alarm.id), alarm: alarm)
-                        .padding(.top, 2)
-                    DayRow(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id))
-                }
-                .frame(minHeight: DayPlan.Rail.rowHeight, alignment: .topLeading)
+                OtherLine(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id))
             }
         }
     }
@@ -383,44 +375,145 @@ private struct TimeField: View {
     }
 }
 
-/// The tick, the name and the words of one row.
+/// A row's block: its tick, painting, name and words, with the rest of what it does behind the dots.
 private struct DayRow: View {
+    let alarm: Alarm
+    let pieces: [DayPlan.Piece]
+    let artwork: String?
+    let painting: (side: Double, under: Bool)
+    let sounding: Bool
+    @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
+    @Environment(\.navigate) private var navigate
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            RowTick(alarm: alarm).padding(.top, 4).frame(width: 23, alignment: .topLeading)
+            let stack = painting.under ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+            stack {
+            Artwork(key: artwork, size: painting.side, radius: 3, outlined: true)
+                .opacity(alarm.on ? 1 : 0.4)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Button { navigate(alarm.route(in: controller)) } label: {
+                        Text(alarm.name).role(.row).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .help("open \(alarm.name)")
+                    // so what's sounding doesn't rest on color alone
+                    if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
+                }
+                WordFlow {
+                    ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) }
+                }
+                .foregroundStyle(alarm.on ? Theme.muted : Theme.faint)
+            }
+            }
+            Spacer(minLength: 8)
+            Menu { RowEntries(entries: entries) } label: {
+                Ph.dotsThree.icon(size: 14)
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 24, height: 24)
+                    .contentShape(.rect)
+                    .hoverable(radius: 4)
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .fixedSize()
+            .help("more")
+            .accessibilityLabel("more for \(alarm.name)")
+        }
+        .padding(6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background {
+            RoundedRectangle(cornerRadius: Radius.small)
+                .fill(sounding ? Theme.primary.opacity(0.1) : Theme.selection.opacity(alarm.on ? 1 : 0.4))
+                .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
+        }
+        .sottovaMenu { entries }
+    }
+
+    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }
+}
+
+/// A day that isn't today, on one line: the words it has room for, all of them behind the menu.
+private struct OtherLine: View {
     let alarm: Alarm
     let pieces: [DayPlan.Piece]
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
-    private let preview = AlarmPreview.shared
+
+    private var warning: Bool { pieces.contains { $0.word == .wake } }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            Toggle(alarm.on ? "Turn \(alarm.name) off" : "Turn \(alarm.name) on", isOn: Binding(get: { alarm.on }, set: { _ in toggle() }))
-                .toggleStyle(Tick())
-                .frame(width: 14, height: 14)
-                .padding(.top, 4)
-                .frame(width: 23, alignment: .topLeading)
-            VStack(alignment: .leading, spacing: 1) {
-                Button { navigate(route) } label: {
-                    Text(alarm.name).role(.row).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                RailTime(label: DayPlan.Rail.Label(text: DayPlan.startText(alarm), y: 0, kind: alarm.on ? .row : .off, row: alarm.id), alarm: alarm)
+                RowTick(alarm: alarm)
+                Button { navigate(alarm.route(in: controller)) } label: {
+                    Text(alarm.name).role(.body).fontWeight(.medium).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
                 }
                 .buttonStyle(.plain)
                 .help("open \(alarm.name)")
-                WordFlow {
-                    ForEach(pieces, id: \.text) { word($0) }
+                .layoutPriority(1)
+                if !warning {
+                    ViewThatFits(in: .horizontal) {
+                        words(pieces)
+                        words(Array(pieces.prefix(1)))
+                        Color.clear.frame(width: 0, height: 0)
+                    }
                 }
-                .foregroundStyle(alarm.on ? Theme.muted : Theme.faint)
+                Spacer(minLength: 0)
+            }
+            .frame(height: 24)
+            // a warning stays whole, under the line
+            if warning {
+                WordFlow { ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) } }
+                    .foregroundStyle(Theme.muted)
+                    .padding(.leading, 90)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .sottovaMenu { menu }
+        .contentShape(.rect)
+        .sottovaMenu { RowActions(alarm: alarm, controller: controller, router: router).entries }
     }
 
-    private var route: Route {
-        controller.playlists.contains { $0.id == alarm.source } ? .playlist(alarm.source) : .album(alarm.source)
+    private func words(_ pieces: [DayPlan.Piece]) -> some View {
+        HStack(spacing: 10) { ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) } }
+            .fixedSize()
+            .foregroundStyle(alarm.on ? Theme.muted : Theme.faint)
     }
+}
 
-    @ViewBuilder
-    private func word(_ piece: DayPlan.Piece) -> some View {
+private extension Alarm {
+    @MainActor func route(in controller: Controller) -> Route {
+        controller.playlists.contains { $0.id == source } ? .playlist(source) : .album(source)
+    }
+}
+
+private struct RowTick: View {
+    let alarm: Alarm
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        Toggle(alarm.on ? "Turn \(alarm.name) off" : "Turn \(alarm.name) on", isOn: Binding(get: { alarm.on }, set: { _ in
+            let on = !alarm.on
+            controller.changeAlarm(alarm.id) { $0.on = on }
+            SystemWake.shared.renew(for: controller.alarms)
+        }))
+        .toggleStyle(Tick())
+        .frame(width: 14, height: 14)
+    }
+}
+
+/// One word of a row's line: most open a native menu that fits what they say.
+private struct RowWord: View {
+    let alarm: Alarm
+    let piece: DayPlan.Piece
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
         switch piece.word {
         case nil:
             Text(piece.text).role(.body)
@@ -465,16 +558,66 @@ private struct DayRow: View {
         controller.changeAlarm(alarm.id, edit)
         SystemWake.shared.renew(for: controller.alarms)
     }
+}
 
-    private func toggle() {
-        let on = !alarm.on
-        change { $0.on = on }
-    }
+/// What a row does, for its right click and its dots: an off attribute with no word of its own stays in reach here.
+@MainActor
+private struct RowActions {
+    let alarm: Alarm
+    let controller: Controller
+    let router: Router
+    private var preview: AlarmPreview { .shared }
 
-    private var menu: [MenuEntry] {
+    var entries: [MenuEntry] {
         [.item("Edit…") { router.alarm = .edit(alarm) }]
             + (alarm.whileHere ? [] : [.item(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }])
-            + [.item(alarm.on ? "Turn off" : "Turn on", action: toggle), .divider, .item("Delete") { controller.removeAlarm(alarm.id) }]
+            + [
+                .item(alarm.on ? "Turn off" : "Turn on") { change { $0.on = !alarm.on } },
+                .divider,
+                .item("Starts by itself", checked: !alarm.whileHere) { change { $0.whileHere = false } },
+                .item("While you're at the Mac", checked: alarm.whileHere) { change(Self.whileHere) },
+                .item("Unless my calendar is busy", checked: alarm.heedsCalendar) {
+                    let on = !alarm.heedsCalendar
+                    change { $0.heedsCalendar = on }
+                    if on { Task { await Presence.askForCalendars() } }
+                },
+                .divider,
+                .item("Delete") { controller.removeAlarm(alarm.id) },
+            ]
+    }
+
+    /// A stretch of the day has to end.
+    static func whileHere(_ row: inout Alarm) {
+        row.whileHere = true
+        row.minutes = row.minutes ?? 60
+    }
+
+    private func change(_ edit: (inout Alarm) -> Void) {
+        controller.changeAlarm(alarm.id, edit)
+        SystemWake.shared.renew(for: controller.alarms)
+    }
+}
+
+/// The same entries as a SwiftUI menu, which opens on the press.
+private struct RowEntries: View {
+    let entries: [MenuEntry]
+
+    var body: some View {
+        ForEach(entries.indices, id: \.self) { index in
+            let entry = entries[index]
+            switch entry.kind {
+            case .divider:
+                Divider()
+            case .action(let action):
+                if entry.checked {
+                    Toggle(entry.title, isOn: Binding(get: { true }, set: { _ in action() }))
+                } else {
+                    Button(entry.title, action: action)
+                }
+            case .submenu:
+                EmptyView()
+            }
+        }
     }
 }
 
@@ -564,7 +707,7 @@ private struct KindWords: View {
 
     var body: some View {
         Toggle("Starts by itself", isOn: Binding(get: { !alarm.whileHere }, set: { _ in change { $0.whileHere = false } }))
-        Toggle("While you're at the Mac", isOn: Binding(get: { alarm.whileHere }, set: { _ in change({ row in row.whileHere = true; row.minutes = row.minutes ?? 60 }) }))
+        Toggle("While you're at the Mac", isOn: Binding(get: { alarm.whileHere }, set: { _ in change(RowActions.whileHere) }))
     }
 }
 
@@ -608,6 +751,19 @@ private struct WordFlow: Layout {
             }
             return (x, y, size)
         }
+    }
+
+    /// How many lines these words take at `width`, for a row to leave them room before it's laid out.
+    static func lines(_ words: [String], width: Double) -> Int {
+        let font = [NSAttributedString.Key.font: NSFont.systemFont(ofSize: Role.body.size)]
+        var (x, lines) = (0.0, 1)
+        for word in words {
+            let size = Double(ceil((word as NSString).size(withAttributes: font).width))
+            if x > 0, x + size > width { (x, lines) = (0, lines + 1) }
+            lines += max(0, Int(size / width))
+            x += size.truncatingRemainder(dividingBy: width) + Double(spacing)
+        }
+        return lines
     }
 }
 
