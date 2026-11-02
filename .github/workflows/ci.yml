@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - run: swift test
+      - run: scripts/release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sottova
+          path: .build/release/Sottova-*.zip
+          retention-days: 14

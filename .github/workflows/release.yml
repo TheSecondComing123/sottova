@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag matches the app's version
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Support/Info.plist)
+          test "v$version" = "$GITHUB_REF_NAME"
+      - run: swift test
+      - run: scripts/release.sh
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          Needs macOS 26 on Apple silicon.
+
+          This build isn't signed by Apple yet, so macOS blocks it the first time. Unzip it, move Sottova to Applications, then run:
+
+          ```sh
+          xattr -dr com.apple.quarantine /Applications/Sottova.app
+          ```
+          EOF
+          gh release create "$GITHUB_REF_NAME" .build/release/Sottova-*.zip --title "Sottova ${GITHUB_REF_NAME#v}" --notes-file notes.md --verify-tag
