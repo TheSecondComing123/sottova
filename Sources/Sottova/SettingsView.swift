@@ -109,7 +109,7 @@ struct SettingsView: View {
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
                 ThemeButton(title: "Rescan", action: controller.rescan)
-                ThemeButton(title: "Add a folder…", action: controller.chooseFolders)
+                ThemeButton(title: "Add folder…", action: controller.chooseFolders)
             }
             .modifier(SettingsRow())
             if !controller.skippedFiles.isEmpty { skipped }

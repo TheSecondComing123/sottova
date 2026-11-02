@@ -12,7 +12,7 @@ struct QueuePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
-                Text("Up next")
+                Text("Queue")
                     .fontWeight(.semibold)
                     .foregroundStyle(Theme.text)
                     .accessibilityAddTraits(.isHeader)

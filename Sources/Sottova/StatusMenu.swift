@@ -73,7 +73,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             paused ? MenuEntry.item("Play", enabled: enabled, action: controller.play) : .item("Pause", enabled: enabled, action: controller.pause)
         }
         switch screen.kind {
-        case .firstRun: return [.item("Choose a folder…", action: controller.chooseFolders)]
+        case .firstRun: return [.item("Add folder…", action: controller.chooseFolders)]
         case .reading: return [.item("Play", enabled: false, action: controller.play), skip(false)]
         case .quiet: return [.item("Play", action: controller.play), skip(false)]
         case .piece: return [playOrPause(true), skip(true)]

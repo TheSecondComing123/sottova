@@ -56,7 +56,7 @@ struct EmptyLibrary: View {
             .foregroundStyle(Theme.muted)
             if controller.pendingAnalysis == 0 {
                 HStack(spacing: 12) {
-                    Button("Add a music folder", action: controller.chooseFolders)
+                    Button("Add folder…", action: controller.chooseFolders)
                         .buttonStyle(PrimaryStyle())
                     // no music yet: something to hear in a minute or two, legally
                     Button("Get free music") { router.go(to: .shelf) }

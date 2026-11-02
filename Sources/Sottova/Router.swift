@@ -117,11 +117,11 @@ struct SottovaCommands: Commands {
             Button(running ? "Pause" : "Play") { controller.toggle() }
                 .keyboardShortcut(.space, modifiers: [])
                 .disabled(controller.tracks.isEmpty)
-            Button("Next") { controller.skip() }
+            Button("Skip") { controller.skip() }
                 .keyboardShortcut(.rightArrow)
                 .disabled(controller.status == .idle || router.typing)
             Divider()
-            Button("Show playing") {
+            Button("Go to \(playingCollection)") {
                 guard let song = controller.current else { return }
                 openWindow(id: "main")
                 router.go(to: controller.copy(ofAlbum: song.albumID).map { .playlist($0.id) } ?? .album(song.albumID))
@@ -153,6 +153,11 @@ struct SottovaCommands: Commands {
         }
     }
 
+    private var playingCollection: String {
+        guard let song = controller.current else { return "collection" }
+        return controller.copy(ofAlbum: song.albumID)?.name ?? song.album
+    }
+
     @ViewBuilder
     private var goItems: some View {
         Group {
@@ -168,9 +173,9 @@ struct SottovaCommands: Commands {
             Button("Songs") { router.go(to: .songs) }.keyboardShortcut("3")
             Button("Free music") { router.go(to: .shelf) }.keyboardShortcut("4")
             Button("Collections") { router.go(to: .collections) }.keyboardShortcut("5")
-            Button("Names") { router.go(to: .artists) }.keyboardShortcut("6")
+            Button("Artists") { router.go(to: .artists) }.keyboardShortcut("6")
             Divider()
-            Button("Search") {
+            Button("Filter songs") {
                 openWindow(id: "main")
                 router.search()
             }
