@@ -37,7 +37,7 @@ struct TitleBar: View {
     /// Off Now, what's sounding. Silence says nothing up here.
     @ViewBuilder
     private var nowPlaying: some View {
-        if router.route != .home, controller.status == .playing || controller.status == .paused, let song = controller.current {
+        if router.route != .home, let song = controller.sounding {
             // not on the click that brings the window forward: going to Now would clear a picked row's selection
             BarControl(firstClick: false, pressScale: 0.99, help: "show what's playing", action: { _ in router.go(to: .home) }) { hovering in
                 HStack(spacing: 6) {
@@ -263,7 +263,7 @@ struct Hairline: View {
     private static let top: CGFloat = 44
 
     private var seekable: Track? {
-        controller.status == .playing || controller.status == .paused ? controller.track : nil
+        controller.sounding == nil ? nil : controller.track
     }
 
     var body: some View {

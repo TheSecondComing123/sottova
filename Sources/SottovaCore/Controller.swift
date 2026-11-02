@@ -1586,6 +1586,19 @@ public final class Controller {
         if status == .idle || status == .paused { toggle() }
     }
 
+    /// Play on a collection's page. If it's already going this brings the music back, out of a silence too.
+    public func playCollection(_ songs: [Song], source: String? = nil) {
+        guard origin?.key == Origin.key(of: songs, source: source), status != .idle else {
+            play(songs, source: source)
+            return
+        }
+        if inSilence {
+            skip()
+        } else if status == .paused {
+            toggle()
+        }
+    }
+
     public func pause() {
         endResuming()
         if status == .playing || status == .resting { toggle() }

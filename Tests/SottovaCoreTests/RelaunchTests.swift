@@ -110,6 +110,26 @@ struct RelaunchTests {
         #expect(try #require(c.machine.restRemaining) > left - 5)
     }
 
+    @Test func playOnTheCollectionEndsItsSilencePausedOrNot() async throws {
+        let (c, album) = try await controller(storage: try temp())
+        c.addAlarm(row(album))
+        c.checkHours()
+        #expect(c.status == .resting)
+        c.playCollection(album.songs)
+        for _ in 0..<200 where c.inSilence { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(!c.inSilence)
+
+        let (d, other) = try await controller(storage: try temp())
+        d.addAlarm(row(other))
+        d.checkHours()
+        d.toggle()
+        #expect(d.status == .paused && d.inSilence)
+        d.playCollection(other.songs)
+        for _ in 0..<200 where d.inSilence { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(!d.inSilence)
+        #expect(d.status != .paused)
+    }
+
     @Test func otherMusicStillComesBackPaused() async throws {
         let storage = try temp()
         let (first, album) = try await controller(storage: storage)

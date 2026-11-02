@@ -17,7 +17,7 @@ extension Controller {
 
     /// The song being heard or held: not during a gap, when the last one has finished.
     var sounding: Song? {
-        status == .playing || status == .paused ? current : nil
+        (status == .playing || status == .paused) && !inSilence ? current : nil
     }
 
     /// Albums without the ones made into playlists, which are listed there instead.

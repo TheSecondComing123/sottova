@@ -155,22 +155,14 @@ struct CollectionMenu<Content: View>: View {
     }
 }
 
-/// Play, the same word and width whatever's going, as the title bar has the pause: paused it resumes, sounding it has nothing to do.
+/// Play, the same word and width whatever's going, as the title bar has the pause: sounding, it has nothing to do.
 struct PlayButton: View {
     let songs: [Song]
     var source: String?
     @Environment(Controller.self) private var controller
 
     var body: some View {
-        let key = Controller.Origin.key(of: songs, source: source)
-        let ours = controller.origin?.key == key && controller.status != .idle
-        ThemeButton(title: "Play", primary: true, icon: .play) {
-            if !ours {
-                controller.play(songs, source: source)
-            } else if controller.status == .paused {
-                controller.toggle()
-            }
-        }
+        ThemeButton(title: "Play", primary: true, icon: .play) { controller.playCollection(songs, source: source) }
     }
 }
 
