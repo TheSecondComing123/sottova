@@ -1,16 +1,13 @@
 {
   "fill": {
-    "solid": "srgb:0.15686,0.15686,0.15686,1.00000"
+    "solid": "srgb:0.05,0.04,0.03,1.0"
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "envelope.svg",
-          "name": "envelope",
-          "fill": {
-            "solid": "srgb:0.98039,0.74118,0.18431,1.00000"
-          },
+          "image-name": "candle.png",
+          "name": "candle",
           "glass": false
         }
       ],
