@@ -53,7 +53,7 @@ struct MetadataTests {
     }
 
     @Test func m4aRoundTrips() async throws {
-        let cover = jpeg(size: 800)
+        let cover = jpeg(size: 2400)
         let tags: [(AVMetadataIdentifier, any NSCopying & NSObjectProtocol, CFString?)] = [
             (.iTunesMetadataSongName, "Song" as NSString, nil),
             (.iTunesMetadataArtist, "Artist" as NSString, nil),
@@ -89,8 +89,8 @@ struct MetadataTests {
         #expect(key == store.save(cover))
         let thumbnail = try #require(store.image(for: key, maxPixel: 80))
         #expect(max(thumbnail.width, thumbnail.height) <= 80)
-        let stored = try #require(store.image(for: key, maxPixel: 1000))
-        #expect(max(stored.width, stored.height) <= 800)
+        let stored = try #require(store.image(for: key, maxPixel: 3000))
+        #expect(max(stored.width, stored.height) == 2000)
     }
 
     @Test func untaggedFileUsesTheFolderCover() async throws {

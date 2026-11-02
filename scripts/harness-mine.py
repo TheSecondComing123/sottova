@@ -53,4 +53,6 @@ for alarm in alarms:
 json.dump(alarms, open(f"{storage}/alarms.json", "w"))
 
 shutil.copy(f"{support}/profile.json", storage)
-shutil.copytree(f"{home}/Library/Caches/Sottova/Artwork", f"{root}/Artwork", dirs_exist_ok=True)
+# the live build may predate the folder's rename
+art = f"{home}/Library/Caches/Sottova/Covers"
+shutil.copytree(art if os.path.isdir(art) else f"{home}/Library/Caches/Sottova/Artwork", f"{root}/Artwork", dirs_exist_ok=True)

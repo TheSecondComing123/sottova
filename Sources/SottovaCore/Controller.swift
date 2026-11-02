@@ -154,7 +154,7 @@ public final class Controller {
     /// `storage` holds library.json, profile.json, status.json and plays.jsonl; tests pass nil to keep nothing on disk.
     /// `playlistFolder` holds the .m3u8 files; nil keeps playlists in memory only.
     public init(engine: AVAudioEngine = AVAudioEngine(), storage: URL? = .applicationSupportDirectory.appending(path: "Sottova"),
-                playlistFolder: URL? = nil, artworkFolder: URL = .cachesDirectory.appending(path: "Sottova/Artwork")) {
+                playlistFolder: URL? = nil, artworkFolder: URL = .cachesDirectory.appending(path: "Sottova/Covers")) {
         self.engine = engine
         self.storage = storage
         playlistStore = playlistFolder.map(PlaylistStore.init)

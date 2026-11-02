@@ -186,7 +186,7 @@ struct NowPage: View {
 
     @concurrent
     nonisolated private static func decode(_ store: ArtworkStore, _ key: String) async -> CGImage? {
-        store.image(for: key, maxPixel: 800)
+        store.image(for: key, maxPixel: 2000)
     }
 }
 
