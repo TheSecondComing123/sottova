@@ -100,12 +100,13 @@ struct Sidebar: View {
                     .role(.small)
                     .foregroundStyle(Theme.text)
                     .multilineTextAlignment(.leading)
+                    .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .help("dismiss")
+            .help("\(problem)\n\nClick to dismiss.")
             .padding(8)
         } else if !controller.skippedFiles.isEmpty {
             Text(controller.libraryLine).role(.small).foregroundStyle(Theme.faint).lineLimit(2).padding(8)
