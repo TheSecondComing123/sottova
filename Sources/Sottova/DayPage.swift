@@ -281,6 +281,7 @@ private struct RailTime: View {
 
     private var text: some View {
         Text(label.text)
+            .underline(alarm != nil, color: Theme.faint)
             .font(.system(size: strong ? 13 : 11, weight: strong ? .medium : .regular))
             .lineHeight(.exact(points: 18))
             .monospacedDigit()
@@ -373,9 +374,9 @@ private struct DayRow: View {
         case nil:
             Text(piece.text).role(.body)
         case .playNow:
-            ThemeLink(text: piece.text) { controller.playNow(alarm) }.role(.body)
+            ThemeLink(text: piece.text, underlined: true) { controller.playNow(alarm) }.role(.body)
         case .wake:
-            ThemeLink(text: piece.text) { SystemWake.shared.schedule(for: controller.alarms) }.role(.body)
+            ThemeLink(text: piece.text, underlined: true) { SystemWake.shared.schedule(for: controller.alarms) }.role(.body)
         case .days?:
             WordMenu(text: piece.text, on: alarm.on) { DayWords(alarm: alarm, change: change) }
         case .order?:
@@ -466,6 +467,7 @@ private struct WordMenu<Content: View>: View {
             content
         } label: {
             Text(text)
+                .underline(color: Theme.faint)
                 .role(.body)
                 // a Menu's label doesn't inherit the row's foreground
                 .foregroundStyle(hovering ? Theme.text : on ? Theme.muted : Theme.faint)
