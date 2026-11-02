@@ -41,8 +41,21 @@ final class Router {
     /// last one picked. Gone when the page changes.
     var selected: Set<String> = []
     @ObservationIgnored private var anchor: String?
+    /// Where the arrows are: a song in a collection twice has one id and two places.
+    @ObservationIgnored private var stepped: Int?
+    /// The list on the page, for the keys and Select All.
+    @ObservationIgnored var run: SongRun?
+    /// The song the arrows moved to, for the page to bring into view.
+    private(set) var scrollTo: String?
+    /// The click under way, read at the press because a tap ends after the window has come forward.
+    @ObservationIgnored var press = (activating: false, picks: 0)
+
+    private var currentRun: SongRun? { run?.route == route ? run : nil }
+    var canSelectAll: Bool { currentRun != nil }
 
     func select(_ id: String, in order: [String]) {
+        // the click that brings the window forward leaves the pick as it was
+        guard !press.activating else { return }
         let keys = NSEvent.modifierFlags
         if keys.contains(.shift), let anchor, let a = order.firstIndex(of: anchor), let b = order.firstIndex(of: id) {
             selected = Set(order[min(a, b)...max(a, b)])
@@ -54,6 +67,48 @@ final class Router {
             selected = [id]
         }
         anchor = id
+        stepped = nil
+    }
+
+    func clearPick() {
+        guard !press.activating else { return }
+        selected = []
+    }
+
+    func selectAll() {
+        guard let currentRun else { return }
+        selected = Set(currentRun.order)
+    }
+
+    /// True when the key was for the list.
+    func key(_ event: NSEvent) -> Bool {
+        guard let run = currentRun, event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]) else { return false }
+        switch event.keyCode {
+        case 125: step(1, in: run.order)
+        case 126: step(-1, in: run.order)
+        case 36, 76:
+            guard let first = run.order.first(where: selected.contains) else { return false }
+            run.play(first)
+        case 51, 117:
+            guard let remove = run.remove, !selected.isEmpty else { return false }
+            remove(selected)
+            selected = []
+        case 53:
+            guard !selected.isEmpty else { return false }
+            selected = []
+        default: return false
+        }
+        return true
+    }
+
+    private func step(_ by: Int, in order: [String]) {
+        guard !order.isEmpty else { return }
+        let here = stepped.flatMap { order.indices.contains($0) && order[$0] == anchor ? $0 : nil } ?? anchor.flatMap(order.firstIndex(of:))
+        let next = here.map { min(max($0 + by, 0), order.count - 1) } ?? (by > 0 ? 0 : order.count - 1)
+        selected = [order[next]]
+        anchor = order[next]
+        stepped = next
+        scrollTo = order[next]
     }
 
     /// The queue's slide-over, so the Controls menu can open it too.
@@ -102,6 +157,14 @@ final class Router {
         let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         withAnimation(reduce ? nil : showsQueue ? Theme.quick : .spring(duration: 0.3, bounce: 0)) { showsQueue.toggle() }
     }
+}
+
+/// A list of songs the keys can act on.
+struct SongRun {
+    let route: Route
+    let order: [String]
+    let play: (String) -> Void
+    var remove: ((Set<String>) -> Void)?
 }
 
 /// The menu bar's Controls and Go menus: everything here is also a click away in the window.

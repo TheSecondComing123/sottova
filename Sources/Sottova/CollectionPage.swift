@@ -260,6 +260,9 @@ struct AlbumCollection: View {
                     }
                     .environment(\.songOrder, album.songs.map(\.id))
                 }
+                .modifier(SongListRun(order: album.songs.map(\.id)) { id in
+                    if let index = album.songs.firstIndex(where: { $0.id == id }) { controller.play(album.songs, from: index) }
+                })
                 .padding(.leading, -22)
                 .padding(.trailing, -12)
             }
@@ -342,6 +345,7 @@ struct YourCollection: View {
                     .padding(.trailing, 12)
                 }
                 row(path, at: index, in: playlist, songs: songs, columns: columns)
+                    .id(path)
                     .overlay(alignment: .top) { insertionLine(at: index) }
                     .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
                         if on { target = index } else if target == index { target = nil }
@@ -356,6 +360,12 @@ struct YourCollection: View {
                     if on { target = playlist.paths.count } else if target == playlist.paths.count { target = nil }
                 }
         }
+        .modifier(SongListRun(order: songs.map(\.id), play: { id in
+            if let index = songs.firstIndex(where: { $0.id == id }) { controller.play(songs, from: index, source: pid) }
+        }, remove: { ids in
+            guard let current = controller.playlists.first(where: { $0.id == pid }) else { return }
+            withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: IndexSet(current.paths.indices.filter { ids.contains(current.paths[$0]) })) }
+        }))
         .padding(.leading, -22)
         .padding(.trailing, -12)
     }
@@ -415,6 +425,9 @@ struct YourCollection: View {
             dragFrom = nil
             if paths.count == 1, folders.isEmpty, let from = dragged ?? playlist.paths.firstIndex(of: paths[0]) {
                 controller.movePlaylistSongs(pid, fromOffsets: [from], toOffset: index)
+            } else if paths.count > 1, folders.isEmpty, paths.allSatisfy(playlist.paths.contains) {
+                // several picked rows dragged within the list: move them, don't copy
+                controller.movePlaylistSongs(pid, fromOffsets: IndexSet(playlist.paths.indices.filter { paths.contains(playlist.paths[$0]) }), toOffset: index)
             } else {
                 let inFolders = controller.catalog.songs.filter { song in folders.contains { song.id.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") } }
                 controller.add(paths.compactMap { controller.catalog.songsByID[$0] } + inFolders, to: pid, at: index)

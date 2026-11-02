@@ -83,10 +83,11 @@ private struct BarIcon: View {
     var on = false
     let hovering: Bool
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.appearsActive) private var active
 
     var body: some View {
         icon.icon(.line, size: 18)
-            .foregroundStyle(!enabled ? Theme.disabled : strong || on ? Theme.text : Theme.muted)
+            .foregroundStyle(!enabled ? Theme.disabled : active && (strong || on) ? Theme.text : Theme.muted)
             .frame(width: 32, height: 28)
             .background(on ? Theme.selection : enabled && hovering ? Theme.hover : .clear, in: .rect(cornerRadius: Radius.small))
     }

@@ -142,7 +142,7 @@ private struct Keepalive: View {
 }
 
 /// sottova:// links arrive here; SwiftUI's onOpenURL needs a window scene, and the main window may not be open.
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @MainActor static var controller: Controller?
     /// Work from anywhere, with or without a window open, unlike SwiftUI's environment actions.
     @MainActor static var showMain: () -> Void = {}
@@ -179,6 +179,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         urls.forEach { Self.controller?.open($0) }
+    }
+
+    /// Edit's Select All: a text field takes it first, so this is only ever a page's list.
+    @objc func selectAll(_ sender: Any?) {
+        MainActor.assumeIsolated { Self.router?.selectAll() }
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        guard item.action == #selector(selectAll(_:)) else { return true }
+        return MainActor.assumeIsolated { Self.router?.canSelectAll == true && NSApp.keyWindow?.frameAutosaveName == "main" }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

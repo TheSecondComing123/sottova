@@ -28,6 +28,8 @@ struct LibraryLine: View {
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
     @Environment(\.songOrder) private var order
+    @Environment(\.appearsActive) private var active
+    @Environment(\.songDrag) private var drag
     @State private var hovering = false
 
     private var picked: [Song] {
@@ -74,26 +76,66 @@ struct LibraryLine: View {
         .padding(.trailing, 12)
         .frame(height: columns.height)
         .background(alignment: .leading) { LineMarker(song: song).offset(x: columns.markerX) }
-        .background(Theme.selection.opacity(hovering || isPicked ? 1 : 0), in: .rect(cornerRadius: Radius.small))
+        .background(Theme.selection.opacity(hovering || (isPicked && active) ? 1 : isPicked ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: play)
         .simultaneousGesture(TapGesture().onEnded { router.select(song.id, in: order) })
         .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityAction(named: "Play", play)
-        .onDrag {
-            dragStarted?()
-            return NSItemProvider(object: URL(filePath: song.id) as NSURL)
-        }
+        .modifier(RowDrag(several: isPicked && router.selected.count > 1, id: song.id, namespace: drag) { dragStarted?() })
         .sottovaMenu {
             MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, controller: controller, router: router, navigate: navigate)
         }
     }
 
     private func name(_ text: String, go: @escaping () -> Void) -> some View {
-        LinkText(text: text, action: go)
+        LinkText(text: text) {
+            // the row's own tap has picked it; while picking, or on the click that brings the window forward, stay here
+            let keys = NSEvent.modifierFlags
+            guard !router.press.activating, router.press.picks < 2, !keys.contains(.command), !keys.contains(.shift) else { return }
+            go()
+        }
             .role(.body)
             .foregroundStyle(Theme.muted)
+    }
+}
+
+/// A row in a pick of several carries all of them; `.onDrag` can only carry its own.
+private struct RowDrag: ViewModifier {
+    let several: Bool
+    let id: String
+    let namespace: Namespace.ID?
+    let started: () -> Void
+
+    func body(content: Content) -> some View {
+        if several, let namespace {
+            content.draggable(containerItemID: id, containerNamespace: namespace)
+        } else {
+            content.onDrag {
+                started()
+                return NSItemProvider(object: URL(filePath: id) as NSURL)
+            }
+        }
+    }
+}
+
+/// Around a list of `LibraryLine`s: what a drag of several picked rows carries, and what the keys act on.
+struct SongListRun: ViewModifier {
+    let order: [String]
+    let play: (String) -> Void
+    var remove: ((Set<String>) -> Void)?
+    @Environment(Router.self) private var router
+    @Namespace private var drag
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.songDrag, drag)
+            .dragContainer(for: URL.self, itemID: \.path, in: drag) { (ids: [String]) in ids.map { URL(filePath: $0) } }
+            .dragContainerSelection(order.filter(router.selected.contains), containerNamespace: drag)
+            .onChange(of: order, initial: true) {
+                router.run = SongRun(route: router.route, order: order, play: play, remove: remove)
+            }
     }
 }
 
@@ -223,6 +265,9 @@ struct SongList: View {
                             }
                             .environment(\.songOrder, songs.map(\.id))
                         }
+                        .modifier(SongListRun(order: songs.map(\.id)) { id in
+                            if let index = songs.firstIndex(where: { $0.id == id }) { controller.play(songs, from: index) }
+                        })
                         .padding(.leading, -22)
                         .padding(.trailing, -12)
                     }

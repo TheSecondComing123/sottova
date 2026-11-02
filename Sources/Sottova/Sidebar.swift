@@ -117,10 +117,20 @@ struct Sidebar: View {
 private extension View {
     /// `.r` in the mock.
     func sidebarRow(selected: Bool) -> some View {
-        padding(.horizontal, 8)
+        modifier(SidebarRow(selected: selected))
+    }
+}
+
+private struct SidebarRow: ViewModifier {
+    let selected: Bool
+    @Environment(\.appearsActive) private var active
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 8)
             .frame(height: 28)
             .contentShape(.rect)
-            .background(selected ? Theme.selection : .clear, in: .rect(cornerRadius: Radius.small))
+            .background(selected ? Theme.selection.opacity(active ? 1 : 0.5) : .clear, in: .rect(cornerRadius: Radius.small))
             .hoverable(radius: Radius.small)
     }
 }

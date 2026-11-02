@@ -7,17 +7,26 @@ struct PageScroll<Content: View>: View {
     var maxWidth: CGFloat = 1440
     @ViewBuilder let content: Content
     @Environment(Router.self) private var router
+    @Environment(\.pageLayout) private var layout
     @State private var position = ScrollPosition(edge: .top)
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                content
+        ScrollViewReader { reader in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    content
+                }
+                // capped so a wide window doesn't spread a song's columns a screen apart
+                .frame(maxWidth: maxWidth, alignment: .leading)
+                .padding(insets)
+                // to the page's foot and edges, under the rows, so a click on nothing lets go of the pick
+                .frame(maxWidth: .infinity, minHeight: layout.height, alignment: .top)
+                .background { Color.clear.contentShape(.rect).onTapGesture { router.clearPick() } }
+                .overlayScrollers()
             }
-            // capped so a wide window doesn't spread a song's columns a screen apart
-            .frame(maxWidth: maxWidth, alignment: .leading)
-            .padding(insets)
-            .overlayScrollers()
+            .onChange(of: router.scrollTo) { _, id in
+                if let id { reader.scrollTo(id) }
+            }
         }
         // rows fade out at the page's foot
         .scrollEdgeEffectStyle(.soft, for: .bottom)

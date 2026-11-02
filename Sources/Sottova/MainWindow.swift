@@ -178,15 +178,23 @@ struct MainWindow: View {
         return false
     }
 
-    /// The back and forward buttons on a mouse, and Esc for the queue when nothing is being typed.
+    /// The back and forward buttons on a mouse, and the keys when nothing is being typed: Esc for the queue, then the list.
     private func watchMouseButtons() {
         guard !Self.watching else { return }
         Self.watching = true
         _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard router.presetEdit == nil else { return event }
-            guard event.keyCode == 53, router.showsQueue, !(event.window?.firstResponder is NSText) else { return event }
-            toggleQueue()
-            return nil
+            // the page's window itself: a sheet, a popover and Settings have their own keys
+            guard router.presetEdit == nil, let window = event.window, window.frameAutosaveName == "main", window.attachedSheet == nil,
+                  !(window.firstResponder is NSText), !(window.firstResponder is NSTableView) else { return event }
+            if event.keyCode == 53, router.showsQueue {
+                toggleQueue()
+                return nil
+            }
+            return router.key(event) ? nil : event
+        }
+        _ = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            router.press = (activating: !(event.window?.isKeyWindow ?? true), picks: router.selected.count)
+            return event
         }
         _ = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: swipe)
         _ = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { event in

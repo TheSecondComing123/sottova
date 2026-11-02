@@ -145,6 +145,7 @@ extension EnvironmentValues {
     @Entry var listLayout = ListLayout(width: 1024)
     /// The songs of the list a row sits in, in order, so ⇧-click can pick the run between two.
     @Entry var songOrder: [String] = []
+    @Entry var songDrag: Namespace.ID?
 }
 
 /// A row or tile that lights up under the pointer, instantly, as in Finder and Music.
