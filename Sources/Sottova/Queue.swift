@@ -7,19 +7,26 @@ struct QueuePanel: View {
     let close: () -> Void
     @Environment(Controller.self) private var controller
 
-    private static let rowHeight: CGFloat = 45
+    private static let rowHeight: CGFloat = 36
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Up next")
-                .role(.body)
-                .fontWeight(.semibold)
-                .foregroundStyle(Theme.text)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, 14)
+            HStack(spacing: 6) {
+                Text("Up next")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.text)
+                    .accessibilityAddTraits(.isHeader)
+                if !controller.upNext.isEmpty {
+                    Text("\(controller.upNext.count), \(Format.length(queuedLength))")
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.faint)
+                }
+            }
+            .role(.body)
+            .padding(.horizontal, 14)
                 .padding(.bottom, 5)
             if controller.upNext.isEmpty {
-                Text("Nothing queued. Drop songs here.")
+                Text("Drop songs here")
                     .role(.body)
                     .foregroundStyle(Theme.faint)
                     .padding(.horizontal, 14)
@@ -57,6 +64,10 @@ struct QueuePanel: View {
         .shadow(color: .black.opacity(0.5), radius: 20, y: 14)
     }
 
+    private var queuedLength: Double {
+        controller.upNext.reduce(0) { $0 + (controller.catalog.songsByID[$1.path]?.duration ?? 0) }
+    }
+
     private func queue(_ urls: [URL], at index: Int) -> Bool {
         let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
         guard !songs.isEmpty else { return false }
@@ -82,11 +93,18 @@ private struct QueueRow: View {
         let song = controller.catalog.songsByID[entry.path]
         HStack(spacing: 8) {
             if let song {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(song.title).role(.body).foregroundStyle(Theme.text)
-                    Text(song.artist).role(.small).foregroundStyle(Theme.muted)
+                // the artist whole or not at all: squeezed, it leaves a sliver of a letter
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        Text(song.title).foregroundStyle(Theme.text)
+                        Text(song.artist).foregroundStyle(Theme.muted)
+                    }
+                    .fixedSize()
+                    Text(song.title).foregroundStyle(Theme.text).truncationMode(.middle)
                 }
+                .role(.body)
                 .lineLimit(1)
+                .help("\(song.title), \(song.artist)")
                 Spacer(minLength: 0)
                 if !hovering {
                     Text(Format.time(song.duration)).role(.body).monospacedDigit().foregroundStyle(Theme.faint)
@@ -104,11 +122,9 @@ private struct QueueRow: View {
                 }
             }
         }
-        .frame(height: 45)
-        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+        .frame(height: 36)
         .contentShape(.rect)
         .onHover { hovering = $0 }
-        .help("drag to reorder")
         .sottovaMenu {
             [.item("Play now") { controller.playQueued(entry.id) }]
                 + (song.map { song in [.item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) }] } ?? [])
