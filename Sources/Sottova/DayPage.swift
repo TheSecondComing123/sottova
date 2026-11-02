@@ -10,6 +10,7 @@ struct DayPage: View {
     @State private var dropHour: Int?
     @State private var played: [Controller.Played] = []
     @State private var width: CGFloat = 1024
+    @State private var height: CGFloat = 748
     private var wake = SystemWake.shared
 
     // beside What played, a row's words need about 430 pt to stay on their line
@@ -42,13 +43,14 @@ struct DayPage: View {
                         VStack(alignment: .leading, spacing: 0) { day(plan, now: now) }.padding(.top, 11)
                         VStack(alignment: .leading, spacing: 0) {
                             HStack {
-                                if !played.isEmpty {
-                                    Text("What played").role(.body).fontWeight(.semibold).foregroundStyle(Theme.text)
-                                }
                                 Spacer(minLength: 16)
                                 newButton
                             }
                             .padding(.bottom, 4)
+                            others(plan, now: now)
+                            if !played.isEmpty {
+                                Text("What played").role(.body).fontWeight(.semibold).foregroundStyle(Theme.text).padding(.top, 18).padding(.bottom, 4)
+                            }
                             ForEach(played, id: \.at) { playedLine($0, plan) }
                         }
                         .frame(width: 320)
@@ -60,7 +62,13 @@ struct DayPage: View {
             }
         }
         .onAppear { wake.refresh() }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { (width, height) = ($0.width, $0.height) }
+    }
+
+    /// Wide, the day fills the page's height; narrow, it scrolls with what played below it.
+    private func hourHeight(_ plan: DayPlan) -> Double {
+        guard !narrow else { return 32 }
+        return min(max((height - 51) / Double(plan.lastHour - plan.firstHour), DayPlan.Rail.hourHeight), 120)
     }
 
     private var newButton: some View {
@@ -73,7 +81,7 @@ struct DayPage: View {
             Text(failure).role(.small).foregroundStyle(Theme.text).padding(.bottom, 16)
         }
         rail(plan)
-        others(plan, now: now)
+        if narrow { others(plan, now: now) }
     }
 
     /// Over the rail with a collection, every hour is a place to land.
@@ -98,7 +106,8 @@ struct DayPage: View {
     }
 
     private func rail(_ plan: DayPlan) -> some View {
-        let rail = plan.rail
+        let scale = hourHeight(plan)
+        let rail = plan.rail(hourHeight: scale)
         let waiting = controller.status == .paused ? nil : controller.hold
         let sounding = controller.soundingRow?.id
         let unwoken = cantWake(now: nowDate)
@@ -139,29 +148,36 @@ struct DayPage: View {
                 .foregroundStyle(Theme.muted)
                 .offset(x: 106, y: 112)
             }
-            ForEach(rail.marks) { mark in
+            ForEach(Array(rail.marks.enumerated()), id: \.element.id) { index, mark in
                 let row = plan.rows.first { $0.id == mark.id }!
+                let top = mark.top + 3
+                let following = index + 1 < rail.marks.count ? rail.marks[index + 1].top + 3 - 4 : Double.infinity
+                let blockHeight = min(max(mark.bar.upperBound - top, DayPlan.Rail.rowHeight - 4), following - top)
                 let rising = sounding == mark.id && controller.rising && controller.status != .paused
                 DayRow(alarm: mark.alarm, pieces: plan.line(for: row, nextPart: nextPart(mark.alarm), rising: rising,
                                                             waiting: sounding == mark.id ? waiting : nil, cantWake: unwoken == mark.id))
-                    .offset(y: mark.top)
-                    .padding(.leading, 83)
+                    .padding(EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(height: blockHeight, alignment: .topLeading)
+                    .background(sounding == mark.id ? Theme.primary.opacity(0.1) : Theme.selection.opacity(mark.alarm.on ? 1 : 0.4), in: .rect(cornerRadius: Radius.small))
+                    .padding(.leading, 90)
+                    .offset(y: top)
             }
             if let (hour, name) = drop {
-                dropRow(plan: plan, hour: hour, name: name)
+                dropRow(plan: plan, hour: hour, name: name, scale: scale)
             }
         }
         // a day of one short row is still somewhere to drop
         .frame(maxWidth: .infinity, minHeight: max(rail.height, 96), alignment: .topLeading)
         .contentShape(.rect)
-        .onDrop(of: [.plainText], delegate: HourDrop(now: nowDate, hour: $dropHour, router: router, controller: controller))
+        .onDrop(of: [.plainText], delegate: HourDrop(now: nowDate, hour: $dropHour, router: router, controller: controller, scale: hourHeight))
     }
 
     private var nowDate: Date { now(.now) }
 
-    private func dropRow(plan: DayPlan, hour: Int, name: String) -> some View {
+    private func dropRow(plan: DayPlan, hour: Int, name: String, scale: Double) -> some View {
         let label = plan.dropLabel(hour: hour)
-        let top = Double(hour - plan.firstHour) * DayPlan.Rail.hourHeight
+        let top = Double(hour - plan.firstHour) * scale
         return ZStack(alignment: .topLeading) {
             Text(label.start)
                 .role(.body)
@@ -177,7 +193,7 @@ struct DayPage: View {
             .padding(.top, 6)
             .padding(.leading, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 2 * DayPlan.Rail.hourHeight, alignment: .topLeading)
+            .frame(height: 2 * scale, alignment: .topLeading)
             .background(Theme.primary.opacity(0.1), in: .rect(cornerRadius: Radius.small))
             .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1) }
             .padding(.leading, 98)
@@ -546,6 +562,7 @@ private struct HourDrop: DropDelegate {
     @Binding var hour: Int?
     let router: Router
     let controller: Controller
+    let scale: (DayPlan) -> Double
 
     func validateDrop(info: DropInfo) -> Bool {
         router.draggingCollection != nil && info.hasItemsConforming(to: [.plainText])
@@ -553,7 +570,8 @@ private struct HourDrop: DropDelegate {
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         // the whole day's scale from the first sample, as that's what the rail opens to under the pointer
-        hour = controller.dayPlan(now: now, wholeDay: true).hour(at: Double(info.location.y))
+        let day = controller.dayPlan(now: now, wholeDay: true)
+        hour = day.hour(at: Double(info.location.y), hourHeight: scale(day))
         return DropProposal(operation: .copy)
     }
 

@@ -292,7 +292,7 @@ struct DayPlanTests {
         let day = plan([overworld, chopin, soon], date(2, 12))
         #expect(day.line(for: day.rows[1], nextPart: nil).filter { $0.text.contains("Overlaps") }.map(\.text) == ["Overlaps "])
         let marks = day.rail.marks
-        #expect(marks[2].top == marks[1].top + 58)
+        #expect(marks[2].top == marks[1].top + DayPlan.Rail.asideHeight)
         #expect(day.rail.height >= marks[2].top + DayPlan.Rail.rowHeight)
     }
 
@@ -300,13 +300,13 @@ struct DayPlanTests {
         var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 18, minute: 0, weekdays: Set(1...7))
         chopin.minutes = 30
         let rail = plan([overworld, chopin], date(2, 12)).rail
-        #expect(rail.height == rail.marks[1].top + 58)
+        #expect(rail.height == rail.marks[1].top + DayPlan.Rail.asideHeight)
     }
 
     @Test func theRailIsToScale() {
         let morning = lauds
         let rail = plan([morning, overworld, compline], date(2, 15, 40), lengths: [morning.id: 69 * 60]).rail
-        #expect(rail.height == 341)
+        #expect(rail.height == rail.marks[2].top + DayPlan.Rail.rowHeight)
         #expect(abs(rail.marks[0].bar.lowerBound - 0.8) < 0.01)
         #expect(abs(rail.marks[0].bar.upperBound - 28.4) < 0.01)
         #expect(rail.marks[1].bar == 192...288)
@@ -319,7 +319,7 @@ struct DayPlanTests {
         var soon = lauds
         (soon.hour, soon.minute, soon.id) = (7, 30, UUID())
         let rail = plan([lauds, soon], date(2, 12)).rail
-        #expect(abs(rail.marks[1].top - (rail.marks[0].top + 40)) < 0.01)
+        #expect(abs(rail.marks[1].top - (rail.marks[0].top + DayPlan.Rail.rowHeight)) < 0.01)
         #expect(rail.marks[1].bar.lowerBound == 12)
         // a time's label goes where its words went
         #expect(rail.labels.contains { $0.text == "7:30 AM" && abs($0.y - rail.marks[1].top - 11) < 0.01 })

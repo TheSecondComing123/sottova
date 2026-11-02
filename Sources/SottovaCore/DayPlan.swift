@@ -301,10 +301,10 @@ extension DayPlan {
     /// when the one above needs the room.
     public struct Rail: Sendable {
         public static let hourHeight = 24.0
-        /// A name and its line.
-        public static let rowHeight = 40.0
-        /// A name and two lines: an overlap's note wraps.
-        static let asideHeight = 58.0
+        /// A row's block: a name and its line, with room around them.
+        public static let rowHeight = 56.0
+        /// A block with two lines: an overlap's note wraps.
+        static let asideHeight = 74.0
 
         public struct Mark: Identifiable, Sendable {
             public let alarm: Alarm
@@ -337,8 +337,11 @@ extension DayPlan {
         public let now: Double?
     }
 
-    public var rail: Rail {
-        let height = Double(lastHour - firstHour) * Rail.hourHeight
+    public var rail: Rail { rail(hourHeight: Rail.hourHeight) }
+
+    /// `hourHeight`: a page with room to spare spends it on the scale.
+    public func rail(hourHeight: Double) -> Rail {
+        let height = Double(lastHour - firstHour) * hourHeight
         let y = { (date: Date) in position(of: date) * height }
         var marks: [Rail.Mark] = []
         for row in rows {
@@ -362,7 +365,7 @@ extension DayPlan {
         let bare = rows.isEmpty ? stride(from: firstHour + 3, to: lastHour, by: 3).map { $0 } : []
         for hour in [firstHour, lastHour] + (firstHour < 12 && lastHour > 12 ? [12] : []) + bare {
             let edge = hour == firstHour || hour == lastHour
-            wanted.append(Rail.Label(text: railTime(hour: hour, minute: 0, full: edge), y: Double(hour - firstHour) * Rail.hourHeight, kind: .frame, row: nil))
+            wanted.append(Rail.Label(text: railTime(hour: hour, minute: 0, full: edge), y: Double(hour - firstHour) * hourHeight, kind: .frame, row: nil))
         }
         var labels: [Rail.Label] = []
         for label in wanted.enumerated().sorted(by: { ($0.element.kind.rawValue, $0.offset) < ($1.element.kind.rawValue, $1.offset) }).map(\.element)
