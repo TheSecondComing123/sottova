@@ -105,6 +105,21 @@ struct NowScreenTests {
         #expect(NowScreen.waiting(.away, row: "Overworld").sub.contains("Overworld"))
     }
 
+    @Test func musicLoadedBeforeTheCatalogIsNeverFirstRun() throws {
+        let engine = AVAudioEngine()
+        try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!, maximumFrameCount: 480)
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-now-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let state = Controller.ResumeState(path: nil, elapsed: nil, restLeft: 30, source: nil, upNext: [], hour: nil)
+        try JSONEncoder().encode(state).write(to: dir.appending(path: "resume.json"))
+        let c = Controller(engine: engine, storage: dir)
+        c.restoreResume()
+        #expect(c.catalog.albums.isEmpty)
+        #expect(c.status != .idle)
+        #expect(c.nowScreen().kind != .firstRun)
+        #expect(c.nowFoot() != NowScreen.pitch)
+    }
+
     @Test func idleReadsTheDay() async throws {
         let (c, _) = try await controller()
         let screen = c.nowScreen()

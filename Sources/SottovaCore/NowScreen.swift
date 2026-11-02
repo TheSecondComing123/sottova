@@ -40,7 +40,8 @@ public struct NowScreen: Equatable, Sendable {
 extension Controller {
     /// `silent`: the screen's own fall has ended, which comes before the audio's. Polled, like the state it reads.
     public func nowScreen(now: Date = .now, silent: Bool = false) -> NowScreen {
-        if catalog.albums.isEmpty {
+        // music picked up from the last run plays before the catalog is built: that isn't a first run
+        if catalog.albums.isEmpty, status == .idle {
             if pendingAnalysis > 0, let folder = folders.first {
                 let done = max(0, tracks.count - pendingAnalysis)
                 return NowScreen(kind: .reading, title: "Reading \(folder.lastPathComponent)", sub: "\(done) of \(tracks.count)")
@@ -63,7 +64,7 @@ extension Controller {
 
     /// The line at the foot of the page. Reads the whole day, so it's asked for rarely.
     public func nowFoot(now: Date = .now, wakeScheduled: Bool = false) -> String? {
-        if catalog.albums.isEmpty { return NowScreen.pitch }
+        if catalog.albums.isEmpty, status == .idle { return NowScreen.pitch }
         if status == .idle { return dayPlan(now: now).quiet(wakeScheduled: wakeScheduled).foot }
         if let row = soundingRow { return dayPlan(now: now).foot(sounding: row) }
         return sourceName.map { "\($0), then everything shuffled." }
