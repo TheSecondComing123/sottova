@@ -21,9 +21,16 @@ public struct PageLayout: Equatable, Sendable {
 
 public struct ListLayout: Equatable, Sendable {
     public let narrow: Bool
-    public init(width: Double) { narrow = width < 860 }
+    /// A window of 1400 or more: the cover and words stay put to the left while the songs scroll.
+    public let pinned: Bool
+    private let width: Double
+    public init(width: Double) {
+        self.width = width
+        narrow = width < 860
+        pinned = width >= 1184
+    }
     public var margin: Double { narrow ? 32 : 40 }
-    public var cover: Double { narrow ? 120 : 160 }
+    public var cover: Double { pinned ? min((width * 0.25).rounded(), 360) : narrow ? 120 : 160 }
 }
 
 /// Where things sit on Now: the cover takes what the words and margins leave, up to the page's height, and is centered

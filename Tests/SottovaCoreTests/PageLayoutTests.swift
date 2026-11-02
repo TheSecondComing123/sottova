@@ -121,4 +121,12 @@ struct PageLayoutTests {
         #expect(PageLayout(windowWidth: 1195, pageHeight: 748).day.narrow)
         #expect(!PageLayout(windowWidth: 1196, pageHeight: 748).day.narrow)
     }
+
+    @Test func aWideWindowPinsTheCover() {
+        #expect(!PageLayout(windowWidth: 1399, pageHeight: 748).list.pinned)
+        #expect(PageLayout(windowWidth: 1400, pageHeight: 748).list.pinned)
+        #expect(PageLayout(windowWidth: 1399, pageHeight: 748).list.cover == 160)
+        #expect(PageLayout(windowWidth: 1470, pageHeight: 898).list.cover == 314)
+        #expect(PageLayout(windowWidth: 1920, pageHeight: 997).list.cover == 360)
+    }
 }

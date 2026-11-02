@@ -259,12 +259,12 @@ struct DayPlanTests {
         let day = plan([lauds, overworld, compline, noon, off])
         #expect(day.shortHours(of: "lauds") == "7:02 weekdays")
         #expect(says(day.shortHours(of: "overworld"), "3", "7 PM"))
-        #expect(day.hours(of: "compline") == "Every day, 8 to 9 PM, at 15%")
-        #expect(says(day.hours(of: "lauds"), "Weekdays", "7:02", "25%"))
-        #expect(says(day.hours(of: "noon"), "Weekends", "11:30", "1 PM"))
+        #expect(day.firstRow(of: "compline").map(day.when) == "8 to 9 PM")
+        #expect(says(day.firstRow(of: "lauds").map(day.when), "7:02"))
+        #expect(says(day.firstRow(of: "noon").map(day.when), "11:30", "1 PM"))
         let eight = Alarm(source: "eight", name: "Eight", hour: 20, minute: 0, weekdays: Set(1...7))
         #expect(says(plan([eight]).shortHours(of: "eight"), "8 PM", "every day"))
-        #expect(day.hours(of: "off") == nil)
+        #expect(day.firstRow(of: "off") == nil)
         #expect(day.shortHours(of: "nothing") == nil)
     }
 

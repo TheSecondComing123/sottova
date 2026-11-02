@@ -194,15 +194,13 @@ public struct DayPlan: Sendable {
         }
     }
 
-    /// On a collection's page: "Every day, 8 to 9 PM, at 15%". Nil if it has no row on.
-    public func hours(of source: String) -> String? {
-        firstRow(of: source).map { row in
-            let when = row.minutes == nil ? "\(clockTime(row))\(twelveHour ? row.hour < 12 ? " AM" : " PM" : "")" : span(row)
-            return [days(row), when, row.volume.map { "at \(Int(($0 * 100).rounded()))%" }].compactMap { $0 }.joined(separator: ", ")
-        }
+    /// On a collection's page, before the row's words: "7:02 AM" or "8 to 9 PM".
+    public func when(_ row: Alarm) -> String {
+        row.minutes == nil ? "\(clockTime(row))\(twelveHour ? row.hour < 12 ? " AM" : " PM" : "")" : span(row)
     }
 
-    private func firstRow(of source: String) -> Alarm? {
+    /// The row a collection's page speaks for. Nil if it has no row on.
+    public func firstRow(of source: String) -> Alarm? {
         alarms.filter { $0.on && $0.source == source }.min { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
     }
 

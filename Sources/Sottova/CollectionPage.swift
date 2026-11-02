@@ -37,12 +37,14 @@ struct CoverImage: View {
     }
 }
 
-/// Cover and words over the songs, all scrolling together.
+/// Cover and words over the songs, all scrolling together; on a wide window pinned left, with the songs scrolling beside them.
 struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     let cover: String?
     /// Nothing in it yet: the only place here an empty frame belongs.
     let empty: Bool
     var dropTargeted = false
+    /// The row it plays for, as words you can click.
+    var row: Alarm?
     let lines: [String]
     /// Where the painting's credit is, and what re-reads it.
     var credit: (url: URL?, key: String?) = (nil, nil)
@@ -52,33 +54,77 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     @Environment(\.listLayout) private var layout
 
     var body: some View {
-        let side = layout.cover
-        PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
-            HStack(alignment: .bottom, spacing: 20) {
-                if let cover {
-                    CoverImage(key: cover, size: side)
-                } else if empty {
-                    RoundedRectangle(cornerRadius: Radius.small)
-                        .fill(dropTargeted ? Theme.primary.opacity(0.1) : .clear)
-                        .strokeBorder(dropTargeted ? Theme.primary : Theme.frame, lineWidth: 1)
-                        .frame(width: side, height: side)
-                }
-                VStack(alignment: .leading, spacing: 0) {
-                    name
-                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                        Text(line)
-                            .role(.body)
-                            .foregroundStyle(Theme.muted)
-                            .padding(.top, index == 0 ? 8 : 0)
+        Group {
+            if layout.pinned {
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        art
+                        words
                     }
-                    CoverCredit(url: credit.url, key: credit.key).padding(.top, 4)
-                    actions.padding(.top, 14)
+                    .frame(width: layout.cover, alignment: .leading)
+                    .padding(.top, 16)
+                    .padding(.leading, layout.margin)
+                    .padding(.trailing, 26)
+                    // the speaker sits 22 left of the rows, and a scroll view clips
+                    PageScroll(insets: EdgeInsets(top: 16, leading: 22, bottom: 24, trailing: layout.margin)) {
+                        songs(false)
+                    }
+                }
+            } else {
+                PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
+                    HStack(alignment: .bottom, spacing: 20) {
+                        art
+                        words
+                    }
+                    .padding(.bottom, 20)
+                    songs(layout.narrow)
                 }
             }
-            .padding(.bottom, 20)
-            songs(layout.narrow)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var art: some View {
+        if let cover {
+            CoverImage(key: cover, size: layout.cover)
+        } else if empty {
+            RoundedRectangle(cornerRadius: Radius.small)
+                .fill(dropTargeted ? Theme.primary.opacity(0.1) : .clear)
+                .strokeBorder(dropTargeted ? Theme.primary : Theme.frame, lineWidth: 1)
+                .frame(width: layout.cover, height: layout.cover)
+        }
+    }
+
+    private var words: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            name
+            if let row { RowLine(row: row).padding(.top, 8) }
+            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                Text(line)
+                    .role(.body)
+                    .foregroundStyle(Theme.muted)
+                    .padding(.top, index == 0 && row == nil ? 8 : 0)
+            }
+            CoverCredit(url: credit.url, key: credit.key).padding(.top, 4)
+            actions.padding(.top, 14)
+        }
+    }
+}
+
+/// When a collection's row plays and how, in the words Your day uses. The time opens the row.
+private struct RowLine: View {
+    let row: Alarm
+    @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
+
+    var body: some View {
+        let plan = DayPlan(alarms: controller.alarms)
+        WordFlow {
+            ThemeLink(text: plan.when(row), underlined: true) { router.alarm = .edit(row) }.role(.body)
+            ForEach(plan.sentence(row, nextPart: row.rotates ? controller.nextPartName(for: row) : nil), id: \.text) { RowWord(alarm: row, piece: $0) }
+        }
+        .foregroundStyle(Theme.muted)
     }
 }
 
@@ -173,8 +219,8 @@ struct AlbumCollection: View {
 
     var body: some View {
         if let album = controller.catalog.albumsByID[id] {
-            CollectionFrame(cover: album.artwork, empty: false,
-                            lines: [DayPlan(alarms: controller.alarms).hours(of: id), songCount(album.songs)].compactMap { $0 }
+            CollectionFrame(cover: album.artwork, empty: false, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
+                            lines: [songCount(album.songs)]
                                 + ownSilence(controller.albumSettings[id], songs: album.songs, controller: controller),
                             credit: (album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") }, album.artwork)) {
                 Text(album.title)
@@ -240,8 +286,8 @@ struct YourCollection: View {
             let cover = controller.playlistCovers[pid] ?? songs.first?.artwork
             let isEmpty = playlist.paths.isEmpty
             let missing = playlist.paths.count - songs.count
-            CollectionFrame(cover: cover, empty: isEmpty, dropTargeted: isEmpty && target == 0,
-                            lines: isEmpty ? [] : [DayPlan(alarms: controller.alarms).hours(of: pid), songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")].compactMap { $0 }
+            CollectionFrame(cover: cover, empty: isEmpty, dropTargeted: isEmpty && target == 0, row: isEmpty ? nil : DayPlan(alarms: controller.alarms).firstRow(of: pid),
+                            lines: isEmpty ? [] : [songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")]
                                 + ownSilence(isEmpty ? nil : playlist.gaps, songs: songs, controller: controller),
                             credit: (Controller.coverURL(forPlaylist: pid), controller.playlistCovers[pid])) {
                 title(playlist)
