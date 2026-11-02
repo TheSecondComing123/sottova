@@ -130,6 +130,7 @@ final class Router {
 
     func goBack() {
         guard let previous = back.popLast() else { return }
+        selected = []
         restore = previous.offset
         withAnimation(Theme.page) {
             forward.append((route, offset))
@@ -139,6 +140,7 @@ final class Router {
 
     func goForward() {
         guard let next = forward.popLast() else { return }
+        selected = []
         restore = next.offset
         withAnimation(Theme.page) {
             back.append((route, offset))

@@ -185,12 +185,13 @@ struct MainWindow: View {
         _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // the page's window itself: a sheet, a popover and Settings have their own keys
             guard router.presetEdit == nil, let window = event.window, window.frameAutosaveName == "main", window.attachedSheet == nil,
-                  !(window.firstResponder is NSText), !(window.firstResponder is NSTableView) else { return event }
+                  !(window.firstResponder is NSText) else { return event }
             if event.keyCode == 53, router.showsQueue {
                 toggleQueue()
                 return nil
             }
-            return router.key(event) ? nil : event
+            // the queue's own list keeps its keys
+            return !(window.firstResponder is NSTableView) && router.key(event) ? nil : event
         }
         _ = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
             router.press = (activating: !(event.window?.isKeyWindow ?? true), picks: router.selected.count)
