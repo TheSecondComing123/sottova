@@ -34,10 +34,11 @@ struct SettingsView: View {
                     playing
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
             }
-            .scrollIndicators(.never)
+            .scrollIndicators(.visible)
+            .scrollIndicatorsFlash(onAppear: true)
             .overlayScrollers()
         }
         .frame(width: 620)
@@ -49,13 +50,13 @@ struct SettingsView: View {
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title).role(.body).fontWeight(.semibold).foregroundStyle(Theme.text).padding(.leading, 4).accessibilityAddTraits(.isHeader)
             VStack(spacing: 0) { content() }
                 .background(Theme.sidebar, in: .rect(cornerRadius: Radius.medium))
                 .overlay { RoundedRectangle(cornerRadius: Radius.medium).strokeBorder(Theme.stroke, lineWidth: 0.5) }
         }
-        .padding(.bottom, 16)
+        .padding(.bottom, 10)
     }
 
     private func label(_ title: String, detail: String? = nil) -> some View {
@@ -103,16 +104,10 @@ struct SettingsView: View {
                 }
                 .modifier(SettingsRow())
             }
-            HStack(spacing: 16) {
-                label("Add a folder…")
-                Spacer(minLength: 0)
-                ThemeButton(title: "Choose", action: controller.chooseFolders)
-            }
-            .modifier(SettingsRow())
-            HStack(spacing: 16) {
-                label("Look through them again")
+            HStack(spacing: 8) {
                 Spacer(minLength: 0)
                 ThemeButton(title: "Rescan", action: controller.rescan)
+                ThemeButton(title: "Add a folder…", action: controller.chooseFolders)
             }
             .modifier(SettingsRow())
             if !controller.skippedFiles.isEmpty { skipped }
@@ -156,12 +151,12 @@ struct SettingsView: View {
             }
             .modifier(SettingsRow())
             Toggle(isOn: $controller.keepsMacAwake) {
-                label("Keep the Mac awake during silence", detail: "Sound stops between songs, so otherwise the Mac can sleep in the middle of one.")
+                label("Keep the Mac awake during silence", detail: "Otherwise the Mac can sleep between songs.")
             }
             .toggleStyle(ThemeCheckbox())
             .modifier(SettingsRow())
             Toggle(isOn: $controller.acceptsURLs) {
-                label("Accept sottova:// links", detail: "Play, pause, toggle, skip and preset/minecraft, from Raycast, Shortcuts or a script. status.json in Application Support/Sottova follows every change.")
+                label("Accept sottova:// links", detail: "Play, pause, toggle, skip, preset/name. State is in Application Support/Sottova/status.json.")
             }
             .toggleStyle(ThemeCheckbox())
             .modifier(SettingsRow())
@@ -202,7 +197,7 @@ private struct SettingsRow: ViewModifier {
         content
             .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 5)
+            .padding(.vertical, 2)
     }
 }
 
