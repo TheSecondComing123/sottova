@@ -99,6 +99,6 @@ extension Controller {
         }
         guard let track else { return nil }
         let left = max(0, Int((track.duration - track.elapsed).rounded(.up)))
-        return String(format: "%d:%02d left", left / 60, left % 60)
+        return (status == .paused ? "Paused, " : "") + String(format: "%d:%02d left", left / 60, left % 60)
     }
 }

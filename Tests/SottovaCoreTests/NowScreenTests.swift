@@ -55,7 +55,7 @@ struct NowScreenTests {
         let (c, _) = try await playing()
         c.advance(91)
         c.toggle()
-        #expect(c.nowScreen().third == "1:49 left")
+        #expect(c.nowScreen().third == "Paused, 1:49 left")
     }
 
     @Test func pausedWinsOverAnEasing() async throws {
