@@ -98,7 +98,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     private func sleep() -> MenuEntry {
-        let controller = controller
+        var entry = MenuEntry.submenu("Sleep", Self.sleepChoices(controller))
+        entry.enabled = controller.status != .idle
+        return entry
+    }
+
+    static func sleepChoices(_ controller: Controller) -> [MenuEntry] {
         let timer = controller.sleepTimer
         let resting = controller.status == .resting
         var entries: [MenuEntry] = timer.map { [.item("stops \(Format.sleep($0, resting: resting, at: .now, sentence: true))", enabled: false) {}, .divider] } ?? []
@@ -108,9 +113,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         entries.append(.divider)
         entries += [15.0, 30, 45, 60, 90].map { minutes in .item(Format.minutes(minutes * 60)) { controller.sleep(minutes: minutes) } }
         if timer != nil { entries += [.divider, .item("Turn off", action: controller.cancelSleep)] }
-        var entry = MenuEntry.submenu("Sleep", entries)
-        entry.enabled = controller.status != .idle
-        return entry
+        return entries
     }
 }
 

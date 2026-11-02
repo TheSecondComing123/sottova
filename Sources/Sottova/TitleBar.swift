@@ -80,13 +80,6 @@ private struct BarIcon: View {
     }
 }
 
-/// .plain dims a disabled label on top of the theme's disabled color.
-private struct BarPress: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.scaleEffect(configuration.isPressed ? 0.96 : 1)
-    }
-}
-
 private struct BarButton: View {
     let icon: Ph
     var strong = false
@@ -179,14 +172,11 @@ private struct BarHit: NSViewRepresentable {
 /// Set, it says how long is left beside it.
 private struct Moon: View {
     @Environment(Controller.self) private var controller
-    @State private var hovering = false
 
     var body: some View {
         let timer = controller.sleepTimer
         let resting = controller.status == .resting
-        Menu {
-            SleepChoices(controller: controller)
-        } label: {
+        BarControl(help: "sleep timer", action: open) { hovering in
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 HStack(spacing: 2) {
                     if let timer {
@@ -198,15 +188,15 @@ private struct Moon: View {
                     BarIcon(icon: .barMoon, strong: timer != nil, hovering: hovering)
                 }
             }
-            .onHover { hovering = $0 }
+        } access: {
+            Menu("sleep timer") { SleepChoices(controller: controller) }
+                .accessibilityValue(timer.map { Format.sleep($0, resting: resting, at: .now) } ?? "off")
         }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(BarPress())
         .fixedSize()
-        .help("sleep timer")
-        .accessibilityLabel("sleep timer")
-        .accessibilityValue(timer.map { Format.sleep($0, resting: resting, at: .now) } ?? "off")
+    }
+
+    private func open(under view: NSView) {
+        NSMenu(StatusMenu.sleepChoices(controller)).popUp(positioning: nil, at: NSPoint(x: 0, y: -4), in: view)
     }
 }
 
