@@ -53,6 +53,13 @@ for alarm in alarms:
 json.dump(alarms, open(f"{storage}/alarms.json", "w"))
 
 shutil.copy(f"{support}/profile.json", storage)
+plays = f"{support}/plays.jsonl"
+if os.path.exists(plays):
+    with open(f"{storage}/plays.jsonl", "w") as out:
+        for line in open(plays):
+            play = json.loads(line)
+            play["file"] = moved(play["file"]).removeprefix("/private")
+            out.write(json.dumps(play) + "\n")
 # the live build may predate the folder's rename
 art = f"{home}/Library/Caches/Sottova/Covers"
 shutil.copytree(art if os.path.isdir(art) else f"{home}/Library/Caches/Sottova/Artwork", f"{root}/Artwork", dirs_exist_ok=True)

@@ -9,6 +9,7 @@ struct DayPage: View {
     @Environment(Router.self) private var router
     @State private var dropHour: Int?
     @State private var played: [Controller.Played] = []
+    @State private var allPlayed = false
     @Environment(\.pageLayout) private var page
     private var wake = SystemWake.shared
 
@@ -33,8 +34,7 @@ struct DayPage: View {
                     newButton.frame(maxWidth: .infinity, alignment: .trailing).padding(.bottom, 14)
                     day(plan, now: now)
                     if !played.isEmpty {
-                        Text("What played").role(.body).fontWeight(.semibold).foregroundStyle(Theme.text).padding(.top, 19).padding(.bottom, 4)
-                        scrollingPlayed(plan)
+                        playedList(plan)
                     }
                 } else {
                     HStack(alignment: .top, spacing: 40) {
@@ -47,10 +47,7 @@ struct DayPage: View {
                             }
                             .padding(.bottom, 4)
                             others(plan, now: now)
-                            if !played.isEmpty {
-                                Text("What played").role(.body).fontWeight(.semibold).foregroundStyle(Theme.text).padding(.top, 18).padding(.bottom, 4)
-                            }
-                            ForEach(played, id: \.at) { playedLine($0, plan) }
+                            playedList(plan)
                         }
                         .frame(width: layout.right)
                     }
@@ -61,6 +58,11 @@ struct DayPage: View {
             }
         }
         .onAppear { wake.refresh() }
+    }
+
+    private func rest(_ plan: DayPlan) -> [Alarm] {
+        let today = Set(plan.rows.map(\.id))
+        return controller.alarms.filter { !today.contains($0.id) }.sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
     }
 
     private func hourHeight(_ plan: DayPlan) -> Double {
@@ -222,31 +224,56 @@ struct DayPage: View {
         }
     }
 
-    /// Only what happened: when it started, and for which row if it was one's.
-    private func playedLine(_ line: Controller.Played, _ plan: DayPlan) -> some View {
-        let words = [line.title, line.row].compactMap { $0 }.joined(separator: ", ")
-        return HStack(spacing: 10) {
-            Text(plan.clockText(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: 38, alignment: .trailing)
-            Text(words).foregroundStyle(Theme.muted).lineLimit(1).help(words)
-        }
-        .role(.body)
-        .frame(height: 24)
+    private func heading(_ text: String) -> some View {
+        Text(text).role(.body).fontWeight(.semibold).foregroundStyle(Theme.text)
     }
 
-    private func scrollingPlayed(_ plan: DayPlan) -> some View {
-        ScrollView(.horizontal) {
-            HStack(alignment: .top, spacing: 40) {
-                ForEach(Array(stride(from: 0, to: played.count, by: 3)), id: \.self) { start in
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(played[start..<min(start + 3, played.count)], id: \.at) { playedLine($0, plan) }
-                    }
+    /// Newest first. What doesn't fit is behind All, with the row each piece played for.
+    @ViewBuilder
+    private func playedList(_ plan: DayPlan) -> some View {
+        if !played.isEmpty {
+            let cap = layout.playedCap(others: rest(plan).count)
+            HStack(spacing: 6) {
+                heading("What played")
+                Text("\(played.count)").role(.body).monospacedDigit().foregroundStyle(Theme.muted)
+                Spacer(minLength: 16)
+                if played.count > cap {
+                    ThemeLink(text: "All \(played.count)", underlined: true) { allPlayed = true }
+                        .role(.body)
+                        .popover(isPresented: $allPlayed, arrowEdge: .trailing) { allPlayedList(plan) }
                 }
             }
+            .padding(.top, 24)
+            .padding(.bottom, 6)
+            ForEach(played.reversed().prefix(cap), id: \.at) { line in
+                HStack(spacing: 8) {
+                    Text(plan.clockText(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: 38, alignment: .trailing)
+                    Artwork(key: line.artwork, size: 20, radius: 3)
+                    Text(line.title).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(line.title)
+                }
+                .role(.body)
+                .frame(height: 24)
+            }
         }
-        .scrollIndicators(.visible)
-        .scrollIndicatorsFlash(onAppear: true)
-        // a long day opens on its latest, with the morning a scroll away
-        .defaultScrollAnchor(.trailing, for: .initialOffset)
+    }
+
+    private func allPlayedList(_ plan: DayPlan) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(played.reversed(), id: \.at) { line in
+                    let words = [line.title, line.row].compactMap { $0 }.joined(separator: ", ")
+                    HStack(spacing: 8) {
+                        Text(plan.clockText(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: 38, alignment: .trailing)
+                        Text(words).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(words)
+                    }
+                    .role(.body)
+                    .frame(height: 24)
+                }
+            }
+            .padding(12)
+        }
+        .frame(width: 380)
+        .frame(maxHeight: 420)
     }
 }
 
