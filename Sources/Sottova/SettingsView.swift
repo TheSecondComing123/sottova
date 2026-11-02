@@ -23,13 +23,14 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     look
-                    section("Starting") {
-                        Toggle(isOn: $opensAtLogin) { label("Open at login", detail: loginProblem ?? "Your day needs Sottova running.") }
+                    section("Your day") {
+                        // says itself while off: after a restart, alarms wouldn't play
+                        Toggle(isOn: $opensAtLogin) { label("Open at login", detail: loginProblem ?? (opensAtLogin ? nil : "Your day needs Sottova running.")) }
                             .toggleStyle(ThemeCheckbox())
                             .modifier(SettingsRow())
                             .onChange(of: opensAtLogin) { _, on in setOpensAtLogin(on) }
+                        CalendarRow()
                     }
-                    section("Calendars") { CalendarRows() }
                     music
                     playing
                 }
@@ -42,8 +43,8 @@ struct SettingsView: View {
             .overlayScrollers()
         }
         .frame(width: 620)
-        // 560 with the title bar this stretches up under
-        .frame(minHeight: 528, idealHeight: 528, maxHeight: .infinity)
+        // with the title bar this stretches up under; every row one line, more folders scroll
+        .frame(minHeight: 460, idealHeight: 460, maxHeight: .infinity)
         .background(Theme.background)
         .ignoresSafeArea()
         .onAppear { opensAtLogin = SMAppService.mainApp.status == .enabled }
@@ -95,10 +96,11 @@ struct SettingsView: View {
     private var music: some View {
         section("Music") {
             ForEach(controller.folders, id: \.self) { folder in
+                let path = folder.path(percentEncoded: false).replacingOccurrences(of: NSHomeDirectory(), with: "~").trimmingSuffix("/")
                 HStack(spacing: 16) {
-                    label(folder.path(percentEncoded: false).replacingOccurrences(of: NSHomeDirectory(), with: "~").trimmingSuffix("/"),
-                          detail: Format.count(songCount(in: folder), "song"))
+                    Text(path).role(.body).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle).help(path)
                     Spacer(minLength: 0)
+                    Text(Format.count(songCount(in: folder), "song")).role(.body).monospacedDigit().foregroundStyle(Theme.muted).fixedSize()
                     ThemeButton(title: "Remove") { controller.removeFolder(folder) }
                         .help("stop watching this folder; the files stay where they are")
                 }
@@ -133,7 +135,7 @@ struct SettingsView: View {
     private var playing: some View {
         section("Playing") {
             HStack(spacing: 16) {
-                label("Loudness", detail: "Starts with the next song.")
+                label("Loudness")
                 Spacer(minLength: 0)
                 ThemePopup(title: Self.levels.first { $0.lufs == controller.settings.targetLufs }?.name ?? "\(Int(controller.settings.targetLufs)) LUFS") {
                     ForEach(Self.levels, id: \.lufs) { level in
@@ -150,16 +152,14 @@ struct SettingsView: View {
                              range: 0...50, unit: "songs")
             }
             .modifier(SettingsRow())
-            Toggle(isOn: $controller.keepsMacAwake) {
-                label("Keep the Mac awake during silence", detail: "Otherwise the Mac can sleep between songs.")
-            }
-            .toggleStyle(ThemeCheckbox())
-            .modifier(SettingsRow())
-            Toggle(isOn: $controller.acceptsURLs) {
-                label("Accept sottova:// links", detail: "Play, pause, toggle, skip, preset/name. State is in Application Support/Sottova/status.json.")
-            }
-            .toggleStyle(ThemeCheckbox())
-            .modifier(SettingsRow())
+            Toggle(isOn: $controller.keepsMacAwake) { label("Keep the Mac awake during silence") }
+                .toggleStyle(ThemeCheckbox())
+                .modifier(SettingsRow())
+                .help("Otherwise the Mac can sleep between songs.")
+            Toggle(isOn: $controller.acceptsURLs) { label("Accept sottova:// links") }
+                .toggleStyle(ThemeCheckbox())
+                .modifier(SettingsRow())
+                .help("Play, pause, toggle, skip, preset/name. State is in Application Support/Sottova/status.json.")
         }
     }
 
@@ -181,7 +181,7 @@ struct SettingsView: View {
             }
             loginProblem = nil
         } catch {
-            loginProblem = "Couldn't change login items: \(error.localizedDescription)"
+            loginProblem = "Couldn't change login items. Try System Settings, General, Login Items."
         }
         // the user can also change this in System Settings, so read back what actually happened
         opensAtLogin = SMAppService.mainApp.status == .enabled
@@ -201,8 +201,8 @@ private struct SettingsRow: ViewModifier {
     }
 }
 
-/// Off, no calendar counts, which is what a row minding them reads: there's nothing else to store.
-private struct CalendarRows: View {
+/// None counted, a row minding its calendar has nothing to wait for: there's nothing else to store.
+private struct CalendarRow: View {
     @State private var status = EKEventStore.authorizationStatus(for: .event)
     @State private var calendars: [EKCalendar] = []
     @State private var counted: [String: Bool] = [:]
@@ -220,42 +220,48 @@ private struct CalendarRows: View {
         Group {
             switch status {
             case .fullAccess:
-                Toggle(isOn: Binding(get: { calendars.contains(where: counts) }, set: { on in calendars.forEach { set(on, $0) } })) {
-                    Text("Wait while my calendar is busy").role(.body).foregroundStyle(Theme.text)
-                }
-                .toggleStyle(ThemeCheckbox())
-                .modifier(SettingsRow())
-                ForEach(calendars, id: \.calendarIdentifier) { calendar in
-                    Toggle(isOn: Binding(get: { counts(calendar) }, set: { set($0, calendar) })) {
-                        Text(calendar.title).role(.body).foregroundStyle(Theme.text)
+                HStack(spacing: 16) {
+                    Text("Calendars that count as busy").role(.body).foregroundStyle(Theme.text)
+                    Spacer(minLength: 0)
+                    ThemePopup(title: "\(calendars.count(where: counts)) of \(calendars.count)") {
+                        Button("All") { calendars.forEach { set(true, $0) } }
+                        Button("None") { calendars.forEach { set(false, $0) } }
+                        Divider()
+                        ForEach(calendars, id: \.calendarIdentifier) { calendar in
+                            Toggle(calendar.title, isOn: Binding(get: { counts(calendar) }, set: { set($0, calendar) }))
+                        }
                     }
-                    .toggleStyle(ThemeCheckbox())
-                    .modifier(SettingsRow())
                 }
+                .modifier(SettingsRow())
             case .notDetermined:
-                ask("Sottova hasn't asked for your calendars", detail: "Rows can wait for meetings once you allow it.", button: "Allow") {
+                ask("Calendars that count as busy", help: "Rows can wait for meetings once you allow it.", button: "Allow") {
                     Task {
                         await Presence.askForCalendars()
                         refresh()
                     }
                 }
             default:
-                ask("Sottova can't read your calendars", detail: "Rows can't wait for meetings until you allow it.", button: "Open Privacy settings") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Sottova can't read your calendars").role(.body).foregroundStyle(Theme.text)
+                        Text("Rows can't wait for meetings until you allow it.").role(.small).foregroundStyle(Theme.muted)
+                    }
+                    Spacer(minLength: 0)
+                    ThemeButton(title: "Open Privacy settings") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
+                    }
                 }
+                .modifier(SettingsRow())
             }
         }
         .onAppear(perform: refresh)
     }
 
-    private func ask(_ title: String, detail: String, button: String, action: @escaping () -> Void) -> some View {
+    private func ask(_ title: String, help: String, button: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title).role(.body).foregroundStyle(Theme.text)
-                Text(detail).role(.small).foregroundStyle(Theme.muted)
-            }
+            Text(title).role(.body).foregroundStyle(Theme.text)
             Spacer(minLength: 0)
-            ThemeButton(title: button, action: action)
+            ThemeButton(title: button, action: action).help(help)
         }
         .modifier(SettingsRow())
     }
@@ -263,7 +269,17 @@ private struct CalendarRows: View {
     private func refresh() {
         status = EKEventStore.authorizationStatus(for: .event)
         // reading calendars from the copy would ask for access
-        #if !SHOT
+        #if SHOT
+        if UserDefaults.standard.bool(forKey: "shotCalendars") {
+            let store = EKEventStore()
+            status = .fullAccess
+            calendars = ["Home", "Work", "School", "Piano", "US Holidays"].map {
+                let calendar = EKCalendar(for: .event, eventStore: store)
+                calendar.title = $0
+                return calendar
+            }
+        }
+        #else
         calendars = Presence.calendars
         #endif
     }
