@@ -145,13 +145,6 @@ struct DayPlanTests {
         #expect(plan([off, chopin], date(2, 12)).rows[1].overlapNote == nil)
     }
 
-    @Test func aLongStretchBetweenRowsIsSaid() {
-        let row = lauds
-        let day = plan([row, overworld, compline], date(2, 12), lengths: [row.id: 69 * 60])
-        #expect(day.gaps.map(\.text) == ["Nothing from 8 to 3."])
-        #expect(day.gaps[0].from == date(2, 8, 11) && day.gaps[0].to == date(2, 15))
-    }
-
     @Test func whatSoundingLeadsTo() {
         #expect(plan([lauds, overworld, compline], date(2, 15, 40)).foot(sounding: overworld) == "Overworld until 7, then Compline at 8.")
         #expect(plan([lauds, overworld, compline], date(2, 20, 5)).foot(sounding: compline) == "Compline until 9. Then nothing until Lauds at 7:02.")
@@ -258,7 +251,7 @@ struct DayPlanTests {
         #expect(text(day.sentence(evening, nextPart: "part 2")) == "Every day, at 15%. Part 2 next.")
         var plain = compline
         plain.volume = nil
-        #expect(text(day.sentence(plain, nextPart: nil)) == "Every day, in order, at the speaker's volume.")
+        #expect(text(day.sentence(plain, nextPart: nil)) == "Every day, in order.")
         var some = overworld
         some.weekdays = [2, 3, 4, 5, 6]
         #expect(text(day.sentence(some, nextPart: nil)) == "Weekdays, while you're at the Mac, in order.")
@@ -274,12 +267,21 @@ struct DayPlanTests {
         #expect(text(day.line(for: row, nextPart: nil)) == "Missed at 7:02. The Mac was off. Play it now")
         #expect(day.line(for: row, nextPart: nil).last?.word == .playNow)
         #expect(text(day.line(for: row, nextPart: nil, rising: true)) == "Rising to 25%. Weekdays, shuffled.")
-        #expect(text(day.line(for: day.rows[1], nextPart: nil, waiting: .call)) == "Waiting, you're on a call. Then in order, at the Mac.")
+        #expect(text(day.line(for: day.rows[1], nextPart: nil, waiting: .call)) == "Waiting, you're on a call.")
         #expect(text(day.line(for: day.rows[1], nextPart: nil, cantWake: true)) == "The Mac won't wake for this. Wake it")
         // a miss today mustn't hide that the next one can't wake either
         #expect(text(day.line(for: row, nextPart: nil, cantWake: true)) == "Missed at 7:02. The Mac was off. Play it now. The Mac won't wake for the next one. Wake it")
         #expect(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: true)) == "The Mac won't wake for this. Wake it")
         #expect(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: false)) == "While you're at the Mac, in order.")
+    }
+
+    @Test func anOverlapIsAddedToTheRowsWords() {
+        var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
+        (chopin.whileHere, chopin.minutes, chopin.shuffled) = (true, 60, true)
+        let day = plan([overworld, chopin], date(2, 12))
+        let line = day.line(for: day.rows[1], nextPart: nil)
+        #expect(text(line) == "While you're at the Mac, shuffled. Overlaps Overworld. This one plays, Overworld waits.")
+        #expect(line.compactMap(\.word) == [.days, .order])
     }
 
     @Test func theRailIsToScale() {
@@ -292,9 +294,6 @@ struct DayPlanTests {
         #expect(rail.marks[2].top == 301)
         #expect(abs(rail.now! - 208) < 0.01)
         #expect(rail.labels.map(\.text) == ["7:02 AM", "8:11", "noon", "3 PM", "3:40", "7 PM", "8 PM", "9 PM"])
-        #expect(rail.gaps.count == 1)
-        #expect(rail.gaps[0].text == "Nothing from 8 to 3.")
-        #expect(abs(rail.gaps[0].top - 82.2) < 0.01)
     }
 
     @Test func wordsMakeRoomButBarsDont() {

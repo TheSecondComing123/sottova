@@ -13,12 +13,6 @@ public struct DayPlan: Sendable {
         public var id: Alarm.ID { alarm.id }
     }
 
-    public struct Gap: Equatable, Sendable {
-        public let from, to: Date
-        /// "Nothing from 8 to 3."
-        public let text: String
-    }
-
     /// What Now says when nothing's sounding.
     public struct Quiet: Equatable, Sendable {
         public let headline: String
@@ -30,13 +24,12 @@ public struct DayPlan: Sendable {
     public let rows: [Row]
     /// The rail runs from the hour of the first row to the end of the last. No rows, or `wholeDay`: 6 AM to 10 PM, or more if a row needs it.
     public let firstHour, lastHour: Int
-    public let gaps: [Gap]
     private let alarms: [Alarm]
     fileprivate let now: Date
     fileprivate let calendar: Calendar
     fileprivate let twelveHour: Bool
 
-    /// A stretch this long between rows gets said out loud, and the next row stops being "then".
+    /// After a stretch this long the next row stops being "then".
     private static let longGap: TimeInterval = 2 * 3600
 
     public init(alarms: [Alarm], now: Date = .now, lengths: [Alarm.ID: TimeInterval] = [:], calendar: Calendar = .current,
@@ -68,17 +61,6 @@ public struct DayPlan: Sendable {
         }.max() ?? 22
         firstHour = whole ? min(first, 6) : first
         lastHour = max(whole ? max(last, 22) : last, firstHour + 1)
-        var gaps: [Gap] = []
-        var reached = on.first?.end
-        for span in on.dropFirst() {
-            if let from = reached, span.start.timeIntervalSince(from) >= Self.longGap {
-                let hour = Self.time(hour: clock(from).hour ?? 0, minute: 0, twelveHour: twelveHour)
-                let to = Self.time(hour: clock(span.start).hour ?? 0, minute: clock(span.start).minute ?? 0, twelveHour: twelveHour)
-                gaps.append(Gap(from: from, to: span.start, text: "Nothing from \(hour) to \(to)."))
-            }
-            reached = max(reached ?? span.end, span.end)
-        }
-        self.gaps = gaps
     }
 
     /// How far down the rail a time sits, 0 to 1.
@@ -246,15 +228,14 @@ extension DayPlan {
             case .busy: "your calendar is busy"
             case .media: "something else is playing"
             }
-            return [Piece("Waiting, \(why). Then "), Piece(alarm.shuffled ? "shuffled" : "in order", .order), Piece(", at the Mac.")]
+            return [Piece("Waiting, \(why).")]
         }
         if let missed = missedToday(alarm) {
             let wake = cantWake ? [Piece(". The Mac won't wake for the next one. "), Piece("Wake it", .wake)] : []
             return [Piece(missed + " "), Piece("Play it now", .playNow)] + wake
         }
         if cantWake { return wakeLine(alarm: alarm, nextPart: nextPart, cantWake: true) }
-        if let note = row.overlapNote { return [Piece(note)] }
-        return sentence(alarm, nextPart: nextPart)
+        return sentence(alarm, nextPart: nextPart) + (row.overlapNote.map { [Piece(" "), Piece($0)] } ?? [])
     }
 
     /// A row with no place on today's rail still says if the Mac can't wake for it.
@@ -272,8 +253,6 @@ extension DayPlan {
         }
         if showsVolume, let volume = alarm.volume {
             clauses.append(Piece("at \(Self.percent(volume))", .volume))
-        } else if showsVolume, !alarm.whileHere {
-            clauses.append(Piece("at the speaker's volume", .volume))
         }
         if alarm.heedsCalendar { clauses.append(Piece("unless your calendar is busy", .calendar)) }
         var pieces: [Piece] = []
@@ -351,7 +330,6 @@ extension DayPlan {
         public let marks: [Mark]
         public let labels: [Label]
         public let now: Double?
-        public let gaps: [(text: String, top: Double)]
     }
 
     public var rail: Rail {
@@ -386,11 +364,7 @@ extension DayPlan {
         where !labels.contains(where: { abs($0.y - label.y) < 15 }) {
             labels.append(label)
         }
-        let spots = gaps.compactMap { gap -> (text: String, top: Double)? in
-            let top = (y(gap.from) + y(gap.to)) / 2 - 28
-            return marks.contains { $0.top < top + 18 && top < $0.top + Rail.rowHeight } ? nil : (gap.text, top)
-        }
-        return Rail(height: max(height, (marks.last?.top ?? 0) + Rail.rowHeight), marks: marks, labels: labels.sorted { $0.y < $1.y }, now: inDay ? y(now) : nil, gaps: spots)
+        return Rail(height: max(height, (marks.last?.top ?? 0) + Rail.rowHeight), marks: marks, labels: labels.sorted { $0.y < $1.y }, now: inDay ? y(now) : nil)
     }
 
     /// "7:02 AM", "noon"; `full` says which half of the day, otherwise "8:11" or "3". A 24-hour clock has no halves.

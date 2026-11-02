@@ -295,7 +295,7 @@ struct AlarmSheet: View {
     @ViewBuilder private var settings: some View {
         VStack(spacing: 8) {
             Toggle("Shuffled", isOn: $shuffled)
-            Toggle("Not while my calendar is busy", isOn: $heedsCalendar)
+            Toggle("Unless your calendar is busy", isOn: $heedsCalendar)
             Toggle("One part each time", isOn: $rotates)
             if rotates {
                 HStack(spacing: 12) {

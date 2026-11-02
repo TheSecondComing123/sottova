@@ -93,14 +93,6 @@ struct DayPage: View {
                     // an 18 pt line sits its small type higher than the mock's
                     .offset(y: label.y - 9 + (label.kind == .row || label.kind == .now ? 1 : 2))
             }
-            if drop == nil {
-                ForEach(Array(rail.gaps.enumerated()), id: \.offset) { _, gap in
-                    Text("\(gap.text) Drag a collection here.")
-                        .role(.body)
-                        .foregroundStyle(Theme.faint)
-                        .offset(x: 106, y: gap.top + 1)
-                }
-            }
             if rail.marks.isEmpty {
                 Text(controller.alarms.isEmpty ? "Nothing on your day. Drag a collection onto an hour." : "Nothing on today. Drag a collection onto an hour.")
                     .role(.body)
