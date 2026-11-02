@@ -32,8 +32,6 @@ public struct NowScreen: Equatable, Sendable {
         }
         return NowScreen(kind: .silence, title: "Waiting", sub: line)
     }
-
-    static let pitch = "Pieces arrive out of silence, at the hours you choose."
 }
 
 extension Controller {
@@ -63,7 +61,7 @@ extension Controller {
 
     /// The line at the foot of the page. Reads the whole day, so it's asked for rarely.
     public func nowFoot(now: Date = .now, wakeScheduled: Bool = false) -> String? {
-        if catalog.albums.isEmpty, status == .idle { return NowScreen.pitch }
+        if catalog.albums.isEmpty, status == .idle { return nil }
         if status == .idle { return dayPlan(now: now).quiet(wakeScheduled: wakeScheduled).foot }
         if let row = soundingRow { return dayPlan(now: now).foot(sounding: row) }
         return sourceName.map { "\($0), then everything shuffled." }

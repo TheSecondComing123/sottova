@@ -113,7 +113,7 @@ struct NowScreenTests {
         #expect(c.catalog.albums.isEmpty)
         #expect(c.status != .idle)
         #expect(c.nowScreen().kind != .firstRun)
-        #expect(c.nowFoot() != NowScreen.pitch)
+        #expect(c.nowFoot() == nil)
     }
 
     @Test func idleReadsTheDay() async throws {
