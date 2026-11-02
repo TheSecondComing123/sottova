@@ -170,6 +170,12 @@ public struct DayPlan: Sendable {
         return halved + (calendar.isDate(date, inSameDayAs: now) ? " today" : dayName(date))
     }
 
+    /// The collection Now's words name when nothing's sounding, for its painting.
+    public var quietSource: String? {
+        alarms.filter(\.on).compactMap { alarm in alarm.window(containing: now, calendar: calendar).map { (alarm.source, $0.end) } }.max { $0.1 < $1.1 }?.0
+            ?? following(after: now)?.alarm.source
+    }
+
     /// Beside a collection in the sidebar: "till 7" while it has the time, otherwise "7:02" or "8 PM". Nil if it has no row on.
     public func label(of source: String) -> String? {
         let mine = alarms.filter { $0.on && $0.source == source }

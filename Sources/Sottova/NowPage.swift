@@ -7,7 +7,7 @@ import SottovaCore
 private final class NowMotion {
     var over: CGImage?
     var under: CGImage?
-    var cover = 1.0
+    var cover = Track.afterimage
     var underLevel = 0.0
     var scale = 1.0
     var text = 1.0
@@ -107,7 +107,7 @@ struct NowPage: View {
             let status = controller.status, track = controller.track
             let rested = status == .resting ? Date.now.timeIntervalSince(start) : 0
             let at = (track?.elapsed ?? 0) + rested
-            var seen = Track.Visual.full
+            var seen = Track.Visual.resting
             var still = Double.infinity
             if status != .idle {
                 if let track, !(controller.inSilence && !track.visual(at: at).silent) {
@@ -128,6 +128,8 @@ struct NowPage: View {
                 let wake = SystemWake.shared.missing(for: controller.alarms).isEmpty
                 motion.foot = controller.nowFoot(now: clock, wakeScheduled: wake)
                 lastFoot = now
+                // the row named moves on with the clock, which the key doesn't have
+                await showArt()
             }
             guard visible else { return }
             let holding = status == .playing && still.isFinite
@@ -155,10 +157,11 @@ struct NowPage: View {
         if motion.silent != seen.silent { motion.silent = seen.silent }
     }
 
-    /// The new piece's cover goes on top and the last one under it, to be risen through. Nothing playing, nothing shown.
+    /// The new piece's cover goes on top and the last one under it, to be risen through. Nothing playing, the painting
+    /// of the row it names, at the afterimage's level.
     private func showArt() async {
         let idle = controller.status == .idle
-        let key = idle ? nil : controller.current?.artwork
+        let key = idle ? idleArt : controller.current?.artwork
         let piece = idle ? nil : controller.current?.id
         // the song too: the next piece of an album has the same art, and the old layer under it has to be this one
         guard piece != shownPiece || key != shownKey else { return }
@@ -169,9 +172,16 @@ struct NowPage: View {
         } else {
             image = nil
         }
-        motion.under = controller.status == .idle ? nil : motion.over
+        // the row's painting was never a piece's, so nothing rises through it
+        motion.under = controller.status == .idle || shownKeyBox.idle ? nil : motion.over
+        shownKeyBox.idle = controller.status == .idle
         motion.over = image
         (shownKey, shownPiece) = (key, piece)
+    }
+
+    private var idleArt: String? {
+        guard !controller.catalog.albums.isEmpty else { return nil }
+        return controller.dayPlan(now: clock).quietSource.flatMap(controller.alarmArtwork)
     }
 
     @State private var shownKeyBox = ShownKey()
@@ -185,7 +195,10 @@ struct NowPage: View {
         nonmutating set { shownKeyBox.piece = newValue }
     }
 
-    private final class ShownKey { var value, piece: String? }
+    private final class ShownKey {
+        var value, piece: String?
+        var idle = false
+    }
 
     @concurrent
     nonisolated private static func decode(_ store: ArtworkStore, _ key: String) async -> CGImage? {

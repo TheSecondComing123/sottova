@@ -191,6 +191,12 @@ struct DayPlanTests {
         #expect(plan([lauds], date(7, 12)).quiet().line == "7:02 Monday")
     }
 
+    @Test func nothingSoundingHasThePaintingOfTheRowItNames() {
+        #expect(plan([lauds, compline], date(2, 20, 30)).quietSource == compline.source)
+        #expect(plan([lauds, compline], date(2, 22)).quietSource == lauds.source)
+        #expect(plan([], date(2, 22)).quietSource == nil)
+    }
+
     @Test func sidebarLabels() {
         let day = plan([lauds, overworld, compline], date(2, 15, 40))
         #expect(day.label(of: "lauds") == "7:02")
