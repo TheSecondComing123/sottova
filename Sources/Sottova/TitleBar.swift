@@ -38,15 +38,19 @@ struct TitleBar: View {
     @ViewBuilder
     private var nowPlaying: some View {
         if router.route != .home, controller.status == .playing || controller.status == .paused, let song = controller.current {
-            HStack(spacing: 6) {
-                Text(song.title).foregroundStyle(Theme.text)
-                Text(song.artist).foregroundStyle(Theme.muted).layoutPriority(-1)
+            Button { router.go(to: .home) } label: {
+                HStack(spacing: 6) {
+                    Text(song.title).foregroundStyle(Theme.text)
+                    Text(song.artist).foregroundStyle(Theme.muted).layoutPriority(-1)
+                }
+                .role(.body)
+                .lineLimit(1)
+                .contentShape(.rect)
             }
-            .role(.body)
-            .lineLimit(1)
+            .buttonStyle(.plain)
+            .help("show what's playing")
             .padding(.leading, 96)
             .padding(.trailing, narrow ? 110 : 190)
-            .allowsHitTesting(false)
         }
     }
 }
