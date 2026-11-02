@@ -39,7 +39,9 @@ struct ShotReady: ViewModifier {
                 let titles = picked.components(separatedBy: "|")
                 router.selected = Set(controller.catalog.songs.filter { titles.contains($0.title) }.map(\.id))
             }
-            if defaults.bool(forKey: "shotSheet") {
+            if let name = defaults.string(forKey: "shotRow") {
+                router.alarm = controller.alarms.first { $0.name == name }.map { .edit($0) } ?? .new(nil)
+            } else if defaults.bool(forKey: "shotSheet") {
                 var preset = controller.settings
                 (preset.name, preset.gapMin, preset.gapMax, preset.fadeIn, preset.crossfade) = ("Long evening", 300, 720, 6, false)
                 router.presetEdit = PresetEdit(preset: preset)
@@ -112,7 +114,7 @@ struct ShotReady: ViewModifier {
                 return
             }
             // a sheet is its own window: asking for one takes the picture of it alone
-            try? Data(String((defaults.bool(forKey: "shotSheet") ? window?.attachedSheet?.windowNumber : nil) ?? window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
+            try? Data(String((defaults.bool(forKey: "shotSheet") || defaults.string(forKey: "shotRow") != nil ? window?.attachedSheet?.windowNumber : nil) ?? window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
         }
     }
 }

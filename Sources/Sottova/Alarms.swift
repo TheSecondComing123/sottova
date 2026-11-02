@@ -93,21 +93,8 @@ struct AlarmSheet: View {
         kind == .whileHere ? (15, 19, .daily, true, nil, true) : (7, 8, .once, false, 0.15, false)
     }
 
-    /// Whether this Mac's clock shows AM and PM.
-    private static let twelveHour = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? false
-
-    /// "7", not "07": the AM or PM sits after the minutes.
-    private func hourText(_ date: Date) -> String {
-        let hour = Calendar.current.component(.hour, from: date)
-        return String(Self.twelveHour ? (hour + 11) % 12 + 1 : hour)
-    }
-
     /// From the start to `until` around the clock, so 10 PM to 1 AM is three hours.
-    private var span: Int {
-        let minutes = { (date: Date) in Calendar.current.component(.hour, from: date) * 60 + Calendar.current.component(.minute, from: date) }
-        let span = (minutes(until) - minutes(time) + 1440) % 1440
-        return span == 0 ? 1440 : span
-    }
+    private var span: Int { RowTime.span(from: time, until: until) }
 
     private var picking: Bool {
         if case .new(nil) = request { true } else { false }
@@ -124,8 +111,8 @@ struct AlarmSheet: View {
     /// The alarm as set so far.
     private var alarm: Alarm? {
         guard let source, let name else { return nil }
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
-        var alarm = Alarm(source: source, name: name, hour: parts.hour ?? 7, minute: parts.minute ?? 0, weekdays: repeats.days, shuffled: shuffled)
+        let clock = RowTime.clock(time)
+        var alarm = Alarm(source: source, name: name, hour: clock.hour, minute: clock.minute, weekdays: repeats.days, shuffled: shuffled)
         alarm.volume = volume
         alarm.heedsCalendar = heedsCalendar
         alarm.rotates = rotates
@@ -144,7 +131,7 @@ struct AlarmSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 16) {
             let unnamed = "New row"
             Text(kind == .whileHere ? name.map { "Play \($0) while you're here" } ?? "Music while you're here"
                                     : name.map { "Start \($0) at…" } ?? unnamed)
@@ -180,24 +167,15 @@ struct AlarmSheet: View {
                 .buttonStyle(.plain)
             }
             Strip(selection: $kind)
-            // when: the time reads as a time, 7 : 00 AM, with what it repeats on right under it
-            VStack(alignment: .leading, spacing: 12) {
-                // the same two rows in both, so switching doesn't move anything under the pointer; one that starts by
-                // itself may play on, so its end has a switch
-                clock($time, label: kind == .whileHere ? "From" : "At")
-                clock($until, label: "Until", on: kind == .whileHere ? nil : Binding(get: { stops }, set: { on in
-                    if on, !stops { until = time + 3600 }
-                    stops = on
-                }))
-                Strip(selection: $repeats)
-                if let alarm, let note = note(alarm) {
-                    Text(note)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.faint)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+                .help(kind == .whileHere ? "waits while you're away, on a call\(heedsCalendar ? ", playing something else or busy on your calendar" : " or playing something else")" : "wakes the Mac and plays, wherever you are")
+            when
+            Strip(selection: $repeats)
             settings
+            if let alarm, !alarm.whileHere, !SystemWake.shared.trusted, !SystemWake.shared.missing(for: [alarm]).isEmpty {
+                Text("Saving asks for your password once.")
+                    .role(.small)
+                    .foregroundStyle(Theme.muted)
+            }
             HStack(spacing: 12) {
                 if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
@@ -209,17 +187,7 @@ struct AlarmSheet: View {
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(SecondaryStyle())
                 let setting = "Set"
-                Button(editing ? "Save" : kind == .whileHere ? "Set hours" : setting) {
-                    guard let alarm else { return }
-                    if editing { controller.changeAlarm(alarm.id) { $0.setUserFields(from: alarm) } } else { controller.addAlarm(alarm) }
-                    dismiss()
-                    if alarm.heedsCalendar {
-                        Task { await Presence.askForCalendars() }
-                    }
-                    if !alarm.whileHere {
-                        SystemWake.shared.schedule(for: controller.alarms)
-                    }
-                }
+                Button(editing ? "Save" : kind == .whileHere ? "Set hours" : setting, action: save)
                 .buttonStyle(PrimaryStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(alarm == nil)
@@ -245,43 +213,48 @@ struct AlarmSheet: View {
         .onDisappear { preview.stop() }
     }
 
-    /// What "waits" means, or that saving will ask for a password.
-    private func note(_ alarm: Alarm) -> String? {
-        if alarm.whileHere {
-            return "waits while you're away, on a call\(heedsCalendar ? ", playing something else or busy on your calendar" : " or playing something else")"
+    private func save() {
+        // a digit that could still be the first of two shows but isn't the picker's value until it loses focus, and a
+        // click on Save doesn't take focus: without this, typing 3 in the minutes saves the old minutes under a 3
+        for window in NSApp.windows where window.firstResponder is NSDatePicker { window.makeFirstResponder(nil) }
+        guard let alarm else { return }
+        if editing { controller.changeAlarm(alarm.id) { $0.setUserFields(from: alarm) } } else { controller.addAlarm(alarm) }
+        dismiss()
+        if alarm.heedsCalendar {
+            Task { await Presence.askForCalendars() }
         }
-        return SystemWake.shared.trusted || SystemWake.shared.missing(for: [alarm]).isEmpty ? nil : "saving asks for your password once, so the mac can wake for alarms from then on"
+        if !alarm.whileHere {
+            SystemWake.shared.schedule(for: controller.alarms)
+        }
     }
 
-    /// "At 7 : 00 AM" as two steppers; with `on`, a switch at the end, and the steppers stand down while it's off.
-    private func clock(_ date: Binding<Date>, label: String, on: Binding<Bool>? = nil) -> some View {
-        HStack(spacing: 4) {
-            Text(label)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 48, alignment: .leading)
-            HStack(spacing: 4) {
-                TimeStep(text: hourText(date.wrappedValue), help: "hour") { date.wrappedValue = date.wrappedValue.addingTimeInterval(Double($0) * 3600) }
-                Text(":")
-                TimeStep(text: date.wrappedValue.formatted(.dateTime.minute(.twoDigits)), help: "minute") {
-                    date.wrappedValue = date.wrappedValue.addingTimeInterval(Double($0) * 60)
-                }
-                if Self.twelveHour {
-                    Text(Calendar.current.component(.hour, from: date.wrappedValue) < 12 ? Calendar.current.amSymbol : Calendar.current.pmSymbol)
-                        .padding(.leading, 4)
-                }
+    /// One line: its start and its end. One that starts by itself may play on, so its end has a box, the word Until in its click.
+    private var when: some View {
+        HStack(spacing: 8) {
+            Text(kind == .whileHere ? "From" : "At").role(.body).foregroundStyle(Theme.text)
+            timeField($time, label: kind == .whileHere ? "From" : "At")
+            Spacer(minLength: 16)
+            if kind == .whileHere {
+                Text("Until").role(.body).foregroundStyle(Theme.text)
+            } else {
+                Toggle("Until", isOn: Binding(get: { stops }, set: { on in
+                    if on, !stops { until = time + 3600 }
+                    stops = on
+                }))
+                .help(stops ? "play on instead" : "stop at a set time, easing down over the last three minutes")
             }
-            .opacity(on?.wrappedValue == false ? 0.35 : 1)
-            .disabled(on?.wrappedValue == false)
-            Spacer(minLength: 0)
-            if let on {
-                Button { on.wrappedValue.toggle() } label: { CheckBox(on: on.wrappedValue) }
-                    .buttonStyle(PressStyle())
-                    .help(on.wrappedValue ? "play on instead" : "stop at a set time, easing down over the last three minutes")
-                    .accessibilityRepresentation { Toggle("Stops", isOn: on) }
-            }
+            timeField($until, label: "Until")
+                .opacity(kind == .whileHere || stops ? 1 : 0.35)
+                .disabled(kind != .whileHere && !stops)
         }
-        .font(.system(size: 17, weight: .semibold))
-        .foregroundStyle(Theme.muted)
+        .toggleStyle(BoxFirst())
+    }
+
+    private func timeField(_ date: Binding<Date>, label: String) -> some View {
+        DatePicker(label, selection: date, displayedComponents: .hourAndMinute)
+            .datePickerStyle(.stepperField)
+            .labelsHidden()
+            .fixedSize()
     }
 
     /// "its own 3 parts, part 2 next", or "about 30 min each, part 1 next".
@@ -300,10 +273,17 @@ struct AlarmSheet: View {
 
     /// The order, the calendar, the parts, and the volume it plays at.
     @ViewBuilder private var settings: some View {
-        VStack(spacing: 8) {
-            Toggle("Shuffled", isOn: $shuffled)
-            Toggle("Unless your calendar is busy", isOn: $heedsCalendar)
-            Toggle("One part each time", isOn: $rotates)
+        VStack(alignment: .leading, spacing: 8) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                GridRow {
+                    Toggle("Shuffled", isOn: $shuffled)
+                    Toggle("Unless my calendar is busy", isOn: $heedsCalendar)
+                }
+                GridRow {
+                    Toggle("One part at a time", isOn: $rotates)
+                    Toggle("Set the volume", isOn: Binding(get: { volume != nil }, set: { volume = $0 ? 0.15 : nil }))
+                }
+            }
             if rotates {
                 HStack(spacing: 12) {
                     // a collection with parts of its own uses those
@@ -319,7 +299,6 @@ struct AlarmSheet: View {
                 }
                 .transition(.opacity)
             }
-            Toggle("Set the volume", isOn: Binding(get: { volume != nil }, set: { volume = $0 ? 0.15 : nil }))
             if let level = volume {
                 HStack(spacing: 12) {
                     LineSlider(value: Binding(get: { level }, set: { volume = max($0, 0.02) }))
@@ -329,58 +308,14 @@ struct AlarmSheet: View {
                         .foregroundStyle(Theme.muted)
                         .frame(width: 40, alignment: .trailing)
                 }
-                .transition(.opacity)
                 // the machine's rise, Machine.riseLength
-                Text(kind == .whileHere ? "set as it begins" : "rises to this over 90 seconds")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.faint)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity)
+                .help(kind == .whileHere ? "set as it begins" : "rises to this over 90 seconds")
+                .transition(.opacity)
             }
         }
-        .toggleStyle(KnobToggle())
+        .toggleStyle(BoxFirst())
         .animation(Theme.quick, value: volume == nil)
         .animation(Theme.quick, value: rotates)
-    }
-}
-
-/// − value + in one bordered strip, like the gap steppers in Settings; a step past the end wraps around the clock.
-private struct TimeStep: View {
-    let text: String
-    let help: String
-    let step: (Int) -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            button(.minus, -1)
-            Text(text)
-                .font(.system(size: 17, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(Theme.text)
-                .frame(minWidth: 52)
-                .contentTransition(.numericText())
-            button(.plus, 1)
-        }
-        .frame(height: 36)
-        .background(Theme.raised, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(help)
-        .accessibilityValue(text)
-        .accessibilityAdjustableAction { $0 == .increment ? step(1) : step(-1) }
-    }
-
-    private func button(_ icon: Ph, _ delta: Int) -> some View {
-        Button { withAnimation(Theme.quick) { step(delta) } } label: {
-            icon.icon(.bold, size: 12)
-                .foregroundStyle(Theme.muted)
-                .frame(width: 32, height: 36)
-                .hoverable(radius: 8)
-        }
-        .buttonStyle(PressStyle())
-        // held down it keeps going, so 7:30 isn't thirty clicks
-        .buttonRepeatBehavior(.enabled)
-        .help(delta < 0 ? "earlier" : "later")
     }
 }
 
@@ -422,16 +357,16 @@ private struct Strip<Option: CaseIterable & Hashable & RawRepresentable>: View w
     }
 }
 
-/// A label with the square switch at the far end, with no card around it.
-private struct KnobToggle: ToggleStyle {
+/// The square box, then its label, both in the click: the two columns would pair a box at the far end with the wrong word.
+private struct BoxFirst: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         Button { configuration.isOn.toggle() } label: {
-            HStack {
-                configuration.label
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                Spacer(minLength: 16)
+            HStack(spacing: 6) {
                 CheckBox(on: configuration.isOn)
+                configuration.label
+                    .role(.body)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
             }
             .contentShape(.rect)
         }
