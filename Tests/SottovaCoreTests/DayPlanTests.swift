@@ -32,8 +32,8 @@ struct DayPlanTests {
         return row
     }
 
-    private func plan(_ alarms: [Alarm], _ now: Date, lengths: [Alarm.ID: TimeInterval] = [:], twelveHour: Bool = true) -> DayPlan {
-        DayPlan(alarms: alarms, now: now, lengths: lengths, calendar: calendar, twelveHour: twelveHour)
+    private func plan(_ alarms: [Alarm], _ now: Date, lengths: [Alarm.ID: TimeInterval] = [:], twelveHour: Bool = true, wholeDay: Bool = false) -> DayPlan {
+        DayPlan(alarms: alarms, now: now, lengths: lengths, calendar: calendar, twelveHour: twelveHour, wholeDay: wholeDay)
     }
 
     @Test func todaysRowsComeInOrderAndOnlyToday() {
@@ -76,22 +76,56 @@ struct DayPlanTests {
         #expect(evening.position(of: evening.rows[0].end) == 1)
     }
 
-    @Test func theRailIsToScaleFromSixToTen() {
+    @Test func theRailRunsFromTheFirstRowToTheLast() {
         let day = plan([overworld], date(2, 12))
-        #expect((day.firstHour, day.lastHour) == (6, 22))
-        #expect(day.position(of: date(2, 6)) == 0)
-        #expect(day.position(of: date(2, 14)) == 0.5)
-        #expect(day.position(of: date(2, 22)) == 1)
+        #expect((day.firstHour, day.lastHour) == (15, 19))
+        #expect(day.position(of: date(2, 15)) == 0)
+        #expect(day.position(of: date(2, 17)) == 0.5)
+        #expect(day.position(of: date(2, 19)) == 1)
         #expect(day.position(of: date(2, 23)) == 1)
+        let row = lauds
+        let full = plan([row, overworld, compline], date(2, 12), lengths: [row.id: 69 * 60])
+        #expect((full.firstHour, full.lastHour) == (7, 21))
     }
 
-    @Test func theRailGrowsForRowsOutsideIt() {
+    @Test func aPartHourRoundsOutward() {
+        var row = Alarm(source: "x", name: "Row", hour: 4, minute: 30, weekdays: Set(1...7))
+        row.minutes = 15
+        #expect({ let day = plan([row], date(2, 12)); return (day.firstHour, day.lastHour) }() == (4, 5))
+    }
+
+    @Test func aRowWithNoLengthStillHasAnHour() {
+        let row = Alarm(source: "x", name: "Row", hour: 9, minute: 0, weekdays: Set(1...7))
+        let day = plan([row], date(2, 12))
+        #expect((day.firstHour, day.lastHour) == (9, 10))
+        #expect(day.position(of: date(2, 9)) == 0)
+    }
+
+    @Test func oneFromLastNightStartsTheRailAtMidnight() {
+        var late = Alarm(source: "x", name: "Late", hour: 23, minute: 0, weekdays: [2])
+        late.minutes = 180
+        let day = plan([late, overworld], date(3, 0, 30))
+        #expect((day.firstHour, day.lastHour) == (0, 19))
+        #expect(abs(day.rail.marks[0].bar.upperBound - 48) < 0.01)
+    }
+
+    @Test func anEmptyDayAndADragGetTheWholeDay() {
+        let empty = plan([], date(2, 12))
+        #expect((empty.firstHour, empty.lastHour) == (6, 22))
+        let dragging = plan([overworld], date(2, 12), wholeDay: true)
+        #expect((dragging.firstHour, dragging.lastHour) == (6, 22))
         var early = Alarm(source: "x", name: "Early", hour: 4, minute: 30, weekdays: Set(1...7))
         early.minutes = 15
         var late = Alarm(source: "y", name: "Late", hour: 22, minute: 30, weekdays: Set(1...7))
         late.minutes = 15
-        let day = plan([early, late], date(2, 12))
-        #expect((day.firstHour, day.lastHour) == (4, 23))
+        let wider = plan([early, late], date(2, 12), wholeDay: true)
+        #expect((wider.firstHour, wider.lastHour) == (4, 23))
+    }
+
+    @Test func theNowDotIsOnlyOnTheRail() {
+        #expect(plan([overworld], date(2, 16)).rail.now != nil)
+        #expect(plan([overworld], date(2, 12)).rail.now == nil)
+        #expect(plan([overworld], date(2, 19, 30)).rail.now == nil)
     }
 
     @Test func theRailReadsTheClockOnTheDayItChanges() {
@@ -251,17 +285,16 @@ struct DayPlanTests {
     @Test func theRailIsToScale() {
         let morning = lauds
         let rail = plan([morning, overworld, compline], date(2, 15, 40), lengths: [morning.id: 69 * 60]).rail
-        #expect(rail.height == 512)
-        // the mock's numbers, from the rail's top at 78 in the page
-        #expect(abs(rail.marks[0].bar.lowerBound - 33.07) < 0.01)
-        #expect(abs(rail.marks[0].bar.upperBound - 69.87) < 0.01)
-        #expect(rail.marks[1].bar == 288...416)
-        #expect(rail.marks[2].top == 437)
-        #expect(abs(rail.now! - 309.33) < 0.01)
-        #expect(rail.labels.map(\.text) == ["6 AM", "7:02 AM", "8:11", "noon", "3 PM", "3:40", "7 PM", "8 PM", "9 PM", "10 PM"])
+        #expect(rail.height == 341)
+        #expect(abs(rail.marks[0].bar.lowerBound - 0.8) < 0.01)
+        #expect(abs(rail.marks[0].bar.upperBound - 28.4) < 0.01)
+        #expect(rail.marks[1].bar == 192...288)
+        #expect(rail.marks[2].top == 301)
+        #expect(abs(rail.now! - 208) < 0.01)
+        #expect(rail.labels.map(\.text) == ["7:02 AM", "8:11", "noon", "3 PM", "3:40", "7 PM", "8 PM", "9 PM"])
         #expect(rail.gaps.count == 1)
         #expect(rail.gaps[0].text == "Nothing from 8 to 3.")
-        #expect(abs(rail.gaps[0].top - 150.93) < 0.01)
+        #expect(abs(rail.gaps[0].top - 82.2) < 0.01)
     }
 
     @Test func wordsMakeRoomButBarsDont() {
@@ -269,7 +302,7 @@ struct DayPlanTests {
         (soon.hour, soon.minute, soon.id) = (7, 30, UUID())
         let rail = plan([lauds, soon], date(2, 12)).rail
         #expect(abs(rail.marks[1].top - (rail.marks[0].top + 40)) < 0.01)
-        #expect(rail.marks[1].bar.lowerBound == 48)
+        #expect(rail.marks[1].bar.lowerBound == 12)
         // a time's label goes where its words went
         #expect(rail.labels.contains { $0.text == "7:30 AM" && abs($0.y - rail.marks[1].top - 11) < 0.01 })
     }
@@ -287,8 +320,8 @@ struct DayPlanTests {
     }
 
     @Test func aDropLandsOnAnHourThatFitsTwo() {
-        let day = plan([lauds], date(2, 12))
-        #expect(day.hour(at: 130) == 10)
+        let day = plan([lauds], date(2, 12), wholeDay: true)
+        #expect(day.hour(at: 100) == 10)
         #expect(day.hour(at: -5) == 6)
         #expect(day.hour(at: 9999) == 20)
         #expect(day.dropLabel(hour: 10).span == "10 AM to noon")
@@ -296,6 +329,6 @@ struct DayPlanTests {
 
     @Test func aTwentyFourHourClockHasNoHalves() {
         let rail = plan([overworld], date(2, 15, 40), twelveHour: false).rail
-        #expect(rail.labels.map(\.text) == ["6:00", "12:00", "15:00", "15:40", "19:00", "22:00"])
+        #expect(rail.labels.map(\.text) == ["15:00", "15:40", "19:00"])
     }
 }

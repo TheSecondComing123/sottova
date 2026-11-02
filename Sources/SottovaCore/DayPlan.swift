@@ -28,7 +28,7 @@ public struct DayPlan: Sendable {
 
     /// Today's rows by time, including those turned off and one still running from last night.
     public let rows: [Row]
-    /// The rail runs 6 AM to 10 PM unless a row needs more.
+    /// The rail runs from the hour of the first row to the end of the last. No rows, or `wholeDay`: 6 AM to 10 PM, or more if a row needs it.
     public let firstHour, lastHour: Int
     public let gaps: [Gap]
     private let alarms: [Alarm]
@@ -40,7 +40,7 @@ public struct DayPlan: Sendable {
     private static let longGap: TimeInterval = 2 * 3600
 
     public init(alarms: [Alarm], now: Date = .now, lengths: [Alarm.ID: TimeInterval] = [:], calendar: Calendar = .current,
-                twelveHour: Bool = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? true) {
+                twelveHour: Bool = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? true, wholeDay: Bool = false) {
         (self.alarms, self.now, self.calendar, self.twelveHour) = (alarms, now, calendar, twelveHour)
         let spans: [(alarm: Alarm, start: Date, end: Date)] = alarms.compactMap { alarm in
             let weekday = calendar.component(.weekday, from: now)
@@ -58,12 +58,16 @@ public struct DayPlan: Sendable {
         let clock = { (date: Date) in calendar.dateComponents([.hour, .minute], from: date) }
         let midnight = calendar.startOfDay(for: now)
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: midnight) ?? midnight
-        firstHour = spans.filter { $0.start >= midnight }.map { clock($0.start).hour ?? 6 }.reduce(6, min)
-        lastHour = spans.map { span -> Int in
+        let whole = wholeDay || spans.isEmpty
+        // one from last night is on the rail from midnight
+        let first = spans.map { $0.start >= midnight ? clock($0.start).hour ?? 6 : 0 }.min() ?? 6
+        let last = spans.map { span -> Int in
             if span.end >= tomorrow { return 24 }
             let end = clock(span.end)
             return (end.hour ?? 22) + ((end.minute ?? 0) > 0 ? 1 : 0)
-        }.reduce(22, max)
+        }.max() ?? 22
+        firstHour = whole ? min(first, 6) : first
+        lastHour = max(whole ? max(last, 22) : last, firstHour + 1)
         var gaps: [Gap] = []
         var reached = on.first?.end
         for span in on.dropFirst() {
@@ -315,7 +319,7 @@ extension DayPlan {
     /// Your day to scale, in points from the rail's top. Rows keep their bars at their times; a row's words move down
     /// when the one above needs the room.
     public struct Rail: Sendable {
-        public static let hourHeight = 32.0
+        public static let hourHeight = 24.0
         /// A name and its line.
         public static let rowHeight = 40.0
 
@@ -369,7 +373,7 @@ extension DayPlan {
                                          kind: .end, row: row.alarm.minutes == nil ? nil : row.alarm.id))
             }
         }
-        let inDay = (firstHour...lastHour).contains(calendar.component(.hour, from: now))
+        let inDay = (firstHour..<lastHour).contains(calendar.component(.hour, from: now))
         if inDay { wanted.append(Rail.Label(text: clockText(now), y: y(now), kind: .now, row: nil)) }
         // with nothing on the rail the hours are all it has to say
         let bare = rows.isEmpty ? stride(from: firstHour + 3, to: lastHour, by: 3).map { $0 } : []
@@ -399,10 +403,10 @@ extension DayPlan {
 }
 
 extension Controller {
-    /// The day as of `now`; a row without an end is as long as its collection.
-    public func dayPlan(now: Date = .now) -> DayPlan {
+    /// The day as of `now`; a row without an end is as long as its collection. `wholeDay`: something's being dropped on it.
+    public func dayPlan(now: Date = .now, wholeDay: Bool = false) -> DayPlan {
         DayPlan(alarms: alarms, now: now, lengths: Dictionary(alarms.filter { $0.minutes == nil }.map { alarm in
             (alarm.id, rowSongs(alarm).reduce(0) { $0 + $1.duration })
-        }, uniquingKeysWith: { first, _ in first }))
+        }, uniquingKeysWith: { first, _ in first }), wholeDay: wholeDay)
     }
 }

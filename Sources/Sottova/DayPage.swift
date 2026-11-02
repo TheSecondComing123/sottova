@@ -23,7 +23,7 @@ struct DayPage: View {
         // for the rail's now and rows passing; the words change by observing the rows
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = now(context.date)
-            let plan = controller.dayPlan(now: now)
+            let plan = controller.dayPlan(now: now, wholeDay: droppingHere)
             PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
                 HStack(alignment: .center) {
                     Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader).offset(y: -2)
@@ -43,6 +43,14 @@ struct DayPage: View {
             }
         }
         .onAppear { wake.refresh() }
+    }
+
+    /// Over the rail with a collection, every hour is a place to land.
+    private var droppingHere: Bool {
+        #if SHOT
+        if router.shotDrop != nil { return true }
+        #endif
+        return dropHour != nil
     }
 
     /// The row the Mac can't wake for: only the very next one, as the days after are filled in as they come closer.
@@ -97,7 +105,7 @@ struct DayPage: View {
                 Text(controller.alarms.isEmpty ? "Nothing on your day. Drag a collection onto an hour." : "Nothing on today. Drag a collection onto an hour.")
                     .role(.body)
                     .foregroundStyle(Theme.muted)
-                    .offset(x: 106, y: 151)
+                    .offset(x: 106, y: 112)
             }
             ForEach(rail.marks) { mark in
                 let row = plan.rows.first { $0.id == mark.id }!
