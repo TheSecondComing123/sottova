@@ -304,7 +304,7 @@ extension DayPlan {
         /// A row's block: a name and its line, with room around them.
         public static let rowHeight = 56.0
         /// A block with two lines: an overlap's note wraps.
-        static let asideHeight = 74.0
+        public static let asideHeight = 74.0
 
         public struct Mark: Identifiable, Sendable {
             public let alarm: Alarm

@@ -14,7 +14,7 @@ struct DayPage: View {
     private var wake = SystemWake.shared
 
     // beside What played, a row's words need about 430 pt to stay on their line
-    private var narrow: Bool { width < 980 }
+    private var narrow: Bool { width < 1005 }
 
     private func now(_ date: Date) -> Date {
         #if SHOT
@@ -152,7 +152,7 @@ struct DayPage: View {
                 let row = plan.rows.first { $0.id == mark.id }!
                 let top = mark.top + 3
                 let following = index + 1 < rail.marks.count ? rail.marks[index + 1].top + 3 - 4 : Double.infinity
-                let blockHeight = min(max(mark.bar.upperBound - top, DayPlan.Rail.rowHeight - 4), following - top)
+                let blockHeight = min(max(mark.bar.upperBound - top, (mark.aside ? DayPlan.Rail.asideHeight : DayPlan.Rail.rowHeight) - 4), following - top)
                 let rising = sounding == mark.id && controller.rising && controller.status != .paused
                 DayRow(alarm: mark.alarm, pieces: plan.line(for: row, nextPart: nextPart(mark.alarm), rising: rising,
                                                             waiting: sounding == mark.id ? waiting : nil, cantWake: unwoken == mark.id))
@@ -360,7 +360,7 @@ private struct DayRow: View {
                 .foregroundStyle(alarm.on ? Theme.muted : Theme.faint)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sottovaMenu { menu }
     }
 
