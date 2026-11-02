@@ -41,7 +41,7 @@ struct FreeMusicPage: View {
                 .role(.body)
                 .foregroundStyle(Theme.muted)
                 .lineLimit(1)
-            Spacer(minLength: 12)
+            Spacer(minLength: 0)
             if running {
                 Text("\(Int(progress * Double(set.megabytes))) MB")
                     .role(.body)
