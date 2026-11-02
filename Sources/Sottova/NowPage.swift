@@ -24,25 +24,26 @@ private final class NowMotion {
 private struct NowLayout {
     /// Under the cover: a two-line title and what follows it.
     private static let under: CGFloat = 186
-    let width, height, side, left, gap: CGFloat
+    let width, height, side, margin, gap: CGFloat
     let stacked: Bool
 
     init(_ size: CGSize) {
         (width, height) = (size.width, size.height)
         let p = min(1, max(0, (size.width - 679) / (1024 - 679)))
-        let margin = (32 + 8 * p).rounded()
+        margin = (32 + 8 * p).rounded()
         gap = (32 + 8 * p).rounded()
         let beside = min(height - 48, width - 2 * margin - gap - (240 + 60 * p).rounded())
         let above = min(height - 48 - Self.under, width - 2 * margin)
         stacked = above > beside
         side = max(stacked ? above : beside, 160).rounded()
-        left = stacked ? margin : max(margin, ((width - side - gap - 456) / 2).rounded())
     }
 
+    func left(_ shown: CGFloat) -> CGFloat { stacked ? margin : max(margin, ((width - shown - gap - 456) / 2).rounded()) }
+
     func coverBottom(_ shown: CGFloat) -> CGFloat { (height + shown - (stacked ? Self.under : 0)) / 2 }
-    func textLeft(_ shown: CGFloat) -> CGFloat { stacked ? left : left + shown + gap }
-    func textWidth(_ shown: CGFloat) -> CGFloat { stacked ? bareTextWidth : min(456, width - textLeft(shown) - left) }
-    var bareTextWidth: CGFloat { min(560, width - 2 * left) }
+    func textLeft(_ shown: CGFloat) -> CGFloat { stacked ? margin : left(shown) + shown + gap }
+    func textWidth(_ shown: CGFloat) -> CGFloat { stacked ? bareTextWidth : min(456, width - textLeft(shown) - margin) }
+    var bareTextWidth: CGFloat { min(560, width - 2 * margin) }
 }
 
 struct NowPage: View {
@@ -243,7 +244,7 @@ private struct NowCover: View {
             }
         }
         .frame(height: layout.side, alignment: .bottomLeading)
-        .offset(x: layout.left, y: layout.coverBottom(shown) - layout.side)
+        .offset(x: layout.left(shown), y: layout.coverBottom(shown) - layout.side)
     }
 
     /// No art while a piece plays: its album's name, low in an outline. Nothing at all once it's gone.
