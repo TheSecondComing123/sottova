@@ -234,7 +234,10 @@ extension DayPlan {
             return [Piece(missed + " "), Piece("Play it now", .playNow)] + wake
         }
         if cantWake { return wakeLine(alarm: alarm, nextPart: nextPart, cantWake: true) }
-        return sentence(alarm, nextPart: nextPart) + (row.overlapNote.map { [Piece(" "), Piece($0)] } ?? [])
+        guard let note = row.overlapNote else { return sentence(alarm, nextPart: nextPart) }
+        // word by word, as it's long enough to wrap
+        let words = note.components(separatedBy: " ")
+        return sentence(alarm, nextPart: nextPart) + [Piece(" ")] + words.indices.map { Piece(words[$0] + ($0 < words.count - 1 ? " " : "")) }
     }
 
     /// A row with no place on today's rail still says if the Mac can't wake for it.
@@ -300,6 +303,8 @@ extension DayPlan {
         public static let hourHeight = 24.0
         /// A name and its line.
         public static let rowHeight = 40.0
+        /// A name and two lines: an overlap's note wraps.
+        static let asideHeight = 58.0
 
         public struct Mark: Identifiable, Sendable {
             public let alarm: Alarm
@@ -309,6 +314,7 @@ extension DayPlan {
             /// Beside the line: it overlaps the row before.
             public let aside: Bool
             public var id: Alarm.ID { alarm.id }
+            var bottom: Double { top + (aside ? Rail.asideHeight : Rail.rowHeight) }
         }
 
         public enum Kind: Int, Sendable { case row, now, off, end, frame }
@@ -336,7 +342,7 @@ extension DayPlan {
         let y = { (date: Date) in position(of: date) * height }
         var marks: [Rail.Mark] = []
         for row in rows {
-            let top = max(y(row.start) - 11, (marks.last?.top ?? -.infinity) + Rail.rowHeight)
+            let top = max(y(row.start) - 11, marks.last?.bottom ?? -.infinity)
             marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: y(row.start)...max(y(row.end), y(row.start) + 3), aside: row.overlapNote != nil))
         }
         var wanted: [Rail.Label] = []
@@ -363,7 +369,7 @@ extension DayPlan {
         where !labels.contains(where: { abs($0.y - label.y) < 15 }) {
             labels.append(label)
         }
-        return Rail(height: max(height, (marks.last?.top ?? 0) + Rail.rowHeight), marks: marks, labels: labels.sorted { $0.y < $1.y }, now: inDay ? y(now) : nil)
+        return Rail(height: max(height, marks.last?.bottom ?? Rail.rowHeight), marks: marks, labels: labels.sorted { $0.y < $1.y }, now: inDay ? y(now) : nil)
     }
 
     /// "7:02 AM", "noon"; `full` says which half of the day, otherwise "8:11" or "3". A 24-hour clock has no halves.

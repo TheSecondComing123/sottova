@@ -12,7 +12,8 @@ struct DayPage: View {
     @State private var width: CGFloat = 1024
     private var wake = SystemWake.shared
 
-    private var narrow: Bool { width < 860 }
+    // beside What played, a row's words need about 430 pt to stay on their line
+    private var narrow: Bool { width < 980 }
 
     private func now(_ date: Date) -> Date {
         #if SHOT
@@ -150,9 +151,10 @@ struct DayPage: View {
                 dropRow(plan: plan, hour: hour, name: name)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: rail.height, alignment: .topLeading)
+        // a day of one short row is still somewhere to drop
+        .frame(maxWidth: .infinity, minHeight: max(rail.height, 96), alignment: .topLeading)
         .contentShape(.rect)
-        .onDrop(of: [.plainText], delegate: HourDrop(plan: plan, hour: $dropHour, router: router, controller: controller))
+        .onDrop(of: [.plainText], delegate: HourDrop(now: nowDate, hour: $dropHour, router: router, controller: controller))
     }
 
     private var nowDate: Date { now(.now) }
@@ -540,7 +542,7 @@ private struct WordFlow: Layout {
 /// A collection dropped on the rail takes the hour under the pointer, two hours of it, while you're at the Mac, so it
 /// can't wake anyone until you say so in its words.
 private struct HourDrop: DropDelegate {
-    let plan: DayPlan
+    let now: Date
     @Binding var hour: Int?
     let router: Router
     let controller: Controller
@@ -550,7 +552,8 @@ private struct HourDrop: DropDelegate {
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        hour = plan.hour(at: Double(info.location.y))
+        // the whole day's scale from the first sample, as that's what the rail opens to under the pointer
+        hour = controller.dayPlan(now: now, wholeDay: true).hour(at: Double(info.location.y))
         return DropProposal(operation: .copy)
     }
 

@@ -284,6 +284,25 @@ struct DayPlanTests {
         #expect(line.compactMap(\.word) == [.days, .order])
     }
 
+    @Test func anOverlapWrapsWordByWordAndTheNextRowLeavesRoom() {
+        var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
+        (chopin.whileHere, chopin.minutes) = (true, 60)
+        var soon = compline
+        soon.hour = 18
+        let day = plan([overworld, chopin, soon], date(2, 12))
+        #expect(day.line(for: day.rows[1], nextPart: nil).filter { $0.text.contains("Overlaps") }.map(\.text) == ["Overlaps "])
+        let marks = day.rail.marks
+        #expect(marks[2].top == marks[1].top + 58)
+        #expect(day.rail.height >= marks[2].top + DayPlan.Rail.rowHeight)
+    }
+
+    @Test func aLastRowWithAnOverlapKeepsItsSecondLineOnTheRail() {
+        var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 18, minute: 0, weekdays: Set(1...7))
+        chopin.minutes = 30
+        let rail = plan([overworld, chopin], date(2, 12)).rail
+        #expect(rail.height == rail.marks[1].top + 58)
+    }
+
     @Test func theRailIsToScale() {
         let morning = lauds
         let rail = plan([morning, overworld, compline], date(2, 15, 40), lengths: [morning.id: 69 * 60]).rail
