@@ -11,6 +11,8 @@ struct Artwork: View {
     let key: String?
     /// nil fills the proposed width as a square.
     var size: CGFloat?
+    /// Wider than `size`, cropped to fill.
+    var width: CGFloat?
     var radius: CGFloat = 4
     var circle = false
     var outlined = false
@@ -18,15 +20,16 @@ struct Artwork: View {
     var subtitle: String?
     @State private var image: CGImage?
 
-    init(key: String?, size: CGFloat? = nil, radius: CGFloat = 4, circle: Bool = false, outlined: Bool = false, title: String? = nil, subtitle: String? = nil) {
+    init(key: String?, size: CGFloat? = nil, width: CGFloat? = nil, radius: CGFloat = 4, circle: Bool = false, outlined: Bool = false, title: String? = nil, subtitle: String? = nil) {
         self.key = key
         self.size = size
+        self.width = width
         self.radius = radius
         self.circle = circle
         self.outlined = outlined
         self.title = title
         self.subtitle = subtitle
-        _image = State(initialValue: key.flatMap { Self.store?.cached(for: $0, maxPixel: Self.pixels(for: size)) })
+        _image = State(initialValue: key.flatMap { Self.store?.cached(for: $0, maxPixel: Self.pixels(for: width ?? size)) })
     }
 
     private static func pixels(for size: CGFloat?) -> Int {
@@ -50,8 +53,8 @@ struct Artwork: View {
                     TypeCover(title: title, subtitle: subtitle, circle: circle)
                 }
             }
-            .frame(width: size, height: size)
-            .aspectRatio(1, contentMode: .fit)
+            .frame(width: width ?? size, height: size)
+            .aspectRatio(width == nil ? 1 : nil, contentMode: .fit)
             .clipShape(shape)
             .overlay {
                 if outlined || image == nil {
@@ -60,12 +63,12 @@ struct Artwork: View {
                 }
             }
             // the size is part of the identity: header art that grows with the window decodes again, sharper
-            .task(id: "\(key ?? "")@\(Self.pixels(for: size))") {
+            .task(id: "\(key ?? "")@\(Self.pixels(for: width ?? size))") {
                 guard let key, let store = Self.store else {
                     image = nil
                     return
                 }
-                let pixels = Self.pixels(for: size)
+                let pixels = Self.pixels(for: width ?? size)
                 if let hit = store.cached(for: key, maxPixel: pixels) {
                     image = hit
                     return

@@ -78,19 +78,19 @@ struct PageLayoutTests {
         for width in [855.0, 1196, 1240, 1470, 1920] {
             let day = PageLayout(windowWidth: width, pageHeight: 898).day
             let width = day.blockWidth(oneColumn: day.narrow)
-            #expect(day.painting(block: 52, blockWidth: width) == (40, false))
+            #expect(day.painting(block: 52, blockWidth: width) == (40, 40, false))
             for block in stride(from: 52.0, through: 1400, by: 3) {
-                let (side, under) = day.painting(block: block, blockWidth: width)
-                #expect(side >= 40 && side <= block - 12)
-                if under { #expect(side + 12 + 66 <= block && side + 63 <= width) } else { #expect(side + 75 + 220 <= width || side == 40) }
+                let (wide, tall, under) = day.painting(block: block, blockWidth: width)
+                #expect(tall >= 40 && tall <= block - 12)
+                #expect(wide >= tall && wide <= tall * 1.5)
+                if under { #expect(tall + 12 + 66 <= block && wide + 63 <= width) } else { #expect(wide + 75 + 220 <= width || wide == 40) }
             }
         }
     }
 
-    @Test func whatPlayedShowsWhatFitsAndAtLeastItsShare() {
-        #expect(PageLayout(windowWidth: 855, pageHeight: 748).day.playedCap(others: 0) == 3)
-        #expect(PageLayout(windowWidth: 1240, pageHeight: 400).day.playedCap(others: 9) == 8)
-        #expect(PageLayout(windowWidth: 1470, pageHeight: 898).day.playedCap(others: 0) > 8)
+    @Test func whatPlayedIsCappedByTheColumns() {
+        #expect(PageLayout(windowWidth: 855, pageHeight: 748).day.playedCap == 3)
+        #expect(PageLayout(windowWidth: 1920, pageHeight: 997).day.playedCap == 8)
     }
 
     @Test(arguments: [

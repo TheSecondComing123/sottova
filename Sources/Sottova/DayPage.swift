@@ -105,10 +105,10 @@ struct DayPage: View {
         let waiting = controller.status == .paused ? nil : controller.hold
         let sounding = controller.soundingRow?.id
         let unwoken = cantWake(now: nowDate)
-        let pieces = Dictionary(uniqueKeysWithValues: plan.rows.map { row in
+        let pieces = Dictionary(plan.rows.map { row in
             let rising = sounding == row.id && controller.rising && controller.status != .paused
             return (row.id, plan.line(for: row, nextPart: nextPart(row.alarm), rising: rising, waiting: sounding == row.id ? waiting : nil, cantWake: unwoken == row.id))
-        })
+        }, uniquingKeysWith: { first, _ in first })
         // room beside a painting at its usual size, and more than enough beside a larger one in a tall block
         let blockWidth = layout.blockWidth(oneColumn: oneColumn(plan))
         let room = blockWidth - 12 - 23 - 72 - 12 - 28
@@ -224,7 +224,7 @@ struct DayPage: View {
     @ViewBuilder
     private func playedList(_ plan: DayPlan) -> some View {
         if !played.isEmpty {
-            let cap = layout.playedCap(others: rest(plan).count)
+            let cap = layout.playedCap
             HStack(spacing: 6) {
                 heading("What played")
                 Text("\(played.count)").role(.body).monospacedDigit().foregroundStyle(Theme.muted)
@@ -380,7 +380,7 @@ private struct DayRow: View {
     let alarm: Alarm
     let pieces: [DayPlan.Piece]
     let artwork: String?
-    let painting: (side: Double, under: Bool)
+    let painting: (width: Double, height: Double, under: Bool)
     let sounding: Bool
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -391,7 +391,7 @@ private struct DayRow: View {
             RowTick(alarm: alarm).padding(.top, 4).frame(width: 23, alignment: .topLeading)
             let stack = painting.under ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
             stack {
-            Artwork(key: artwork, size: painting.side, radius: 3, outlined: true)
+            Artwork(key: artwork, size: painting.height, width: painting.width, radius: 3, outlined: true)
                 .opacity(alarm.on ? 1 : 0.4)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
@@ -429,8 +429,10 @@ private struct DayRow: View {
         .background {
             RoundedRectangle(cornerRadius: Radius.small)
                 .fill(sounding ? Theme.primary.opacity(0.1) : Theme.selection.opacity(alarm.on ? 1 : 0.4))
-                .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
         }
+        // on the whole block, so the painting counts; its words and tick keep their own clicks
+        .contentShape(.rect)
+        .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
         .sottovaMenu { entries }
     }
 
