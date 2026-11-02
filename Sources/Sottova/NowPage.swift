@@ -20,22 +20,28 @@ private final class NowMotion {
 }
 
 /// Where things sit: the cover takes what the words and margins leave, up to the page's height, and is centered down
-/// it. Too short a page for that leaves spare width, which goes either side.
+/// it, with the words beside it or under it, whichever lets it be larger. Spare width beside it goes either side.
 private struct NowLayout {
+    /// Under the cover: a two-line title and what follows it.
+    private static let under: CGFloat = 186
     let width, height, side, left, gap: CGFloat
+    let stacked: Bool
 
     init(_ size: CGSize) {
         (width, height) = (size.width, size.height)
         let p = min(1, max(0, (size.width - 679) / (1024 - 679)))
-        let margin = (32 + 16 * p).rounded()
+        let margin = (32 + 8 * p).rounded()
         gap = (32 + 8 * p).rounded()
-        side = max(min(height - 48, width - 2 * margin - gap - (240 + 60 * p).rounded()), 160).rounded()
-        left = max(margin, ((width - side - gap - 456) / 2).rounded())
+        let beside = min(height - 48, width - 2 * margin - gap - (240 + 60 * p).rounded())
+        let above = min(height - 48 - Self.under, width - 2 * margin)
+        stacked = above > beside
+        side = max(stacked ? above : beside, 160).rounded()
+        left = stacked ? margin : max(margin, ((width - side - gap - 456) / 2).rounded())
     }
 
-    func coverBottom(_ shown: CGFloat) -> CGFloat { (height + shown) / 2 }
-    func textLeft(_ shown: CGFloat) -> CGFloat { left + shown + gap }
-    func textWidth(_ shown: CGFloat) -> CGFloat { min(456, width - textLeft(shown) - left) }
+    func coverBottom(_ shown: CGFloat) -> CGFloat { (height + shown - (stacked ? Self.under : 0)) / 2 }
+    func textLeft(_ shown: CGFloat) -> CGFloat { stacked ? left : left + shown + gap }
+    func textWidth(_ shown: CGFloat) -> CGFloat { stacked ? bareTextWidth : min(456, width - textLeft(shown) - left) }
     var bareTextWidth: CGFloat { min(560, width - 2 * left) }
 }
 
@@ -69,6 +75,8 @@ struct NowPage: View {
             let shown = motion.over.map { min(layout.side, CGFloat($0.width)) } ?? layout.side
             let bare = motion.bare
             let width = bare ? layout.bareTextWidth : layout.textWidth(shown)
+            let under = layout.stacked && !bare
+            let bottom = layout.coverBottom(shown)
             ZStack(alignment: .topLeading) {
                 NowCover(motion: motion, layout: layout, shown: shown, album: controller.current?.album, dragging: router.droppingMusic)
                 VStack(alignment: bare ? .center : .leading, spacing: 12) {
@@ -77,8 +85,9 @@ struct NowPage: View {
                     foot
                 }
                 .multilineTextAlignment(bare ? .center : .leading)
-                .frame(width: width, height: bare ? geo.size.height : layout.coverBottom(shown) + 5, alignment: bare ? .center : .bottomLeading)
-                .offset(x: bare ? (layout.width - width) / 2 : layout.textLeft(shown))
+                .frame(width: width, height: bare ? geo.size.height : under ? geo.size.height - bottom - 16 : bottom + 5,
+                       alignment: bare ? .center : under ? .topLeading : .bottomLeading)
+                .offset(x: bare ? (layout.width - width) / 2 : layout.textLeft(shown), y: under ? bottom + 16 : 0)
             }
         }
         .task(id: key) { await follow() }
