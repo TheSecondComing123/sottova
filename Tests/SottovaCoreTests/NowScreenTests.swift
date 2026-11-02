@@ -96,13 +96,9 @@ struct NowScreenTests {
 
     @Test(arguments: [(Hold.away, "away"), (.call, "call"), (.busy, "busy"), (.media, "playing")])
     func aHoldSaysWhy(hold: Hold, line: String) {
-        #expect(NowScreen.waiting(hold, row: nil).sub.contains(line))
-        #expect(NowScreen.waiting(hold, row: nil).title == "Waiting")
-        #expect(NowScreen.waiting(hold, row: nil).action == nil)
-    }
-
-    @Test func aHoldNamesTheRow() {
-        #expect(NowScreen.waiting(.away, row: "Overworld").sub.contains("Overworld"))
+        #expect(NowScreen.waiting(hold).sub.contains(line))
+        #expect(NowScreen.waiting(hold).title == "Waiting")
+        #expect(NowScreen.waiting(hold).action == nil)
     }
 
     @Test func musicLoadedBeforeTheCatalogIsNeverFirstRun() throws {

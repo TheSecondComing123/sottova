@@ -23,13 +23,12 @@ public struct NowScreen: Equatable, Sendable {
         }
     }
 
-    static func waiting(_ hold: Hold, row: String?) -> NowScreen {
-        let name = row ?? "It"
+    static func waiting(_ hold: Hold) -> NowScreen {
         let line = switch hold {
-        case .away: "You're away. \(name) picks up when you're back."
-        case .call: "You're on a call. \(name) picks up after."
-        case .busy: "Your calendar is busy."
-        case .media: "Something else is playing. \(name) waits for it."
+        case .away: "You're away"
+        case .call: "You're on a call"
+        case .busy: "Your calendar is busy"
+        case .media: "Something else is playing"
         }
         return NowScreen(kind: .silence, title: "Waiting", sub: line)
     }
@@ -56,7 +55,7 @@ extension Controller {
             return NowScreen(kind: .quiet, title: quiet.headline, sub: quiet.line, action: alarms.contains(where: \.on) ? nil : .openDay)
         }
         if silent || inSilence || status == .resting {
-            if let hold, status != .paused { return .waiting(hold, row: soundingRow?.name) }
+            if let hold, status != .paused { return .waiting(hold) }
             return NowScreen(kind: .silence, title: "Silence", sub: status == .paused ? "Paused" : "")
         }
         return NowScreen(kind: .piece, title: current?.title ?? title ?? "", sub: nowSub, third: nowThird)
