@@ -53,10 +53,12 @@ struct LibraryLine: View {
                 .padding(.trailing, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let width = columns.performer {
-                Group {
+                // the clear keeps the column where a song has no performer, so no title runs under the heading
+                ZStack(alignment: .leading) {
+                    Color.clear
                     if let performer { name(performer) { navigate(.artist(performer)) } }
                 }
-                .frame(width: width, alignment: .leading)
+                .frame(width: width)
             }
             if let width = columns.collection {
                 name(controller.copy(ofAlbum: song.albumID)?.name ?? song.album) { navigate(.album(song.albumID)) }
