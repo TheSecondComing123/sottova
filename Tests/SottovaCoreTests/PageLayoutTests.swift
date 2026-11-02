@@ -1,0 +1,84 @@
+import Testing
+@testable import SottovaCore
+
+/// Every window the app can be, by the plan's steps: the rules hold over the whole range, not only the sizes looked at.
+struct PageLayoutTests {
+    private static let windows = stride(from: 855.0, through: 2560, by: 5).flatMap { width in
+        stride(from: 640.0, through: 1440, by: 20).map { PageLayout(windowWidth: width, pageHeight: $0) }
+    }
+
+    @Test func thePageIsWhatTheSidebarLeaves() {
+        for page in Self.windows {
+            #expect(page.width + page.sidebar >= 855)
+            #expect(page.width >= 679)
+            #expect(page.sidebar == (page.narrowWindow ? 176 : 216))
+        }
+    }
+
+    @Test func coverAndWordsFitBesideOrUnder() {
+        for page in Self.windows {
+            let now = page.now
+            #expect(now.side >= 160)
+            #expect(now.left(now.side) >= now.margin)
+            if now.stacked {
+                #expect(now.side + 48 + 186 <= page.height + 0.5)
+                #expect(now.side + 2 * now.margin <= page.width + 0.5)
+                #expect(now.coverBottom(now.side) + 186 <= page.height + 0.5 + 24)
+            } else {
+                #expect(now.side <= page.height - 48 + 0.5)
+                #expect(now.coverBottom(now.side) <= page.height)
+                // words keep at least the 240 the cover left them, and never leave the page
+                #expect(now.textWidth(now.side) >= 239.5)
+                #expect(now.textLeft(now.side) + now.textWidth(now.side) <= page.width - now.margin + 0.5)
+            }
+            #expect(now.bareTextWidth <= page.width - 2 * now.margin)
+        }
+    }
+
+    @Test func aTallerPageNeverShrinksTheCover() {
+        for width in stride(from: 679.0, through: 2344, by: 5) {
+            var last = 0.0
+            for height in stride(from: 588.0, through: 1440, by: 20) {
+                let side = NowLayout(width: width, height: height).side
+                #expect(side >= last)
+                last = side
+            }
+        }
+    }
+
+    @Test func theRailFillsThePageWithinItsLimits() {
+        for page in Self.windows {
+            for hours in 2...24 {
+                let scale = page.day.hourHeight(hours: hours)
+                #expect(scale >= DayPlan.Rail.hourHeight && scale <= 120)
+                if !page.day.narrow, scale > DayPlan.Rail.hourHeight { #expect(Double(hours) * scale <= page.height - 51 + 0.001) }
+                if !page.day.narrow, scale < 120 { #expect(Double(hours) * scale >= min(page.height - 51, Double(hours) * DayPlan.Rail.hourHeight) - 0.001) }
+            }
+        }
+    }
+
+    @Test(arguments: [
+        (855.0, 748.0, 176.0, true, 679.0, 32.0, 32.0, true),
+        (1240, 748, 216, false, 1024, 40, 40, false),
+        (1470, 898, 216, false, 1254, 40, 40, false),
+        (1920, 997, 216, false, 1704, 40, 40, false),
+    ])
+    func theSizesTheOwnerLooksAt(window: Double, height: Double, sidebar: Double, narrowWindow: Bool, page: Double, listMargin: Double, nowMargin: Double, dayNarrow: Bool) {
+        let layout = PageLayout(windowWidth: window, pageHeight: height)
+        #expect(layout.sidebar == sidebar)
+        #expect(layout.narrowWindow == narrowWindow)
+        #expect(layout.width == page)
+        #expect(layout.list.margin == listMargin)
+        #expect(layout.now.margin == nowMargin)
+        #expect(layout.day.narrow == dayNarrow)
+    }
+
+    @Test func thresholdsFallWhereThePagesExpect() {
+        #expect(PageLayout(windowWidth: 1039, pageHeight: 748).sidebar == 176)
+        #expect(PageLayout(windowWidth: 1040, pageHeight: 748).sidebar == 216)
+        #expect(PageLayout(windowWidth: 1075, pageHeight: 748).list.narrow)
+        #expect(!PageLayout(windowWidth: 1076, pageHeight: 748).list.narrow)
+        #expect(PageLayout(windowWidth: 1220, pageHeight: 748).day.narrow)
+        #expect(!PageLayout(windowWidth: 1221, pageHeight: 748).day.narrow)
+    }
+}
