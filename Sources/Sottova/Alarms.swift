@@ -214,9 +214,7 @@ struct AlarmSheet: View {
     }
 
     private func save() {
-        // a digit that could still be the first of two shows but isn't the picker's value until it loses focus, and a
-        // click on Save doesn't take focus: without this, typing 3 in the minutes saves the old minutes under a 3
-        for window in NSApp.windows where window.firstResponder is NSDatePicker { window.makeFirstResponder(nil) }
+        NSDatePicker.commitTyping()
         guard let alarm else { return }
         if editing { controller.changeAlarm(alarm.id) { $0.setUserFields(from: alarm) } } else { controller.addAlarm(alarm) }
         dismiss()
@@ -548,5 +546,13 @@ final class AlarmPreview {
         player?.stop()
         player = nil
         playing = nil
+    }
+}
+
+extension NSDatePicker {
+    /// A digit that could still be the first of two shows but isn't the picker's value until it loses focus, and a
+    /// click on Save doesn't take focus: without this, typing 3 in the minutes saves the old minutes under a 3.
+    @MainActor static func commitTyping() {
+        for window in NSApp.windows where window.firstResponder is NSDatePicker { window.makeFirstResponder(nil) }
     }
 }

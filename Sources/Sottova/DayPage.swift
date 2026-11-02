@@ -298,7 +298,7 @@ private struct BreakMark: View {
 }
 
 /// A time down the rail. A row's start, and an end it was given, are clickable: a native typed field in a popover,
-/// applied when it closes so a half-typed time can't fire anything.
+/// applied when it closes so a half-typed time can't fire anything. Return and a click away apply, Esc doesn't.
 private extension DayPlan.Rail.Label {
     var key: String { row.map { "\($0) \(kind)" } ?? "\(kind) \(text) \(y)" }
 }
@@ -312,10 +312,10 @@ private struct RailTime: View {
     var body: some View {
         Group {
             if let alarm {
-                Button { open = true } label: { text }
+                Button { open = true } label: { text.padding(.horizontal, 3).hoverable(radius: 3).padding(.horizontal, -3) }
                     .buttonStyle(.plain)
                     .help(label.kind == .end ? "when it stops" : "when it starts")
-                    .popover(isPresented: $open, arrowEdge: .trailing) { TimeField(alarm: alarm, end: label.kind == .end) }
+                    .popover(isPresented: $open, arrowEdge: .trailing) { TimeField(alarm: alarm, end: label.kind == .end, open: $open) }
             } else {
                 text
             }
@@ -341,12 +341,16 @@ private struct RailTime: View {
 private struct TimeField: View {
     let alarm: Alarm
     let end: Bool
+    @Binding var open: Bool
     @Environment(Controller.self) private var controller
     @State private var time: Date
+    @State private var keys: Any?
+    @State private var cancelled = false
+    @FocusState private var typing: Bool
     private let opened: Date
 
-    init(alarm: Alarm, end: Bool) {
-        (self.alarm, self.end) = (alarm, end)
+    init(alarm: Alarm, end: Bool, open: Binding<Bool>) {
+        (self.alarm, self.end, _open) = (alarm, end, open)
         let start = Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: .now) ?? .now
         opened = end ? start + Double(alarm.minutes ?? 60) * 60 : start
         _time = State(initialValue: opened)
@@ -355,11 +359,27 @@ private struct TimeField: View {
     var body: some View {
         DatePicker(end ? "Until" : "At", selection: $time, displayedComponents: .hourAndMinute)
             .datePickerStyle(.stepperField)
+            .focused($typing)
+            .defaultFocus($typing, true)
             .padding(12)
-            .onDisappear(perform: apply)
+            .onAppear {
+                keys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                    switch event.keyCode {
+                    case 36, 76: open = false
+                    case 53: (cancelled, open) = (true, false)
+                    default: return event
+                    }
+                    return nil
+                }
+            }
+            .onDisappear {
+                keys.map(NSEvent.removeMonitor)
+                if !cancelled { apply() }
+            }
     }
 
     private func apply() {
+        NSDatePicker.commitTyping()
         let clock = Calendar.current.dateComponents([.hour, .minute], from: time)
         let (hour, minute) = (clock.hour ?? alarm.hour, clock.minute ?? alarm.minute)
         guard time != opened else { return }
