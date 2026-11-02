@@ -144,6 +144,7 @@ struct SongList: View {
                 let needle = Song.folded(router.songFilter)
                 let sorted = controller.catalog.songs(by: sort, matching: needle)
                 let songs: [Song] = reversed ? sorted.reversed() : sorted
+                let columns = columns(all)
                 PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: margin)) {
                     HStack(spacing: 16) {
                         HStack(alignment: .top, spacing: 18) {
@@ -180,7 +181,7 @@ struct SongList: View {
                         .role(.body)
                         .padding(.top, 8)
                     } else {
-                        headings
+                        headings(columns)
                         LazyVStack(spacing: 0) {
                             ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                                 LibraryLine(song: song, columns: columns, performer: song.performer) { controller.play(songs, from: index) }
@@ -204,22 +205,30 @@ struct SongList: View {
         filtering = true
     }
 
-    private var columns: LineColumns {
-        narrow ? LineColumns(who: 120) : LineColumns(who: 120, performer: 190, collection: 130)
+    /// From the whole library, so typing in the filter doesn't move them.
+    private func columns(_ songs: [Song]) -> LineColumns {
+        let fit = { (names: [String], most: CGFloat) -> CGFloat in
+            let widest = Set(names).map { ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13)]).width }.max() ?? 0
+            return min(max(widest + 23, 76), most).rounded()
+        }
+        let who = fit(songs.map(\.who), 160)
+        return narrow ? LineColumns(who: who) : LineColumns(who: who, performer: fit(songs.compactMap(\.performer), 190),
+                                                            collection: fit(songs.map { controller.copy(ofAlbum: $0.albumID)?.name ?? $0.album }, 180))
     }
 
     private func count(of shown: Int, in all: Int, filtered: Bool) -> String {
         if router.selected.count > 1 { return "\(router.selected.count) of \(all) picked" }
-        return filtered ? "\(shown) of \(all)" : Format.count(all, "song")
+        if filtered { return shown == 0 ? "" : "\(shown) of \(all)" }
+        return Format.count(all, "song")
     }
 
-    private var headings: some View {
+    private func headings(_ columns: LineColumns) -> some View {
         HStack(spacing: 0) {
-            heading("Who", .who).frame(width: 120, alignment: .leading)
+            heading("Who", .who).frame(width: columns.who, alignment: .leading)
             heading("Title", .title).frame(maxWidth: .infinity, alignment: .leading)
             if !narrow {
-                heading("Performer", .performer).frame(width: 190, alignment: .leading)
-                heading("Collection", .album).frame(width: 130, alignment: .leading)
+                heading("Performer", .performer).frame(width: columns.performer, alignment: .leading)
+                heading("Collection", .album).frame(width: columns.collection, alignment: .leading)
             }
             heading("Time", .longest).frame(width: 40, alignment: .trailing)
         }
