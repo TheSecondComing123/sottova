@@ -19,33 +19,6 @@ private final class NowMotion {
     var bare: Bool { over == nil && (screen.kind == .quiet || screen.kind == .silence) }
 }
 
-/// Where things sit: the cover takes what the words and margins leave, up to the page's height, and is centered down
-/// it, with the words beside it or under it, whichever lets it be larger. Spare width beside it goes either side.
-private struct NowLayout {
-    /// Under the cover: a two-line title and what follows it.
-    private static let under: CGFloat = 186
-    let width, height, side, margin, gap: CGFloat
-    let stacked: Bool
-
-    init(_ size: CGSize) {
-        (width, height) = (size.width, size.height)
-        let p = min(1, max(0, (size.width - 679) / (1024 - 679)))
-        margin = (32 + 8 * p).rounded()
-        gap = (32 + 8 * p).rounded()
-        let beside = min(height - 48, width - 2 * margin - gap - (240 + 60 * p).rounded())
-        let above = min(height - 48 - Self.under, width - 2 * margin)
-        stacked = above > beside
-        side = max(stacked ? above : beside, 160).rounded()
-    }
-
-    func left(_ shown: CGFloat) -> CGFloat { stacked ? margin : max(margin, ((width - shown - gap - 456) / 2).rounded()) }
-
-    func coverBottom(_ shown: CGFloat) -> CGFloat { (height + shown - (stacked ? Self.under : 0)) / 2 }
-    func textLeft(_ shown: CGFloat) -> CGFloat { stacked ? margin : left(shown) + shown + gap }
-    func textWidth(_ shown: CGFloat) -> CGFloat { stacked ? bareTextWidth : min(456, width - textLeft(shown) - margin) }
-    var bareTextWidth: CGFloat { min(560, width - 2 * margin) }
-}
-
 struct NowPage: View {
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -72,7 +45,7 @@ struct NowPage: View {
 
     var body: some View {
         GeometryReader { geo in
-            let layout = NowLayout(geo.size)
+            let layout = NowLayout(width: geo.size.width, height: geo.size.height)
             let shown = motion.over.map { min(layout.side, CGFloat($0.width)) } ?? layout.side
             let bare = motion.bare
             let width = bare ? layout.bareTextWidth : layout.textWidth(shown)

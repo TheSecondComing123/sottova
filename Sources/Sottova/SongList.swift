@@ -133,8 +133,8 @@ struct SongList: View {
     @State private var width: CGFloat = 1024
     @MainActor private static var answeredSearch = 0
 
-    private var narrow: Bool { width < 860 }
-    private var margin: CGFloat { narrow ? 32 : 40 }
+    private var narrow: Bool { ListLayout(width: width).narrow }
+    private var margin: CGFloat { ListLayout(width: width).margin }
 
     var body: some View {
         @Bindable var router = router

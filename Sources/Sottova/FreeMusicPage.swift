@@ -10,7 +10,7 @@ struct FreeMusicPage: View {
     private static let titleWidth = (Shelf.sets.map { ($0.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium)]).width }.max() ?? 0).rounded(.up)
 
     var body: some View {
-        let margin: CGFloat = width < 860 ? 32 : 40
+        let margin = ListLayout(width: width).margin
         PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: margin)) {
             Text("Free music")
                 .role(.title)

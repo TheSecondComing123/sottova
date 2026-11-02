@@ -52,9 +52,9 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     @State private var width: CGFloat = 1024
 
     var body: some View {
-        let narrow = width < 860
-        let side: CGFloat = narrow ? 120 : 160
-        PageScroll(insets: EdgeInsets(top: 16, leading: narrow ? 32 : 40, bottom: 24, trailing: narrow ? 32 : 40)) {
+        let layout = ListLayout(width: width)
+        let side = layout.cover
+        PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
             HStack(alignment: .bottom, spacing: 20) {
                 if let cover {
                     CoverImage(key: cover, size: side)
@@ -77,7 +77,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
                 }
             }
             .padding(.bottom, 20)
-            songs(narrow)
+            songs(layout.narrow)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }

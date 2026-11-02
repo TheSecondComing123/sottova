@@ -11,12 +11,14 @@ struct MainWindow: View {
     @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
-    @State private var narrow = false
+    @State private var windowWidth = 1240.0
+    private var page_: PageLayout { PageLayout(windowWidth: windowWidth, pageHeight: 0) }
+    private var narrow: Bool { page_.narrowWindow }
 
     var body: some View {
         HStack(spacing: 0) {
             Sidebar(section: router.route.section)
-                .frame(width: narrow ? 176 : 216)
+                .frame(width: page_.sidebar)
                 .overlay(alignment: .top) { TitleDrag().frame(height: 44) }
                 .background(Theme.sidebar)
                 .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
@@ -48,7 +50,7 @@ struct MainWindow: View {
         }
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .frame(minWidth: 855, minHeight: 640)
-        .onGeometryChange(for: Bool.self) { $0.size.width < 1040 } action: { narrow = $0 }
+        .onGeometryChange(for: Double.self) { $0.size.width } action: { windowWidth = $0 }
         .background(WindowVisibility(visible: $visible))
         .environment(\.windowVisible, visible)
         .environment(\.renaming, $renaming)
@@ -103,7 +105,7 @@ struct MainWindow: View {
                     SilenceSheet(edit: edit)
                         .padding(.top, 52)
                         .frame(maxWidth: .infinity)
-                        .padding(.leading, narrow ? 176 : 216)
+                        .padding(.leading, page_.sidebar)
                 }
                 .ignoresSafeArea()
                 .transition(.opacity)

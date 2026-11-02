@@ -13,8 +13,8 @@ struct DayPage: View {
     @State private var height: CGFloat = 748
     private var wake = SystemWake.shared
 
-    // beside What played, a row's words need about 430 pt to stay on their line
-    private var narrow: Bool { width < 1005 }
+    private var layout: DayLayout { DayLayout(width: width, height: height) }
+    private var narrow: Bool { layout.narrow }
 
     private func now(_ date: Date) -> Date {
         #if SHOT
@@ -29,7 +29,7 @@ struct DayPage: View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = now(context.date)
             let plan = controller.dayPlan(now: now, wholeDay: droppingHere)
-            PageScroll(insets: EdgeInsets(top: 16, leading: narrow ? 32 : 40, bottom: 24, trailing: narrow ? 32 : 40)) {
+            PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
                 if narrow {
                     newButton.frame(maxWidth: .infinity, alignment: .trailing).padding(.bottom, 14)
                     day(plan, now: now)
@@ -53,7 +53,7 @@ struct DayPage: View {
                             }
                             ForEach(played, id: \.at) { playedLine($0, plan) }
                         }
-                        .frame(width: 320)
+                        .frame(width: layout.right)
                     }
                 }
             }
@@ -65,11 +65,7 @@ struct DayPage: View {
         .onGeometryChange(for: CGSize.self) { $0.size } action: { (width, height) = ($0.width, $0.height) }
     }
 
-    /// Wide, the day fills the page's height; narrow, it scrolls with what played below it.
-    private func hourHeight(_ plan: DayPlan) -> Double {
-        guard !narrow else { return 32 }
-        return min(max((height - 51) / Double(plan.lastHour - plan.firstHour), DayPlan.Rail.hourHeight), 120)
-    }
+    private func hourHeight(_ plan: DayPlan) -> Double { layout.hourHeight(hours: plan.lastHour - plan.firstHour) }
 
     private var newButton: some View {
         ThemeButton(title: "New", icon: .plus, iconWeight: .line) { router.alarm = .new(nil) }
