@@ -96,7 +96,8 @@ struct TrackVisualTests {
         guard case .track(let t) = m.phase else { Issue.record("no track"); return }
         #expect(near(t.fallLength, 0.5625))
         #expect(near(t.visual(at: t.outStart).cover, 1))
-        #expect(t.visual(at: t.outStart + 1).silent)
+        #expect(!t.visual(at: t.outStart + 0.7).silent)
+        #expect(!t.visual(at: t.outStart + 1).silent)
     }
 
     @Test func aSkipMidFallCarriesOnFromWhereTheCoverIs() {

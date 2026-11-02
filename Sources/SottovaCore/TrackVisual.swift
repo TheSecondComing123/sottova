@@ -41,6 +41,8 @@ extension Track {
             let floor = min(Self.afterimage, from.cover)
             let end = outStart + fallLength
             guard t < end else {
+                // a skip goes straight to the next piece: there's no silence to name
+                if skipping { return Visual(cover: floor, under: 0, scale: 1, text: 0, hairline: 0, silent: false) }
                 return Visual(cover: floor, under: 0, scale: 1, text: Self.clamp((t - end) / Self.silenceFade), hairline: 0, silent: true)
             }
             let p = (t - outStart) / fallLength
