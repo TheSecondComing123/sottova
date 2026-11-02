@@ -38,17 +38,18 @@ struct TitleBar: View {
     @ViewBuilder
     private var nowPlaying: some View {
         if router.route != .home, controller.status == .playing || controller.status == .paused, let song = controller.current {
-            Button { router.go(to: .home) } label: {
+            // not on the click that brings the window forward: going to Now would clear a picked row's selection
+            BarControl(firstClick: false, pressScale: 0.99, help: "show what's playing", action: { _ in router.go(to: .home) }) { _ in
                 HStack(spacing: 6) {
                     Text(song.title).foregroundStyle(Theme.text)
                     Text(song.artist).foregroundStyle(Theme.muted).layoutPriority(-1)
                 }
                 .role(.body)
                 .lineLimit(1)
-                .contentShape(.rect)
+            } access: {
+                Button("\(song.title), \(song.artist)") { router.go(to: .home) }
+                    .accessibilityHint("show what's playing")
             }
-            .buttonStyle(.plain)
-            .help("show what's playing")
             .padding(.leading, 96)
             .padding(.trailing, narrow ? 110 : 190)
         }
@@ -100,6 +101,7 @@ private struct BarButton: View {
 /// as a drag. `firstClick`: whether the click that brings an inactive window forward acts too.
 private struct BarControl<Label: View, Access: View>: View {
     var firstClick = true
+    var pressScale = 0.96
     let help: String
     let action: (NSView) -> Void
     @ViewBuilder let label: (_ hovering: Bool) -> Label
@@ -109,7 +111,7 @@ private struct BarControl<Label: View, Access: View>: View {
 
     var body: some View {
         label(hovering)
-            .scaleEffect(pressed ? 0.96 : 1)
+            .scaleEffect(pressed ? pressScale : 1)
             .overlay(BarHit(firstClick: firstClick, help: help, pressed: $pressed, hovering: $hovering, action: action))
             .accessibilityRepresentation(representation: access)
     }
