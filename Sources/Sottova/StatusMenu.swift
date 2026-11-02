@@ -38,7 +38,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let title = NSTextField(labelWithString: screen.title)
         title.font = .systemFont(ofSize: 13, weight: .medium)
         title.lineBreakMode = .byTruncatingTail
-        let sub = NSTextField(wrappingLabelWithString: screen.sub)
+        // one line, except a warning, which stays whole
+        let warning = screen.action == .openSound
+        let sub = warning ? NSTextField(wrappingLabelWithString: screen.sub) : NSTextField(labelWithString: screen.sub)
+        sub.lineBreakMode = warning ? .byWordWrapping : .byTruncatingTail
         sub.font = .systemFont(ofSize: 13)
         sub.textColor = .secondaryLabelColor
         sub.isHidden = screen.sub.isEmpty
@@ -60,18 +63,23 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         return item
     }
 
+    /// The same two in every state, dimmed when they can't act, so the menu doesn't move under the pointer.
     private func actions(_ screen: NowScreen) -> [MenuEntry] {
         let controller = controller
-        let playOrPause: MenuEntry = controller.status == .paused ? .item("Play", action: controller.play) : .item("Pause", action: controller.pause)
-        let next = MenuEntry.item("Play the next song now", action: controller.skip)
+        let holding = controller.hold != nil && controller.status != .paused
+        let paused = controller.status == .paused
+        let skip = { (enabled: Bool) in MenuEntry.item("Skip", enabled: enabled, action: controller.skip) }
+        let playOrPause = { (enabled: Bool) in
+            paused ? MenuEntry.item("Play", enabled: enabled, action: controller.play) : .item("Pause", enabled: enabled, action: controller.pause)
+        }
         switch screen.kind {
         case .firstRun: return [.item("Choose a folder…", action: controller.chooseFolders)]
-        case .reading: return []
-        case .quiet: return [.item("Play something", action: controller.play)]
-        case .piece: return [playOrPause, .item("Skip", action: controller.skip)]
+        case .reading: return [.item("Play", enabled: false, action: controller.play), skip(false)]
+        case .quiet: return [.item("Play", action: controller.play), skip(false)]
+        case .piece: return [playOrPause(true), skip(true)]
         case .silence:
             if screen.action == .openSound { return [.item("Open Sound settings") { NSWorkspace.shared.open(.soundSettings) }] }
-            return controller.hold != nil && controller.status != .paused ? [next] : [playOrPause, next]
+            return [playOrPause(!holding), skip(true)]
         }
     }
 
