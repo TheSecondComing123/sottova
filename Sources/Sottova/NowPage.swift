@@ -14,24 +14,29 @@ private final class NowMotion {
     var silent = false
     var screen = NowScreen(kind: .quiet, title: "")
     var foot: String?
+
+    /// Nothing in the cover's place, so the words have the page.
+    var bare: Bool { over == nil && (screen.kind == .quiet || screen.kind == .silence) }
 }
 
-/// Where things sit, from the mock: 400 pt cover at 64 in a 1024 pane, 280 at 32 in a 679 one, with the cover's foot
-/// 70% of the way down.
+/// Where things sit: the cover takes what the words and margins leave, up to the page's height, and is centered down
+/// it. Too short a page for that leaves spare width, which goes either side.
 private struct NowLayout {
     let width, height, side, left, gap: CGFloat
 
     init(_ size: CGSize) {
         (width, height) = (size.width, size.height)
         let p = min(1, max(0, (size.width - 679) / (1024 - 679)))
-        side = (280 + 120 * p).rounded()
-        left = (32 + 32 * p).rounded()
+        let margin = (32 + 16 * p).rounded()
         gap = (32 + 8 * p).rounded()
+        side = max(min(height - 48, width - 2 * margin - gap - (260 + 40 * p).rounded()), 160).rounded()
+        left = max(margin, ((width - side - gap - 456) / 2).rounded())
     }
 
-    var coverBottom: CGFloat { max(side + 24, height * 524 / 748) }
+    func coverBottom(_ shown: CGFloat) -> CGFloat { (height + shown) / 2 }
     func textLeft(_ shown: CGFloat) -> CGFloat { left + shown + gap }
     func textWidth(_ shown: CGFloat) -> CGFloat { min(456, width - textLeft(shown) - left) }
+    var bareTextWidth: CGFloat { min(560, width - 2 * left) }
 }
 
 struct NowPage: View {
@@ -62,15 +67,18 @@ struct NowPage: View {
         GeometryReader { geo in
             let layout = NowLayout(geo.size)
             let shown = motion.over.map { min(layout.side, CGFloat($0.width)) } ?? layout.side
+            let bare = motion.bare
+            let width = bare ? layout.bareTextWidth : layout.textWidth(shown)
             ZStack(alignment: .topLeading) {
-                NowCover(motion: motion, layout: layout, album: controller.current?.album, dragging: router.droppingMusic)
-                NowText(motion: motion, width: layout.textWidth(shown), dragging: router.droppingMusic, act: act,
-                        choose: controller.chooseFolders, freeMusic: { navigate(.shelf) })
-                    .frame(height: layout.coverBottom + 5, alignment: .bottomLeading)
-                    .offset(x: layout.textLeft(shown))
-                foot
-                    .frame(height: geo.size.height - 14, alignment: .bottomLeading)
-                    .offset(x: layout.textLeft(shown))
+                NowCover(motion: motion, layout: layout, shown: shown, album: controller.current?.album, dragging: router.droppingMusic)
+                VStack(alignment: bare ? .center : .leading, spacing: 12) {
+                    NowText(motion: motion, width: width, centered: bare, dragging: router.droppingMusic, act: act,
+                            choose: controller.chooseFolders, freeMusic: { navigate(.shelf) })
+                    foot
+                }
+                .multilineTextAlignment(bare ? .center : .leading)
+                .frame(width: width, height: bare ? geo.size.height : layout.coverBottom(shown) + 5, alignment: bare ? .center : .bottomLeading)
+                .offset(x: bare ? (layout.width - width) / 2 : layout.textLeft(shown))
             }
         }
         .task(id: key) { await follow() }
@@ -202,6 +210,7 @@ struct NowPage: View {
 private struct NowCover: View {
     let motion: NowMotion
     let layout: NowLayout
+    let shown: CGFloat
     let album: String?
     let dragging: Bool
     @Environment(\.colorScheme) private var scheme
@@ -227,7 +236,7 @@ private struct NowCover: View {
             }
         }
         .frame(height: layout.side, alignment: .bottomLeading)
-        .offset(x: layout.left, y: layout.coverBottom - layout.side)
+        .offset(x: layout.left, y: layout.coverBottom(shown) - layout.side)
     }
 
     /// No art while a piece plays: its album's name, low in an outline. Nothing at all once it's gone.
@@ -262,6 +271,7 @@ private struct NowCover: View {
 private struct NowText: View {
     let motion: NowMotion
     let width: CGFloat
+    let centered: Bool
     let dragging: Bool
     let act: (NowScreen.Action) -> Void
     let choose: () -> Void
@@ -270,44 +280,48 @@ private struct NowText: View {
     var body: some View {
         let screen = motion.screen
         let firstRun = screen.kind == .firstRun
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: centered ? .center : .leading, spacing: 0) {
             let title = firstRun && dragging ? "Let go to add it" : screen.title
             Text(title)
                 .role(.title)
                 .foregroundStyle(Theme.text)
                 .lineLimit(4)
-                .frame(width: min(width, Balance.width(title, in: width)), alignment: .leading)
-            ZStack(alignment: .topLeading) {
-                if firstRun {
-                    if !dragging {
-                        HStack(spacing: 0) {
-                            Text("or ")
-                            ThemeLink(text: "choose a folder", underlined: true, action: choose)
-                            Text(", or ")
-                            ThemeLink(text: "get free music", underlined: true, action: freeMusic)
+                .frame(width: min(width, Balance.width(title, in: width)), alignment: centered ? .center : .leading)
+            if firstRun || !screen.sub.isEmpty {
+                ZStack(alignment: .topLeading) {
+                    if firstRun {
+                        if !dragging {
+                            HStack(spacing: 0) {
+                                Text("or ")
+                                ThemeLink(text: "choose a folder", underlined: true, action: choose)
+                                Text(", or ")
+                                ThemeLink(text: "get free music", underlined: true, action: freeMusic)
+                            }
                         }
+                    } else {
+                        Text(screen.sub).lineLimit(2)
                     }
-                } else {
-                    Text(screen.sub).lineLimit(2)
                 }
+                .role(.body)
+                .foregroundStyle(Theme.muted)
+                .frame(minHeight: 18, alignment: .topLeading)
+                // 8 in the mock; an exact line height sits 2 pt lower here than in a browser
+                .padding(.top, 10)
             }
-            .role(.body)
-            .foregroundStyle(Theme.muted)
-            .frame(minHeight: 18, alignment: .topLeading)
-            // 8 in the mock; an exact line height sits 2 pt lower here than in a browser
-            .padding(.top, 10)
-            ZStack(alignment: .topLeading) {
-                if let action = screen.action, let label = screen.actionTitle {
-                    ThemeLink(text: label) { act(action) }
-                } else if let third = screen.third {
-                    Text(third).monospacedDigit().foregroundStyle(Theme.faint)
+            if screen.action != nil || screen.third != nil {
+                ZStack(alignment: .topLeading) {
+                    if let action = screen.action, let label = screen.actionTitle {
+                        ThemeLink(text: label) { act(action) }
+                    } else if let third = screen.third {
+                        Text(third).monospacedDigit().foregroundStyle(Theme.faint)
+                    }
                 }
+                .role(.body)
+                .frame(minHeight: 18, alignment: .topLeading)
+                .padding(.top, 2)
             }
-            .role(.body)
-            .frame(minHeight: 18, alignment: .topLeading)
-            .padding(.top, 2)
         }
-        .frame(width: width, alignment: .leading)
+        .frame(width: width, alignment: centered ? .center : .leading)
         .opacity(motion.text)
     }
 }

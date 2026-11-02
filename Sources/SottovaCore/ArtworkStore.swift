@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 /// Cover art on disk as JPEGs named by content hash, so every track on an album shares one file.
 public final class ArtworkStore: Sendable {
-    // Now's cover is 400 pt
+    // the largest Now's cover draws: a point to a pixel
     private static let savedPixels = 800
     private let directory: URL
     // NSCache is thread-safe but isn't marked Sendable
