@@ -63,6 +63,7 @@ struct TitleDrag: View {
             .contentShape(.rect)
             .gesture(WindowDragGesture())
             .simultaneousGesture(TapGesture(count: 2).onEnded { NSApp.keyWindow?.performZoom(nil) })
+            .allowsWindowActivationEvents()
     }
 }
 
