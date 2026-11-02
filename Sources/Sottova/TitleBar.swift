@@ -62,8 +62,18 @@ struct TitleDrag: View {
         Color.clear
             .contentShape(.rect)
             .gesture(WindowDragGesture())
-            .simultaneousGesture(TapGesture(count: 2).onEnded { NSApp.keyWindow?.performZoom(nil) })
+            .simultaneousGesture(TapGesture(count: 2).onEnded(doubleClicked))
             .allowsWindowActivationEvents()
+    }
+
+    /// What Desktop & Dock's "double-click a window's title bar to" says. Fill has no public call, so it zooms.
+    private func doubleClicked() {
+        guard let window = NSApp.currentEvent?.window else { return }
+        switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+        case "None": break
+        case "Minimize": window.miniaturize(nil)
+        default: window.performZoom(nil)
+        }
     }
 }
 
