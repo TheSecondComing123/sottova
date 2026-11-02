@@ -57,12 +57,18 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
         Group {
             if layout.pinned {
                 HStack(alignment: .top, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 20) {
-                        art
-                        words
+                    // scrolls only in a wide, short window, where Play would otherwise fall off the bottom
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            art
+                            words
+                        }
+                        .frame(width: layout.cover, alignment: .leading)
+                        .padding(.top, 16)
+                        .padding(.bottom, 24)
                     }
-                    .frame(width: layout.cover, alignment: .leading)
-                    .padding(.top, 16)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.leading, layout.margin)
                     .padding(.trailing, 26)
                     // the speaker sits 22 left of the rows, and a scroll view clips
