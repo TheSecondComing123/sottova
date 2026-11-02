@@ -341,11 +341,14 @@ struct NameList: View {
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 19)
-            ForEach(names, id: \.self) { name in
-                LinkText(text: name) { navigate(.artist(name)) }
-                    .foregroundStyle(Theme.text)
-                    .role(.body)
-                    .frame(height: 28)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 28, alignment: .leading)], alignment: .leading, spacing: 0) {
+                ForEach(names, id: \.self) { name in
+                    LinkText(text: name) { navigate(.artist(name)) }
+                        .foregroundStyle(Theme.text)
+                        .role(.body)
+                        .lineLimit(1)
+                        .frame(height: 28)
+                }
             }
         }
     }
