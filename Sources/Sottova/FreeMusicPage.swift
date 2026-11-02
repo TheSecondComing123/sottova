@@ -13,15 +13,12 @@ struct FreeMusicPage: View {
                 .offset(y: -2)
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
-                .padding(.bottom, 27)
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Shelf.sets) { row($0) }
-                Text("Free to keep. CC BY sets credit the artist.")
-                    .role(.body)
-                    .foregroundStyle(Theme.faint)
-                    .padding(.top, 20)
-            }
-            .frame(maxWidth: 720)
+                .padding(.bottom, 19)
+            ForEach(Shelf.sets) { row($0) }
+            Text("CC BY sets credit the artist.")
+                .role(.body)
+                .foregroundStyle(Theme.faint)
+                .padding(.top, 16)
         }
     }
 
@@ -29,18 +26,19 @@ struct FreeMusicPage: View {
         let running = shelf.downloading.contains(set.id)
         let progress = shelf.progress[set.id] ?? 0
         return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(set.title)
-                    .role(.item)
-                    .foregroundStyle(Theme.text)
-                Text("\(set.creator), \(set.license), \(Self.size(set.megabytes))")
-                    .role(.body)
-                    .foregroundStyle(Theme.muted)
-            }
-            .lineLimit(1)
+            Text(set.title)
+                .role(.body)
+                .fontWeight(.medium)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .layoutPriority(1)
+            Text("\(set.creator), \(set.license), \(Self.size(set.megabytes))")
+                .role(.body)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
             Spacer(minLength: 12)
             if running {
-                Text("\(Int(progress * Double(set.megabytes))) MB of \(Self.size(set.megabytes))")
+                Text("\(Int(progress * Double(set.megabytes))) MB")
                     .role(.body)
                     .monospacedDigit()
                     .foregroundStyle(Theme.muted)
@@ -61,7 +59,7 @@ struct FreeMusicPage: View {
                 ThemeButton(title: "Download") { start(set) }
             }
         }
-        .frame(height: 56)
+        .frame(height: 32)
         .overlay(alignment: .bottom) {
             if running {
                 Rectangle().fill(Theme.hairline).frame(height: 2)
