@@ -37,7 +37,8 @@ struct DayPage: View {
                     }
                 } else {
                     HStack(alignment: .top, spacing: 40) {
-                        VStack(alignment: .leading, spacing: 0) { day(plan, now: now) }
+                        // the first row's name level with What played
+                        VStack(alignment: .leading, spacing: 0) { day(plan, now: now) }.padding(.top, 11)
                         VStack(alignment: .leading, spacing: 0) {
                             HStack {
                                 if !played.isEmpty {
