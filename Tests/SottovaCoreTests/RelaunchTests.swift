@@ -216,6 +216,53 @@ struct RelaunchTests {
         #expect(c.sleepTimer == nil)
     }
 
+    // what a stop after this piece does across a relaunch, as it is today
+
+    @Test func aPieceLeftPlayingToAClosedHoursStopComesBackPaused() async throws {
+        let storage = try temp()
+        let (first, _) = try await hourPlaying(storage: storage)
+        first.checkHours(now: .now + 3600)
+        let c = try relaunch(first, storage: storage)
+        try await buildCatalog(c, from: first)
+        #expect(c.sleepTimer == .afterCurrent)
+        #expect(c.status == .paused)
+    }
+
+    @Test func aStopAfterThisPieceWithItsWindowClosedComesBackPaused() async throws {
+        let storage = try temp()
+        let (first, album) = try await hourPlaying(storage: storage)
+        first.checkHours(now: .now + 3600)
+        first.quitting()
+        let closed = row(album, ago: 2 * 3600)
+        first.addAlarm(closed)
+        first.quitting()
+        let url = storage.appending(path: "resume.json")
+        var state = try JSONDecoder().decode(Controller.ResumeState.self, from: Data(contentsOf: url))
+        state.hour = closed.id
+        try JSONEncoder().encode(state).write(to: url)
+        let c = try opened(storage)
+        c.presence = { _ in nil }
+        c.loadAlarms()
+        c.restoreResume()
+        try await buildCatalog(c, from: first)
+        #expect(c.sleepTimer == .afterCurrent)
+        #expect(c.status == .paused)
+    }
+
+    @Test func anAlarmAfterARelaunchCancelsTheStop() async throws {
+        let storage = try temp()
+        let (first, album) = try await hourPlaying(storage: storage)
+        first.checkHours(now: .now + 3600)
+        let c = try relaunch(first, storage: storage)
+        try await buildCatalog(c, from: first)
+        #expect(c.sleepTimer == .afterCurrent)
+        let lauds = Alarm(source: album.id, name: "Lauds", hour: LiveClock.farHour, minute: 0, weekdays: Set(1...7))
+        c.addAlarm(lauds)
+        c.fire(lauds.id, due: .now)
+        #expect(c.sleepTimer == nil)
+        #expect(c.status == .playing || c.status == .resting)
+    }
+
     // MARK: Volume
 
     private func alarm(_ album: Album, volume: Double) -> Alarm {
