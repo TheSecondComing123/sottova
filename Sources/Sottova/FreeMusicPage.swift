@@ -15,7 +15,8 @@ struct FreeMusicPage: View {
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 19)
-            ForEach(Shelf.sets) { row($0) }
+            // capped: across a wide page the button would sit a screen from its name
+            ForEach(Shelf.sets) { row($0).frame(maxWidth: 720) }
             Text("CC BY sets credit the artist.")
                 .role(.body)
                 .foregroundStyle(Theme.faint)
