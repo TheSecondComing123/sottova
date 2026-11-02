@@ -109,7 +109,7 @@ struct DayPage: View {
             let rising = sounding == row.id && controller.rising && controller.status != .paused
             return (row.id, plan.line(for: row, nextPart: nextPart(row.alarm), rising: rising, waiting: sounding == row.id ? waiting : nil, cantWake: unwoken == row.id))
         }, uniquingKeysWith: { first, _ in first })
-        // room beside a painting at its usual size, and more than enough beside a larger one in a tall block
+        // room beside a painting at its usual size, and more than enough under one
         let blockWidth = layout.blockWidth(oneColumn: oneColumn(plan))
         let room = blockWidth - 12 - 23 - 72 - 12 - 28
         let rail = plan.rail(hourHeight: scale, lines: pieces.mapValues { WordFlow.lines($0.map(\.text), width: room) })
@@ -156,7 +156,7 @@ struct DayPage: View {
             ForEach(rail.marks) { mark in
                 let height = mark.block.upperBound - mark.block.lowerBound
                 DayRow(alarm: mark.alarm, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
-                       painting: layout.painting(block: height, blockWidth: blockWidth), sounding: sounding == mark.id)
+                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines((pieces[mark.id] ?? []).map(\.text), width: blockWidth - 63)), sounding: sounding == mark.id)
                     .frame(height: height)
                     .padding(.leading, DayLayout.blockLeft)
                     .offset(y: mark.block.lowerBound)
@@ -387,42 +387,20 @@ private struct DayRow: View {
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            RowTick(alarm: alarm).padding(.top, 4).frame(width: 23, alignment: .topLeading)
-            let stack = painting.under ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
-            stack {
-            Artwork(key: artwork, size: painting.height, width: painting.width, radius: 3, outlined: true)
-                .opacity(alarm.on ? 1 : 0.4)
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Button { navigate(alarm.route(in: controller)) } label: {
-                        Text(alarm.name).role(.row).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
-                    }
-                    .buttonStyle(.plain)
-                    .help("open \(alarm.name)")
-                    // so what's sounding doesn't rest on color alone
-                    if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
+        Group {
+            if painting.under {
+                VStack(alignment: .leading, spacing: 8) {
+                    art
+                    HStack(alignment: .top, spacing: 0) { tick; words; Spacer(minLength: 8); dots }
                 }
-                WordFlow {
-                    ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) }
+            } else {
+                HStack(alignment: .top, spacing: 0) {
+                    tick
+                    HStack(alignment: .top, spacing: 12) { art; words }
+                    Spacer(minLength: 8)
+                    dots
                 }
-                .foregroundStyle(alarm.on ? Theme.muted : Theme.faint)
             }
-            }
-            Spacer(minLength: 8)
-            Menu { RowEntries(entries: entries) } label: {
-                Ph.dotsThree.icon(size: 14)
-                    .foregroundStyle(Theme.muted)
-                    .frame(width: 24, height: 24)
-                    .contentShape(.rect)
-                    .hoverable(radius: 4)
-            }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .fixedSize()
-            .help("more")
-            .accessibilityLabel("more for \(alarm.name)")
         }
         .padding(6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -434,6 +412,49 @@ private struct DayRow: View {
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
         .sottovaMenu { entries }
+    }
+
+    private var tick: some View {
+        RowTick(alarm: alarm).padding(.top, 4).frame(width: 23, alignment: .topLeading)
+    }
+
+    private var art: some View {
+        Artwork(key: artwork, size: painting.height, width: painting.width, radius: 3, outlined: true)
+            .opacity(alarm.on ? 1 : 0.4)
+    }
+
+    private var words: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 6) {
+                Button { navigate(alarm.route(in: controller)) } label: {
+                    Text(alarm.name).role(.row).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .help("open \(alarm.name)")
+                // so what's sounding doesn't rest on color alone
+                if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
+            }
+            WordFlow {
+                ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) }
+            }
+            .foregroundStyle(alarm.on ? Theme.muted : Theme.faint)
+        }
+    }
+
+    private var dots: some View {
+        Menu { RowEntries(entries: entries) } label: {
+            Ph.dotsThree.icon(size: 14)
+                .foregroundStyle(Theme.muted)
+                .frame(width: 24, height: 24)
+                .contentShape(.rect)
+                .hoverable(radius: 4)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("more")
+        .accessibilityLabel("more for \(alarm.name)")
     }
 
     private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }

@@ -78,12 +78,16 @@ struct PageLayoutTests {
         for width in [855.0, 1196, 1240, 1470, 1920] {
             let day = PageLayout(windowWidth: width, pageHeight: 898).day
             let width = day.blockWidth(oneColumn: day.narrow)
-            #expect(day.painting(block: 52, blockWidth: width) == (40, 40, false))
+            #expect(day.painting(block: 52, blockWidth: width, lines: 1) == (40, 40, false))
             for block in stride(from: 52.0, through: 1400, by: 3) {
-                let (wide, tall, under) = day.painting(block: block, blockWidth: width)
+                let (wide, tall, under) = day.painting(block: block, blockWidth: width, lines: 3)
                 #expect(tall >= 40 && tall <= block - 12)
-                #expect(wide >= tall && wide <= tall * 1.5)
-                if under { #expect(tall + 12 + 66 <= block && wide + 63 <= width) } else { #expect(wide + 75 + 220 <= width || wide == 40) }
+                if under {
+                    #expect(wide == width - 12 && tall >= 160 && wide <= tall * 4)
+                    #expect(tall + 12 + 31 + 54 <= block)
+                } else {
+                    #expect(wide == tall && (wide + 75 + 220 <= width || wide == 40))
+                }
             }
         }
     }
