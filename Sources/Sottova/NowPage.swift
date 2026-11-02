@@ -310,14 +310,14 @@ private struct NowText: View {
             if screen.action != nil || screen.third != nil {
                 ZStack(alignment: .topLeading) {
                     if let action = screen.action, let label = screen.actionTitle {
-                        ThemeLink(text: label) { act(action) }
+                        ThemeLink(text: label, underlined: true) { act(action) }
                     } else if let third = screen.third {
                         Text(third).monospacedDigit().foregroundStyle(Theme.faint)
                     }
                 }
                 .role(.body)
                 .frame(minHeight: 18, alignment: .topLeading)
-                .padding(.top, 2)
+                .padding(.top, screen.sub.isEmpty ? 10 : 2)
             }
         }
         .frame(width: width, alignment: centered ? .center : .leading)
