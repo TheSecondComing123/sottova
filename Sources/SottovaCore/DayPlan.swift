@@ -108,11 +108,10 @@ public struct DayPlan: Sendable {
 
     private func quietPlan(wakeScheduled: Bool) -> Quiet {
         guard let next = following(after: now) else {
-            return Quiet(headline: "Nothing on your day", line: "Press play, or give a collection some hours.", foot: nil)
+            return Quiet(headline: "Nothing on your day", line: "Press play.", foot: nil)
         }
         if calendar.isDate(next.at, inSameDayAs: now) {
-            let then = following(after: next.at).flatMap { calendar.isDate($0.at, inSameDayAs: now) ? "Then \($0.alarm.name) at \(time($0.at))." : nil }
-            return Quiet(headline: "Nothing on yet", line: "\(next.alarm.name) at \(time(next.at)).", foot: then)
+            return Quiet(headline: "Nothing on yet", line: "\(next.alarm.name) at \(time(next.at)).", foot: nil)
         }
         let word = dayWord(next.at).isEmpty ? " tomorrow" : dayWord(next.at)
         return Quiet(headline: rows.contains(where: \.alarm.on) ? "The day is done" : "Nothing on today", line: "\(next.alarm.name) at \(time(next.at))\(word).",

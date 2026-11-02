@@ -103,8 +103,6 @@ struct NowPage: View {
 
     private func act(_ action: NowScreen.Action) {
         switch action {
-        case .skip: controller.skip()
-        case .play: controller.play()
         case .openDay: navigate(.alarms)
         case .openSound: NSWorkspace.shared.open(.soundSettings)
         }

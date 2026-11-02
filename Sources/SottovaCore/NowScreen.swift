@@ -3,7 +3,7 @@ import Foundation
 /// The words on Now.
 public struct NowScreen: Equatable, Sendable {
     public enum Kind: Sendable { case firstRun, reading, quiet, piece, silence }
-    public enum Action: Sendable { case skip, play, openDay, openSound }
+    public enum Action: Sendable { case openDay, openSound }
 
     public var kind: Kind
     public var title: String
@@ -17,8 +17,6 @@ public struct NowScreen: Equatable, Sendable {
 
     public var actionTitle: String? {
         switch action {
-        case .skip: "Play the next song now"
-        case .play: "Play something now"
         case .openDay: "Open Your day"
         case .openSound: "Open Sound settings"
         case nil: nil
@@ -33,7 +31,7 @@ public struct NowScreen: Equatable, Sendable {
         case .busy: "Your calendar is busy."
         case .media: "Something else is playing. \(name) waits for it."
         }
-        return NowScreen(kind: .silence, title: "Waiting", sub: line, action: .skip)
+        return NowScreen(kind: .silence, title: "Waiting", sub: line)
     }
 
     static let pitch = "Pieces arrive out of silence, at the hours you choose."
@@ -54,11 +52,11 @@ extension Controller {
         }
         guard status != .idle else {
             let quiet = dayPlan(now: now).quiet()
-            return NowScreen(kind: .quiet, title: quiet.headline, sub: quiet.line, action: alarms.contains(where: \.on) ? .play : .openDay)
+            return NowScreen(kind: .quiet, title: quiet.headline, sub: quiet.line, action: alarms.contains(where: \.on) ? nil : .openDay)
         }
         if silent || inSilence || status == .resting {
             if let hold, status != .paused { return .waiting(hold, row: soundingRow?.name) }
-            return NowScreen(kind: .silence, title: "Silence", sub: status == .paused ? "Paused" : "Next song in a while", action: .skip)
+            return NowScreen(kind: .silence, title: "Silence", sub: status == .paused ? "Paused" : "")
         }
         return NowScreen(kind: .piece, title: current?.title ?? title ?? "", sub: nowSub, third: nowThird)
     }
@@ -80,7 +78,7 @@ extension Controller {
         guard let song = current else { return sourceName ?? "" }
         var who = [song.artist]
         if let composer = song.composer, composer != song.artist { who.insert(composer, at: 0) }
-        return (who + (sourceName.map { ["in \($0)"] } ?? [])).joined(separator: ", ")
+        return who.joined(separator: ", ")
     }
 
     private var nowThird: String? {
@@ -94,7 +92,6 @@ extension Controller {
         }
         guard let track else { return nil }
         let left = max(0, Int((track.duration - track.elapsed).rounded(.up)))
-        let time = String(format: "%d:%02d", left / 60, left % 60)
-        return status == .paused ? "Paused, \(time) left" : "\(time) left"
+        return String(format: "%d:%02d left", left / 60, left % 60)
     }
 }

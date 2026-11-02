@@ -40,22 +40,22 @@ struct NowScreenTests {
         #expect(screen.title == "Drop your music here")
     }
 
-    @Test func aPieceSaysWhoWhereAndTimeLeft() async throws {
+    @Test func aPieceSaysWhoAndTimeLeft() async throws {
         let (c, _) = try await playing()
         c.advance(91)
         let screen = c.nowScreen()
         #expect(screen.kind == .piece)
         #expect(screen.title == "A piece")
-        #expect(screen.sub == "Komiku, in Overworld")
+        #expect(screen.sub == "Komiku")
         #expect(screen.third == "1:49 left")
         #expect(screen.action == nil)
     }
 
-    @Test func pausedSaysSo() async throws {
+    @Test func pausedSaysTheTimeLeft() async throws {
         let (c, _) = try await playing()
         c.advance(91)
         c.toggle()
-        #expect(c.nowScreen().third == "Paused, 1:49 left")
+        #expect(c.nowScreen().third == "1:49 left")
     }
 
     @Test func pausedWinsOverAnEasing() async throws {
@@ -65,17 +65,16 @@ struct NowScreenTests {
         c.advance(55)
         #expect(c.easing)
         c.toggle()
-        #expect(c.nowScreen().third?.hasPrefix("Paused,") == true)
+        #expect(c.nowScreen().third?.hasSuffix("left") == true)
     }
 
-    @Test func silenceOffersTheNextSong() async throws {
+    @Test func silenceLeavesSkipToTheTitleBar() async throws {
         let (c, _) = try await playing()
         while c.status != .resting { c.advance(0.5) }
         let screen = c.nowScreen()
         #expect(screen.title == "Silence")
-        #expect(screen.sub == "Next song in a while")
-        #expect(screen.action == .skip)
-        #expect(screen.actionTitle == "Play the next song now")
+        #expect(screen.sub == "")
+        #expect(screen.action == nil)
     }
 
     @Test func theTailOfAFadeAlreadyReadsAsSilence() async throws {
@@ -92,7 +91,7 @@ struct NowScreenTests {
         c.toggle()
         let screen = c.nowScreen()
         #expect((screen.title, screen.sub) == ("Silence", "Paused"))
-        #expect(screen.action == .skip)
+        #expect(screen.action == nil)
     }
 
     @Test(arguments: [(Hold.away, "You're away. It picks up when you're back."), (.call, "You're on a call. It picks up after."),
@@ -100,6 +99,7 @@ struct NowScreenTests {
     func aHoldSaysWhy(hold: Hold, line: String) {
         #expect(NowScreen.waiting(hold, row: nil).sub == line)
         #expect(NowScreen.waiting(hold, row: nil).title == "Waiting")
+        #expect(NowScreen.waiting(hold, row: nil).action == nil)
     }
 
     @Test func aHoldNamesTheRow() {
@@ -112,6 +112,8 @@ struct NowScreenTests {
         #expect(screen.kind == .quiet)
         #expect(screen.title == "Nothing on your day")
         #expect(screen.action == .openDay)
+        c.addAlarm(Alarm(source: c.catalog.albums[0].id, name: "Overworld", hour: LiveClock.farHour, minute: 0, weekdays: Set(1...7)))
+        #expect(c.nowScreen().action == nil)
     }
 
     @Test func aPieceWithNoRowSaysWhatFollows() async throws {

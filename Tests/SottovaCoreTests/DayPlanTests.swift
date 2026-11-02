@@ -160,8 +160,8 @@ struct DayPlanTests {
     }
 
     @Test func whatNowSaysInSilenceOfTheDay() {
-        #expect(plan([], date(2, 12)).quiet() == .init(headline: "Nothing on your day", line: "Press play, or give a collection some hours.", foot: nil))
-        #expect(plan([lauds, overworld, compline], date(2, 12)).quiet() == .init(headline: "Nothing on yet", line: "Overworld at 3.", foot: "Then Compline at 8."))
+        #expect(plan([], date(2, 12)).quiet() == .init(headline: "Nothing on your day", line: "Press play.", foot: nil))
+        #expect(plan([lauds, overworld, compline], date(2, 12)).quiet() == .init(headline: "Nothing on yet", line: "Overworld at 3.", foot: nil))
         #expect(plan([lauds, overworld, compline], date(2, 22)).quiet(wakeScheduled: true) == .init(headline: "The day is done", line: "Lauds at 7:02 tomorrow.", foot: "The Mac will wake for it."))
         #expect(plan([lauds], date(2, 22)).quiet().foot == nil)
         #expect(plan([overworld], date(2, 22)).quiet(wakeScheduled: true).foot == nil)
