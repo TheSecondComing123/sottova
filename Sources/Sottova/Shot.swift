@@ -18,7 +18,8 @@ struct ShotReady: ViewModifier {
             // before the route: resized during a page's transition, the window's width runs away and AppKit throws
             let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
             let window = NSApp.windows.first { $0.title == "Sottova" }
-            window?.setContentSize(NSSize(width: width, height: 800))
+            let height = defaults.object(forKey: "shotHeight") != nil ? defaults.double(forKey: "shotHeight") : 800
+            window?.setContentSize(NSSize(width: width, height: height))
             let routes: [String: Route] = ["home": .home, "songs": .songs, "collections": .collections, "artists": .artists, "alarms": .alarms, "shelf": .shelf]
             let asked = defaults.string(forKey: "shotRoute") ?? "home"
             if asked.hasPrefix("collection:") {
@@ -90,6 +91,9 @@ struct ShotReady: ViewModifier {
             // for someone watching: in front, but still not activated
             if defaults.bool(forKey: "shotRaise") { window?.orderFrontRegardless() }
             try? await Task.sleep(for: .seconds(1))
+            // a covered window holds an animated change undrawn: a route with no resize to push it showed the old page
+            window?.contentView?.layoutSubtreeIfNeeded()
+            window?.displayIfNeeded()
             // from the window's top left, as the mocks measure
             if let at = defaults.string(forKey: "shotMenuAt")?.split(separator: ",").compactMap({ Double($0) }), let window, let height = window.contentView?.bounds.height {
                 return shotMenu(at: NSPoint(x: at[0], y: height - at[1]), in: window)
