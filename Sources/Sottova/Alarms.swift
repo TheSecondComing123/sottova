@@ -121,7 +121,7 @@ struct AlarmSheet: View {
         source.map { controller.alarmName(of: $0) }
     }
 
-    /// The alarm as set so far, so the sheet can say exactly when it'll go off.
+    /// The alarm as set so far.
     private var alarm: Alarm? {
         guard let source, let name else { return nil }
         let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
@@ -180,7 +180,7 @@ struct AlarmSheet: View {
                 .buttonStyle(.plain)
             }
             Strip(selection: $kind)
-            // when: the time reads as a time, 7 : 00 AM, with what it repeats on and what that means right under it
+            // when: the time reads as a time, 7 : 00 AM, with what it repeats on right under it
             VStack(alignment: .leading, spacing: 12) {
                 // the same two rows in both, so switching doesn't move anything under the pointer; one that starts by
                 // itself may play on, so its end has a switch
@@ -190,9 +190,8 @@ struct AlarmSheet: View {
                     stops = on
                 }))
                 Strip(selection: $repeats)
-                if let alarm {
-                    Text(alarm.whileHere ? "plays now and then, \(AlarmLine.time(alarm)) to \(AlarmLine.end(of: alarm, minutes: span)) \(AlarmLine.days(alarm)). waits while you're away, on a call\(heedsCalendar ? ", playing something else or busy on your calendar" : " or playing something else")"
-                        : AlarmLine.describe(alarm) + (heedsCalendar ? ", not on days your calendar has something on then" : "") + (SystemWake.shared.trusted || SystemWake.shared.missing(for: [alarm]).isEmpty ? "" : ". saving asks for your password once, so the mac can wake for alarms from then on"))
+                if let alarm, let note = note(alarm) {
+                    Text(note)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.faint)
                         .fixedSize(horizontal: false, vertical: true)
@@ -244,6 +243,14 @@ struct AlarmSheet: View {
             if heedsCalendar == was.calendar { heedsCalendar = next.calendar }
         }
         .onDisappear { preview.stop() }
+    }
+
+    /// What "waits" means, or that saving will ask for a password.
+    private func note(_ alarm: Alarm) -> String? {
+        if alarm.whileHere {
+            return "waits while you're away, on a call\(heedsCalendar ? ", playing something else or busy on your calendar" : " or playing something else")"
+        }
+        return SystemWake.shared.trusted || SystemWake.shared.missing(for: [alarm]).isEmpty ? nil : "saving asks for your password once, so the mac can wake for alarms from then on"
     }
 
     /// "At 7 : 00 AM" as two steppers; with `on`, a switch at the end, and the steppers stand down while it's off.
@@ -324,7 +331,7 @@ struct AlarmSheet: View {
                 }
                 .transition(.opacity)
                 // the machine's rise, Machine.riseLength
-                Text(kind == .whileHere ? "set as it begins, whatever the speaker was left at" : "starts silent and rises to this over a minute and a half")
+                Text(kind == .whileHere ? "set as it begins" : "rises to this over 90 seconds")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.faint)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -456,40 +463,6 @@ private struct LineSlider: View {
         .frame(height: 20)
         .padding(.horizontal, 8)
         .accessibilityRepresentation { Slider(value: $value, in: 0...1) { Text("Volume") } }
-    }
-}
-
-/// How a row reads in words.
-enum AlarmLine {
-    private static func day(_ at: Date) -> String {
-        Calendar.current.isDateInToday(at) ? "today" : Calendar.current.isDateInTomorrow(at) ? "tomorrow" : at.formatted(.dateTime.weekday(.wide))
-    }
-
-    /// "starts at 7:02 tomorrow", "starts at 7:02 on weekdays", "plays 3:00 PM to 7:00 PM every day, while you're at the mac".
-    static func describe(_ alarm: Alarm) -> String {
-        if alarm.whileHere { return "plays \(time(alarm)) to \(end(of: alarm, minutes: alarm.minutes ?? 0)) \(days(alarm)), while you're at the mac" }
-        return "starts at \(time(alarm)) \(days(alarm))" + (alarm.minutes.map { ", stops at \(end(of: alarm, minutes: $0))" } ?? "")
-    }
-
-    /// When an alarm that stops after `minutes` goes quiet: "9:00 PM".
-    static func end(of alarm: Alarm, minutes: Int) -> String {
-        ((Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: .now) ?? .now) + Double(minutes) * 60)
-            .formatted(date: .omitted, time: .shortened)
-    }
-
-    static func time(_ alarm: Alarm) -> String {
-        (Calendar.current.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: .now) ?? .now)
-            .formatted(date: .omitted, time: .shortened)
-    }
-
-    /// "tomorrow", "every day", "on weekdays".
-    static func days(_ alarm: Alarm) -> String {
-        switch alarm.weekdays.count {
-        case 7: return "every day"
-        case 0:
-            return alarm.next(after: .now).map(day) ?? "once"
-        default: return alarm.weekdays == [2, 3, 4, 5, 6] ? "on weekdays" : alarm.weekdays == [1, 7] ? "on weekends" : "on some days"
-        }
     }
 }
 
