@@ -134,7 +134,7 @@ private struct RowLine: View {
     }
 }
 
-/// `.btn` with three dots: the rest of what a collection does.
+/// Three dots, quieter than the buttons beside it: the rest of what a collection does.
 struct CollectionMenu<Content: View>: View {
     @ViewBuilder let content: Content
 
@@ -143,11 +143,9 @@ struct CollectionMenu<Content: View>: View {
             content
         } label: {
             Ph.dotsThree.icon(size: 14)
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 7)
-                .frame(height: 24)
-                .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
-                .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
+                .foregroundStyle(Theme.muted)
+                .frame(width: 24, height: 24)
+                .contentShape(.rect)
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
@@ -166,7 +164,7 @@ struct PlayButton: View {
     var body: some View {
         let key = Controller.Origin.key(of: songs, source: source)
         let ours = controller.origin?.key == key && controller.status != .idle
-        ThemeButton(title: "Play", icon: .play) {
+        ThemeButton(title: "Play", primary: true, icon: .play) {
             if !ours {
                 controller.play(songs, source: source)
             } else if controller.status == .paused {
@@ -238,14 +236,14 @@ struct AlbumCollection: View {
             } actions: {
                 HStack(spacing: 6) {
                     PlayButton(songs: album.songs)
+                    ThemeButton(title: "Shuffle", icon: .shuffle, iconWeight: .bold) { controller.play(album.songs.shuffled(), shuffled: true) }
                     CollectionMenu {
-                        Button("Shuffle") { controller.play(album.songs.shuffled(), shuffled: true) }
-                        Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
-                            .help("a copy you can reorder and add to. songs added to its folder later won't join it")
-                        Divider()
-                        Button("Choose cover…") { router.coverFor = .album(id) }
                         Button("Start at…") { router.alarm = .new(.album(id)) }
                         SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.albumSettings[id] = $0 }
+                        Divider()
+                        Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
+                            .help("a copy you can reorder and add to. songs added to its folder later won't join it")
+                        Button("Choose cover…") { router.coverFor = .album(id) }
                         if album.artist != "Various Artists" {
                             Divider()
                             Button("Go to \(album.artist)") { navigate(.artist(album.artist)) }
@@ -304,6 +302,7 @@ struct YourCollection: View {
                 if !isEmpty {
                     HStack(spacing: 6) {
                         PlayButton(songs: songs, source: pid)
+                        ThemeButton(title: "Shuffle", icon: .shuffle, iconWeight: .bold) { controller.play(songs.shuffled(), source: pid, shuffled: true) }
                         menu(playlist, songs: songs)
                     }
                 }
@@ -468,12 +467,11 @@ struct YourCollection: View {
 
     private func menu(_ playlist: Playlist, songs: [Song]) -> some View {
         CollectionMenu {
-            Button("Shuffle") { controller.play(songs.shuffled(), source: pid, shuffled: true) }
+            Button("Start at…") { router.alarm = .new(.playlist(pid)) }
+            SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
             Divider()
             Button("Rename") { startRename(playlist) }
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
-            Button("Start at…") { router.alarm = .new(.playlist(pid)) }
-            SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {
