@@ -11,14 +11,13 @@ struct MainWindow: View {
     @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
-    @State private var windowWidth = 1240.0
-    private var page_: PageLayout { PageLayout(windowWidth: windowWidth, pageHeight: 0) }
-    private var narrow: Bool { page_.narrowWindow }
+    @State private var layout = PageLayout(windowWidth: 1240, pageHeight: 748)
+    private var narrow: Bool { layout.narrowWindow }
 
     var body: some View {
         HStack(spacing: 0) {
             Sidebar(section: router.route.section)
-                .frame(width: page_.sidebar)
+                .frame(width: layout.sidebar)
                 .overlay(alignment: .top) { TitleDrag().frame(height: 44) }
                 .background(Theme.sidebar)
                 .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline).frame(width: 1) }
@@ -40,6 +39,8 @@ struct MainWindow: View {
                 }
             }
         }
+        // inside the safe area's edge, so it's the whole window, full screen or not, less the bar
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { layout = PageLayout(windowWidth: $0.width, pageHeight: $0.height - 52) }
         .background(Theme.background)
         .ignoresSafeArea(.container, edges: .top)
         // in the toolbar, so the title bar is 52 pt with the traffic lights on this line, and clicks reach them
@@ -50,7 +51,8 @@ struct MainWindow: View {
         }
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .frame(minWidth: 855, minHeight: 640)
-        .onGeometryChange(for: Double.self) { $0.size.width } action: { windowWidth = $0 }
+        .environment(\.pageLayout, layout)
+        .environment(\.listLayout, layout.list)
         .background(WindowVisibility(visible: $visible))
         .environment(\.windowVisible, visible)
         .environment(\.renaming, $renaming)
@@ -105,7 +107,7 @@ struct MainWindow: View {
                     SilenceSheet(edit: edit)
                         .padding(.top, 52)
                         .frame(maxWidth: .infinity)
-                        .padding(.leading, page_.sidebar)
+                        .padding(.leading, layout.sidebar)
                 }
                 .ignoresSafeArea()
                 .transition(.opacity)

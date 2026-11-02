@@ -6,11 +6,11 @@ import SottovaCore
 struct FreeMusicPage: View {
     @Environment(Controller.self) private var controller
     private let shelf = ShelfDownload.shelf
-    @State private var width: CGFloat = 1024
+    @Environment(\.listLayout) private var layout
     private static let titleWidth = (Shelf.sets.map { ($0.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium)]).width }.max() ?? 0).rounded(.up)
 
     var body: some View {
-        let margin = ListLayout(width: width).margin
+        let margin = layout.margin
         PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: margin)) {
             Text("Free music")
                 .role(.title)
@@ -24,7 +24,6 @@ struct FreeMusicPage: View {
                 .foregroundStyle(Theme.faint)
                 .padding(.top, 16)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 
     private func row(_ set: ShelfSet) -> some View {

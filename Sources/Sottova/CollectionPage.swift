@@ -49,10 +49,9 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     @ViewBuilder let name: Name
     @ViewBuilder let actions: Actions
     @ViewBuilder let songs: (_ narrow: Bool) -> Songs
-    @State private var width: CGFloat = 1024
+    @Environment(\.listLayout) private var layout
 
     var body: some View {
-        let layout = ListLayout(width: width)
         let side = layout.cover
         PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
             HStack(alignment: .bottom, spacing: 20) {
@@ -80,7 +79,6 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
             songs(layout.narrow)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
 

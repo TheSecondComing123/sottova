@@ -24,6 +24,7 @@ struct NowPage: View {
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
     @Environment(\.windowVisible) private var visible
+    @Environment(\.pageLayout) private var page
     @State private var motion = NowMotion()
 
     private struct Key: Equatable {
@@ -44,8 +45,9 @@ struct NowPage: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let layout = NowLayout(width: geo.size.width, height: geo.size.height)
+        // for its proposal only: the cover and words run past a short page, and mustn't push the window's content
+        GeometryReader { _ in
+            let layout = page.now
             let shown = motion.over.map { min(layout.side, CGFloat($0.width)) } ?? layout.side
             let bare = motion.bare
             let width = bare ? layout.bareTextWidth : layout.textWidth(shown)
@@ -59,7 +61,7 @@ struct NowPage: View {
                     foot
                 }
                 .multilineTextAlignment(bare ? .center : .leading)
-                .frame(width: width, height: bare ? geo.size.height : under ? geo.size.height - bottom - 16 : bottom + 5,
+                .frame(width: width, height: bare ? layout.height : under ? layout.height - bottom - 16 : bottom + 5,
                        alignment: bare ? .center : under ? .topLeading : .bottomLeading)
                 .offset(x: bare ? (layout.width - width) / 2 : layout.textLeft(shown), y: under ? bottom + 16 : 0)
             }

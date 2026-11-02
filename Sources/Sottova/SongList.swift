@@ -130,11 +130,11 @@ struct SongList: View {
     @AppStorage("songsSort") private var sort = SongSort.who
     @AppStorage("songsSortReversed") private var reversed = false
     @FocusState private var filtering: Bool
-    @State private var width: CGFloat = 1024
+    @Environment(\.listLayout) private var layout
     @MainActor private static var answeredSearch = 0
 
-    private var narrow: Bool { ListLayout(width: width).narrow }
-    private var margin: CGFloat { ListLayout(width: width).margin }
+    private var narrow: Bool { layout.narrow }
+    private var margin: CGFloat { layout.margin }
 
     var body: some View {
         @Bindable var router = router
@@ -196,7 +196,6 @@ struct SongList: View {
                 }
             }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .onAppear(perform: answerSearch)
         .onChange(of: router.searchRequests) { answerSearch() }
         .onDisappear { router.typing = false }

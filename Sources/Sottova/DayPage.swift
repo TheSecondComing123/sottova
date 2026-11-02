@@ -9,11 +9,10 @@ struct DayPage: View {
     @Environment(Router.self) private var router
     @State private var dropHour: Int?
     @State private var played: [Controller.Played] = []
-    @State private var width: CGFloat = 1024
-    @State private var height: CGFloat = 748
+    @Environment(\.pageLayout) private var page
     private var wake = SystemWake.shared
 
-    private var layout: DayLayout { DayLayout(width: width, height: height) }
+    private var layout: DayLayout { page.day }
     private var narrow: Bool { layout.narrow }
 
     private func now(_ date: Date) -> Date {
@@ -62,7 +61,6 @@ struct DayPage: View {
             }
         }
         .onAppear { wake.refresh() }
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { (width, height) = ($0.width, $0.height) }
     }
 
     private func hourHeight(_ plan: DayPlan) -> Double { layout.hourHeight(hours: plan.lastHour - plan.firstHour) }
