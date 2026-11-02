@@ -37,7 +37,7 @@ struct CoverImage: View {
     }
 }
 
-/// Cover and words pinned on the left, the songs scrolling on the right.
+/// Cover and words over the songs, all scrolling together.
 struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     let cover: String?
     /// Nothing in it yet: the only place here an empty frame belongs.
@@ -53,39 +53,31 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
 
     var body: some View {
         let narrow = width < 860
-        let side: CGFloat = narrow ? 180 : 256
-        HStack(alignment: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
+        let side: CGFloat = narrow ? 120 : 160
+        PageScroll(insets: EdgeInsets(top: 16, leading: narrow ? 32 : 40, bottom: 24, trailing: narrow ? 32 : 40)) {
+            HStack(alignment: .bottom, spacing: 20) {
                 if let cover {
-                    CoverImage(key: cover, size: side).padding(.bottom, 20)
+                    CoverImage(key: cover, size: side)
                 } else if empty {
                     RoundedRectangle(cornerRadius: Radius.small)
                         .fill(dropTargeted ? Theme.primary.opacity(0.1) : .clear)
                         .strokeBorder(dropTargeted ? Theme.primary : Theme.frame, lineWidth: 1)
                         .frame(width: side, height: side)
-                        .padding(.bottom, 20)
                 }
-                name
-                    // no cover: the name starts where a cover's top would be, its line box's air taken out
-                    .padding(.top, cover == nil && !empty ? -4 : 0)
-                ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                    Text(line)
-                        .role(.body)
-                        .foregroundStyle(Theme.muted)
-                        .padding(.top, index == 0 ? 8 : 0)
+                VStack(alignment: .leading, spacing: 0) {
+                    name
+                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                        Text(line)
+                            .role(.body)
+                            .foregroundStyle(Theme.muted)
+                            .padding(.top, index == 0 ? 8 : 0)
+                    }
+                    CoverCredit(url: credit.url, key: credit.key).padding(.top, 4)
+                    actions.padding(.top, 14)
                 }
-                CoverCredit(url: credit.url, key: credit.key).padding(.top, 4)
-                actions.padding(.top, 14)
             }
-            .frame(width: side, alignment: .leading)
-            .padding(.top, 32)
-            .padding(.leading, 40)
-            .padding(.trailing, 26)
-
-            // the speaker sits 22 left of the rows, and a scroll view clips
-            PageScroll(insets: EdgeInsets(top: 32, leading: 22, bottom: 24, trailing: 40)) {
-                songs(narrow)
-            }
+            .padding(.bottom, 20)
+            songs(narrow)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
