@@ -48,13 +48,49 @@ struct PageLayoutTests {
 
     @Test func theRailFillsThePageWithinItsLimits() {
         for page in Self.windows {
-            for hours in 2...24 {
-                let scale = page.day.hourHeight(hours: hours)
-                #expect(scale >= DayPlan.Rail.hourHeight && scale <= 120)
-                if !page.day.narrow, scale > DayPlan.Rail.hourHeight { #expect(Double(hours) * scale <= page.height - 51 + 0.001) }
-                if !page.day.narrow, scale < 120 { #expect(Double(hours) * scale >= min(page.height - 51, Double(hours) * DayPlan.Rail.hourHeight) - 0.001) }
+            for span in stride(from: 2.0, through: 24, by: 0.5) {
+                for (others, played) in [(0, 0), (3, 0), (2, 19)] {
+                    let day = page.day
+                    let scale = day.hourHeight(span: span, others: others, played: played)
+                    let room = day.railRoom(others: others, played: played)
+                    #expect(scale >= DayPlan.Rail.hourHeight && scale <= DayPlan.Rail.maxHourHeight)
+                    if scale > DayPlan.Rail.hourHeight { #expect(span * scale <= room + 0.001) }
+                    if scale < DayPlan.Rail.maxHourHeight { #expect(span * scale >= min(room, span * DayPlan.Rail.hourHeight) - 0.001) }
+                }
             }
         }
+    }
+
+    @Test func theRightColumnStaysInRangeAndLeavesTheRailRoom() {
+        for page in Self.windows where !page.day.narrow {
+            #expect(page.day.right >= 320 && page.day.right <= 420)
+            #expect(page.day.blockWidth(oneColumn: false) >= 430)
+            #expect(!page.day.oneColumn(others: 1, played: 0))
+            #expect(page.day.oneColumn(others: 0, played: 0))
+        }
+        for page in Self.windows where page.day.narrow {
+            #expect(page.day.blockWidth(oneColumn: true) >= 430)
+            #expect(page.day.oneColumn(others: 1, played: 1))
+        }
+    }
+
+    @Test func aPaintingFitsItsBlock() {
+        for width in [855.0, 1196, 1240, 1470, 1920] {
+            let day = PageLayout(windowWidth: width, pageHeight: 898).day
+            let width = day.blockWidth(oneColumn: day.narrow)
+            #expect(day.painting(block: 52, blockWidth: width) == (40, false))
+            for block in stride(from: 52.0, through: 1400, by: 3) {
+                let (side, under) = day.painting(block: block, blockWidth: width)
+                #expect(side >= 40 && side <= block - 12)
+                if under { #expect(side + 12 + 66 <= block && side + 63 <= width) } else { #expect(side + 75 + 220 <= width || side == 40) }
+            }
+        }
+    }
+
+    @Test func whatPlayedShowsWhatFitsAndAtLeastItsShare() {
+        #expect(PageLayout(windowWidth: 855, pageHeight: 748).day.playedCap(others: 0) == 3)
+        #expect(PageLayout(windowWidth: 1240, pageHeight: 400).day.playedCap(others: 9) == 8)
+        #expect(PageLayout(windowWidth: 1470, pageHeight: 898).day.playedCap(others: 0) > 8)
     }
 
     @Test(arguments: [
@@ -78,7 +114,7 @@ struct PageLayoutTests {
         #expect(PageLayout(windowWidth: 1040, pageHeight: 748).sidebar == 216)
         #expect(PageLayout(windowWidth: 1075, pageHeight: 748).list.narrow)
         #expect(!PageLayout(windowWidth: 1076, pageHeight: 748).list.narrow)
-        #expect(PageLayout(windowWidth: 1220, pageHeight: 748).day.narrow)
-        #expect(!PageLayout(windowWidth: 1221, pageHeight: 748).day.narrow)
+        #expect(PageLayout(windowWidth: 1195, pageHeight: 748).day.narrow)
+        #expect(!PageLayout(windowWidth: 1196, pageHeight: 748).day.narrow)
     }
 }

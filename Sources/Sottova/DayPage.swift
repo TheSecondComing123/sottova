@@ -63,7 +63,9 @@ struct DayPage: View {
         .onAppear { wake.refresh() }
     }
 
-    private func hourHeight(_ plan: DayPlan) -> Double { layout.hourHeight(hours: plan.lastHour - plan.firstHour) }
+    private func hourHeight(_ plan: DayPlan) -> Double {
+        layout.hourHeight(span: plan.span, others: 0, played: played.count)
+    }
 
     private var newButton: some View {
         ThemeButton(title: "New", icon: .plus, iconWeight: .line) { router.alarm = .new(nil) }
@@ -111,6 +113,9 @@ struct DayPage: View {
         #endif
         return ZStack(alignment: .topLeading) {
             Rectangle().fill(Theme.hairline).frame(width: 1, height: rail.height).offset(x: 72)
+            ForEach(rail.breaks, id: \.y) { gap in
+                BreakMark(text: gap.text).offset(y: gap.y - 10)
+            }
             ForEach(rail.marks) { mark in
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Theme.faint)
@@ -144,9 +149,8 @@ struct DayPage: View {
             }
             ForEach(Array(rail.marks.enumerated()), id: \.element.id) { index, mark in
                 let row = plan.rows.first { $0.id == mark.id }!
-                let top = mark.top + 3
-                let following = index + 1 < rail.marks.count ? rail.marks[index + 1].top + 3 - 4 : Double.infinity
-                let blockHeight = min(max(mark.bar.upperBound - top, (mark.aside ? DayPlan.Rail.asideHeight : DayPlan.Rail.rowHeight) - 4), following - top)
+                let top = mark.block.lowerBound
+                let blockHeight = mark.block.upperBound - mark.block.lowerBound
                 let rising = sounding == mark.id && controller.rising && controller.status != .paused
                 DayRow(alarm: mark.alarm, pieces: plan.line(for: row, nextPart: nextPart(mark.alarm), rising: rising,
                                                             waiting: sounding == mark.id ? waiting : nil, cantWake: unwoken == mark.id))
@@ -171,7 +175,7 @@ struct DayPage: View {
 
     private func dropRow(plan: DayPlan, hour: Int, name: String, scale: Double) -> some View {
         let label = plan.dropLabel(hour: hour)
-        let top = Double(hour - plan.firstHour) * scale
+        let top = plan.y(hour: hour, hourHeight: scale)
         return ZStack(alignment: .topLeading) {
             Text(label.start)
                 .role(.body)
@@ -243,6 +247,34 @@ struct DayPage: View {
         .scrollIndicatorsFlash(onAppear: true)
         // a long day opens on its latest, with the morning a scroll away
         .defaultScrollAnchor(.trailing, for: .initialOffset)
+    }
+}
+
+/// A long gap drawn short: the line broken, and how long it really is.
+private struct BreakMark: View {
+    let text: String
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Rectangle().fill(Theme.background).frame(width: 9, height: 12).offset(x: 68)
+            Canvas { context, size in
+                var slashes = Path()
+                for x in [69.0, 73.0] {
+                    slashes.move(to: CGPoint(x: x - 3, y: 13))
+                    slashes.addLine(to: CGPoint(x: x + 3, y: 7))
+                }
+                context.stroke(slashes, with: .color(Theme.faint), lineWidth: 1)
+            }
+            .frame(width: 80, height: 20)
+            Text(text)
+                .font(.system(size: 11))
+                .monospacedDigit()
+                .foregroundStyle(Theme.faint)
+                .offset(x: DayLayout.blockLeft)
+        }
+        .frame(height: 20)
+        .accessibilityElement()
+        .accessibilityLabel("\(text) with nothing on")
     }
 }
 

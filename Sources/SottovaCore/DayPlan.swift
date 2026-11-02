@@ -24,6 +24,8 @@ public struct DayPlan: Sendable {
     public let rows: [Row]
     /// The rail runs from the hour of the first row to the end of the last. No rows, or `wholeDay`: 6 AM to 10 PM, or more if a row needs it.
     public let firstHour, lastHour: Int
+    /// Stretches with no row in them drawn short, in hours from midnight. None on the whole day.
+    public let breaks: [ClosedRange<Double>]
     private let alarms: [Alarm]
     fileprivate let now: Date
     fileprivate let calendar: Calendar
@@ -31,6 +33,8 @@ public struct DayPlan: Sendable {
 
     /// After a stretch this long the next row stops being "then".
     private static let longGap: TimeInterval = 2 * 3600
+    /// A break's drawn hours, and the gap it takes to make one.
+    private static let breakHours = 2.0
 
     public init(alarms: [Alarm], now: Date = .now, lengths: [Alarm.ID: TimeInterval] = [:], calendar: Calendar = .current,
                 twelveHour: Bool = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? true, wholeDay: Bool = false) {
@@ -61,6 +65,22 @@ public struct DayPlan: Sendable {
         }.max() ?? 22
         firstHour = whole ? min(first, 6) : first
         lastHour = max(whole ? max(last, 22) : last, firstHour + 1)
+        var gaps: [ClosedRange<Double>] = []
+        if !whole {
+            let hours = { (date: Date) in date < midnight ? 0 : date >= tomorrow ? 24 : Self.hours(date, calendar) }
+            var reached = hours(spans[0].start)
+            for span in spans {
+                let start = hours(span.start)
+                if start - reached > Self.breakHours { gaps.append(reached...start) }
+                reached = max(reached, start, hours(span.end))
+            }
+        }
+        breaks = gaps
+    }
+
+    private static func hours(_ date: Date, _ calendar: Calendar) -> Double {
+        let clock = calendar.dateComponents([.hour, .minute, .second], from: date)
+        return Double(clock.hour ?? 0) + Double(clock.minute ?? 0) / 60 + Double(clock.second ?? 0) / 3600
     }
 
     /// How far down the rail a time sits, 0 to 1.
@@ -68,10 +88,34 @@ public struct DayPlan: Sendable {
         let midnight = calendar.startOfDay(for: now)
         guard date >= midnight else { return 0 }
         guard date < calendar.date(byAdding: .day, value: 1, to: midnight) ?? date else { return 1 }
-        let clock = calendar.dateComponents([.hour, .minute, .second], from: date)
-        let hours = Double(clock.hour ?? 0) + Double(clock.minute ?? 0) / 60 + Double(clock.second ?? 0) / 3600
-        return min(max((hours - Double(firstHour)) / Double(lastHour - firstHour), 0), 1)
+        return min(max(drawn(hour: Self.hours(date, calendar)) / span, 0), 1)
     }
+
+    /// The rail's length in hours as drawn.
+    public var span: Double {
+        Double(lastHour - firstHour) - breaks.reduce(0) { $0 + ($1.upperBound - $1.lowerBound - Self.breakHours) }
+    }
+
+    /// Hours down the rail an hour of the day draws, with each break's gap squeezed evenly into its drawn length.
+    public func drawn(hour: Double) -> Double {
+        breaks.reduce(hour - Double(firstHour)) { drawn, gap in
+            guard hour > gap.lowerBound else { return drawn }
+            let length = gap.upperBound - gap.lowerBound
+            return drawn - (min(hour, gap.upperBound) - gap.lowerBound) * (1 - Self.breakHours / length)
+        }
+    }
+
+    /// The inverse of `drawn(hour:)`.
+    public func hour(drawn: Double) -> Double {
+        var hour = drawn + Double(firstHour)
+        for gap in breaks where hour > gap.lowerBound {
+            let length = gap.upperBound - gap.lowerBound
+            hour += hour < gap.lowerBound + Self.breakHours ? (hour - gap.lowerBound) * (length / Self.breakHours - 1) : length - Self.breakHours
+        }
+        return hour
+    }
+
+    public func y(hour: Int, hourHeight: Double) -> Double { drawn(hour: Double(hour)) * hourHeight }
 
     /// "Overworld until 7, then Compline at 8." under a row that's sounding.
     public func foot(sounding row: Alarm) -> String {
@@ -282,9 +326,9 @@ extension DayPlan {
         return String(format: "%d:%02d", twelveHour ? (hour + 11) % 12 + 1 : hour, clock.minute ?? 0)
     }
 
-    /// The hour a point on the rail falls in, for a drop: a two-hour row has to fit, so never the last hour.
+    /// The hour a point on the rail falls in, through any break, for a drop: a two-hour row has to fit, so never the last hour.
     public func hour(at y: Double, hourHeight: Double = Rail.hourHeight) -> Int {
-        min(max(firstHour + Int(y / hourHeight), firstHour), max(lastHour - 2, firstHour))
+        min(max(Int(hour(drawn: max(y, 0) / hourHeight)), firstHour), max(lastHour - 2, firstHour))
     }
 
     /// "10 AM to noon", as a dropped row would read.
@@ -297,10 +341,12 @@ extension DayPlan {
     /// when the one above needs the room.
     public struct Rail: Sendable {
         public static let hourHeight = 24.0
+        /// Above this a short day stops filling the page, as an hour can't usefully be taller than a painting.
+        public static let maxHourHeight = 180.0
         /// A row's block: a name and its line, with room around them.
         public static let rowHeight = 56.0
-        /// A block with two lines: an overlap's note wraps.
-        public static let asideHeight = 74.0
+        /// Each line of words past the first.
+        public static let lineHeight = 18.0
 
         public struct Mark: Identifiable, Sendable {
             public let alarm: Alarm
@@ -309,8 +355,16 @@ extension DayPlan {
             public let bar: ClosedRange<Double>
             /// Beside the line: it overlaps the row before.
             public let aside: Bool
+            /// The block behind its words, from its bar's end or its lines' room, stopping short of the next.
+            public fileprivate(set) var block: ClosedRange<Double>
+            let bottom: Double
             public var id: Alarm.ID { alarm.id }
-            var bottom: Double { top + (aside ? Rail.asideHeight : Rail.rowHeight) }
+        }
+
+        /// A gap drawn short: where its mark goes, and how long it really is.
+        public struct Break: Sendable {
+            public let y: Double
+            public let text: String
         }
 
         public enum Kind: Int, Sendable { case row, now, off, end, frame }
@@ -331,18 +385,26 @@ extension DayPlan {
         public let marks: [Mark]
         public let labels: [Label]
         public let now: Double?
+        public let breaks: [Break]
     }
 
     public var rail: Rail { rail(hourHeight: Rail.hourHeight) }
 
-    /// `hourHeight`: a page with room to spare spends it on the scale.
-    public func rail(hourHeight: Double) -> Rail {
-        let height = Double(lastHour - firstHour) * hourHeight
+    /// `hourHeight`: a page with room to spare spends it on the scale. `lines`: rows whose words take more than one line.
+    public func rail(hourHeight: Double, lines: [Alarm.ID: Int] = [:]) -> Rail {
+        let height = span * hourHeight
         let y = { (date: Date) in position(of: date) * height }
         var marks: [Rail.Mark] = []
         for row in rows {
+            let room = Rail.rowHeight + Double((lines[row.id] ?? 1) - 1) * Rail.lineHeight
             let top = max(y(row.start) - 11, marks.last?.bottom ?? -.infinity)
-            marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: y(row.start)...max(y(row.end), y(row.start) + 3), aside: row.waits != nil))
+            let bar = y(row.start)...max(y(row.end), y(row.start) + 3)
+            marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: bar, aside: row.waits != nil,
+                                   block: top + 3...max(bar.upperBound, top + 3 + room - 4), bottom: top + room))
+        }
+        for index in marks.indices.dropLast() {
+            let block = marks[index].block
+            marks[index].block = block.lowerBound...max(block.lowerBound, min(block.upperBound, marks[index + 1].block.lowerBound - 4))
         }
         var wanted: [Rail.Label] = []
         for (mark, row) in zip(marks, rows) {
@@ -359,16 +421,28 @@ extension DayPlan {
         if inDay { wanted.append(Rail.Label(text: clockText(now), y: y(now), kind: .now, row: nil)) }
         // with nothing on the rail the hours are all it has to say
         let bare = rows.isEmpty ? stride(from: firstHour + 3, to: lastHour, by: 3).map { $0 } : []
-        for hour in [firstHour, lastHour] + (firstHour < 12 && lastHour > 12 ? [12] : []) + bare {
+        for hour in [firstHour, lastHour] + (firstHour < 12 && lastHour > 12 && !breaks.contains { $0.contains(12) } ? [12] : []) + bare {
             let edge = hour == firstHour || hour == lastHour
-            wanted.append(Rail.Label(text: railTime(hour: hour, minute: 0, full: edge), y: Double(hour - firstHour) * hourHeight, kind: .frame, row: nil))
+            wanted.append(Rail.Label(text: railTime(hour: hour, minute: 0, full: edge), y: self.y(hour: hour, hourHeight: hourHeight), kind: .frame, row: nil))
         }
         var labels: [Rail.Label] = []
         for label in wanted.enumerated().sorted(by: { ($0.element.kind.rawValue, $0.offset) < ($1.element.kind.rawValue, $1.offset) }).map(\.element)
         where !labels.contains(where: { abs($0.y - label.y) < 15 }) {
             labels.append(label)
         }
-        return Rail(height: max(height, marks.last?.bottom ?? Rail.rowHeight), marks: marks, labels: labels.sorted { $0.y < $1.y }, now: inDay ? y(now) : nil)
+        let foot = marks.last.map { max($0.bottom, $0.block.upperBound) } ?? Rail.rowHeight
+        return Rail(height: max(height, foot), marks: marks, labels: labels.sorted { $0.y < $1.y }, now: inDay ? y(now) : nil,
+                    breaks: breaks.map { gap in
+                        let at = marks.firstIndex { drawn(hour: gap.upperBound) * hourHeight <= $0.bar.lowerBound + 0.001 } ?? 0
+                        let above = at > 0 ? marks[at - 1].block.upperBound : 0
+                        return Rail.Break(y: (above + (at < marks.count ? marks[at].block.lowerBound : height)) / 2, text: Self.length(gap.upperBound - gap.lowerBound))
+                    })
+    }
+
+    /// "6 h 49 min", "7 h"
+    private static func length(_ hours: Double) -> String {
+        let minutes = Int((hours * 60).rounded())
+        return minutes % 60 == 0 ? "\(minutes / 60) h" : "\(minutes / 60) h \(minutes % 60) min"
     }
 
     /// "7:02 AM", "noon"; `full` says which half of the day, otherwise "8:11" or "3". A 24-hour clock has no halves.

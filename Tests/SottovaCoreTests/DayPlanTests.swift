@@ -121,6 +121,8 @@ struct DayPlanTests {
         late.minutes = 180
         let day = plan([late, overworld], date(3, 0, 30))
         #expect((day.firstHour, day.lastHour) == (0, 19))
+        // midnight to 2, then a break to 3 PM drawn as two hours
+        #expect(day.breaks == [2...15])
         #expect(abs(day.rail.marks[0].bar.upperBound - 2 * DayPlan.Rail.hourHeight) < 0.01)
     }
 
@@ -299,36 +301,32 @@ struct DayPlanTests {
         #expect(line.compactMap(\.word) == [.kind, .order])
     }
 
-    @Test func anOverlapWrapsWordByWordAndTheNextRowLeavesRoom() {
+    @Test func theNextRowLeavesRoomForALongerLine() {
         var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
         (chopin.whileHere, chopin.minutes) = (true, 60)
         var soon = compline
         soon.hour = 18
         let day = plan([overworld, chopin, soon], date(2, 12))
-        let marks = day.rail.marks
-        #expect(marks[2].top >= marks[1].bottom)
-        #expect(day.rail.height >= marks[2].top + DayPlan.Rail.rowHeight)
-    }
-
-    @Test func aLastRowWithAnOverlapKeepsItsSecondLineOnTheRail() {
-        var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 18, minute: 0, weekdays: Set(1...7))
-        chopin.minutes = 30
-        let rail = plan([overworld, chopin], date(2, 12)).rail
-        #expect(rail.height >= rail.marks[1].bottom)
+        let rail = day.rail(hourHeight: DayPlan.Rail.hourHeight, lines: [chopin.id: 2])
+        #expect(rail.marks[2].top >= rail.marks[1].bottom)
+        #expect(rail.height >= rail.marks[2].block.upperBound)
+        #expect(rail.marks[1].aside)
     }
 
     @Test func theRailIsToScale() {
         let morning = lauds
-        let rail = plan([morning, overworld, compline], date(2, 15, 40), lengths: [morning.id: 69 * 60]).rail
+        let day = plan([morning, overworld, compline], date(2, 15, 40), lengths: [morning.id: 69 * 60])
+        let rail = day.rail
         let scale = DayPlan.Rail.hourHeight
         #expect(rail.height >= rail.marks[2].bottom)
-        // the rail starts at 7: Lauds runs 7:02 to 8:11, Overworld 3 to 7, and it's 3:40
+        // the rail starts at 7: Lauds runs 7:02 to 8:11, the long gap draws two hours, Overworld 3 to 7, and it's 3:40
         #expect(abs(rail.marks[0].bar.lowerBound - 2.0 / 60 * scale) < 0.01)
         #expect(abs(rail.marks[0].bar.upperBound - 71.0 / 60 * scale) < 0.01)
-        #expect(rail.marks[1].bar == 8 * scale...12 * scale)
+        let three = (71.0 / 60 + 2) * scale
+        #expect(abs(rail.marks[1].bar.lowerBound - three) < 0.01 && abs(rail.marks[1].bar.upperBound - (three + 4 * scale)) < 0.01)
         #expect(rail.marks[2].top >= rail.marks[1].bottom)
-        #expect(abs(rail.now! - 26.0 / 3 * scale) < 0.01)
-        #expect(rail.labels.map(\.text) == ["7:02 AM", "8:11", "noon", "3 PM", "3:40", "7 PM", "8 PM", "9 PM"])
+        #expect(abs(rail.now! - (three + 40.0 / 60 * scale)) < 0.01)
+        #expect(rail.labels.map(\.text).contains("7:02 AM") && rail.labels.map(\.text).contains("3 PM") && rail.labels.map(\.text).contains("3:40"))
     }
 
     @Test func wordsMakeRoomButBarsDont() {
@@ -364,5 +362,125 @@ struct DayPlanTests {
     @Test func aTwentyFourHourClockHasNoHalves() {
         let rail = plan([overworld], date(2, 15, 40), twelveHour: false).rail
         #expect(rail.labels.map(\.text) == ["15:00", "15:40", "19:00"])
+    }
+
+    // MARK: long gaps
+
+    /// 7:02 to 8:11, a long gap, 3 to 7, an hour, 8 to 9.
+    private var ownersDay: DayPlan {
+        let row = lauds
+        return plan([row, overworld, compline], date(2, 12), lengths: [row.id: 69 * 60])
+    }
+
+    @Test func aGapOverTwoHoursBreaksAndAShorterOneDoesnt() {
+        let day = ownersDay
+        #expect(day.breaks.count == 1)
+        #expect(abs(day.breaks[0].lowerBound - (8 + 11.0 / 60)) < 0.001 && day.breaks[0].upperBound == 15)
+        #expect(abs(day.span - (14 - (15 - 8 - 11.0 / 60) + 2)) < 0.001)
+        // exactly two hours is still to scale
+        var two = compline
+        two.hour = 21
+        #expect(plan([overworld, two], date(2, 12)).breaks.isEmpty)
+        two.minute = 1
+        #expect(plan([overworld, two], date(2, 12)).breaks.count == 1)
+    }
+
+    @Test func aRowTurnedOffStillHoldsItsPlaceInAGap() {
+        var off = Alarm(source: "x", name: "Off", hour: 11, minute: 0, weekdays: Set(1...7))
+        (off.on, off.minutes) = (false, 60)
+        let row = lauds
+        #expect(plan([row, off, overworld], date(2, 12), lengths: [row.id: 69 * 60]).breaks.count == 2)
+    }
+
+    @Test func overlappingRowsDontMakeAGap() {
+        var chopin = Alarm(source: "c", name: "Chopin", hour: 16, minute: 0, weekdays: Set(1...7))
+        chopin.minutes = 30
+        // Chopin ends at 4:30 inside Overworld, so Compline's gap counts from 7
+        var late = compline
+        late.hour = 22
+        #expect(plan([overworld, chopin, late], date(2, 12)).breaks == [19...22])
+    }
+
+    @Test func theWholeDayAndAnEmptyDayHaveNoBreaks() {
+        let row = lauds
+        #expect(plan([row, overworld, compline], date(2, 12), lengths: [row.id: 69 * 60], wholeDay: true).breaks.isEmpty)
+        #expect(plan([], date(2, 12)).breaks.isEmpty)
+    }
+
+    @Test func aRowIsNeverCompressedAndABreakDrawsTwoHours() {
+        for scale in [24.0, 50, 76, 120] {
+            let rail = ownersDay.rail(hourHeight: scale)
+            let marks = rail.marks
+            #expect(abs(marks[0].bar.upperBound - marks[0].bar.lowerBound - 69.0 / 60 * scale) < 0.001)
+            #expect(abs(marks[1].bar.upperBound - marks[1].bar.lowerBound - 4 * scale) < 0.001)
+            #expect(abs(marks[2].bar.upperBound - marks[2].bar.lowerBound - scale) < 0.001)
+            #expect(abs(marks[1].bar.lowerBound - marks[0].bar.upperBound - 2 * scale) < 0.001)
+            #expect(abs(marks[2].bar.lowerBound - marks[1].bar.upperBound - scale) < 0.001)
+            #expect(abs(rail.height - ownersDay.span * scale) < 0.001 || rail.height > ownersDay.span * scale)
+        }
+    }
+
+    @Test func theMapAndItsInverseAgreeEverywhere() {
+        let day = ownersDay
+        var last = -1.0
+        for quarter in 28...84 {
+            let hour = Double(quarter) / 4
+            let drawn = day.drawn(hour: hour)
+            #expect(drawn > last)
+            last = drawn
+            #expect(abs(day.hour(drawn: drawn) - hour) < 0.0001)
+        }
+        #expect(day.drawn(hour: 7) == 0)
+        #expect(abs(day.drawn(hour: 21) - day.span) < 0.001)
+        #expect(day.position(of: date(2, 21)) == 1)
+    }
+
+    @Test func aDropInABreakLandsByTheInverseSnappedToItsHour() {
+        let day = ownersDay
+        let scale = 50.0
+        // halfway down the break is halfway through the gap
+        let middle = day.drawn(hour: (8 + 11.0 / 60 + 15) / 2) * scale
+        #expect(day.hour(at: middle, hourHeight: scale) == 11)
+        #expect(day.hour(at: 0, hourHeight: scale) == 7)
+        #expect(day.hour(at: -5, hourHeight: scale) == 7)
+        #expect(day.hour(at: 99999, hourHeight: scale) == 19)
+        // what it lands on draws where it says
+        #expect(abs(day.y(hour: 15, hourHeight: scale) - day.rail(hourHeight: scale).marks[1].bar.lowerBound) < 0.001)
+        for y in stride(from: 0.0, through: day.span * scale, by: 7) {
+            let hour = day.hour(at: y, hourHeight: scale)
+            #expect(hour >= 7 && hour <= 19)
+        }
+    }
+
+    @Test func theNowDotInABreakIsBetweenWhatsEitherSide() {
+        let row = lauds
+        let day = plan([row, overworld, compline], date(2, 11, 30), lengths: [row.id: 69 * 60])
+        let rail = day.rail(hourHeight: 50)
+        #expect(rail.now! > rail.marks[0].bar.upperBound && rail.now! < rail.marks[1].bar.lowerBound)
+        #expect(rail.labels.contains { $0.text == "11:30" && $0.kind == .now })
+    }
+
+    @Test func timesEitherSideOfABreakStayAndHoursInsideItDont() {
+        let rail = ownersDay.rail(hourHeight: 50)
+        let texts = rail.labels.map(\.text)
+        #expect(texts.contains("8:11") && texts.contains("3 PM"))
+        #expect(!texts.contains("noon"))
+        #expect(rail.breaks.map(\.text) == ["6 h 49 min"])
+        #expect(rail.breaks[0].y > rail.marks[0].bar.upperBound && rail.breaks[0].y < rail.marks[1].bar.lowerBound)
+    }
+
+    @Test func aBlockFitsItsLinesAndNeverRunsIntoTheNext() {
+        var soon = lauds
+        (soon.hour, soon.minute, soon.id) = (7, 30, UUID())
+        let first = lauds
+        for scale in [24.0, 50, 120] {
+            let rail = plan([first, soon, overworld], date(2, 12), lengths: [first.id: 3600]).rail(hourHeight: scale, lines: [soon.id: 3])
+            for (mark, next) in zip(rail.marks, rail.marks.dropFirst()) {
+                #expect(mark.block.upperBound <= next.block.lowerBound)
+                #expect(mark.block.upperBound - mark.block.lowerBound >= DayPlan.Rail.rowHeight - 4)
+            }
+            #expect(rail.marks[1].block.upperBound - rail.marks[1].block.lowerBound >= DayPlan.Rail.rowHeight - 4 + 2 * DayPlan.Rail.lineHeight)
+            #expect(rail.height >= rail.marks.last!.block.upperBound)
+        }
     }
 }

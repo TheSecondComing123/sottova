@@ -52,21 +52,58 @@ public struct NowLayout: Equatable, Sendable {
     public var bareTextWidth: Double { min(560, width - 2 * margin) }
 }
 
-/// Your day: one column under about 1005 pt, as beside What played a row's words need about 430 pt to stay on their line.
+/// Your day: the rail, with New, Other days and What played beside it or, narrow, around it. The rail takes what they leave.
 public struct DayLayout: Equatable, Sendable {
-    public let height: Double
+    public static let gap = 32.0
+    /// Times and the rail's line, before a block starts.
+    public static let blockLeft = 90.0
+    private static let top = 16.0, bottom = 24.0
+    private static let line = 24.0
+
+    public let width, height: Double
     public let narrow: Bool
     public var margin: Double { narrow ? 32 : 40 }
-    public let right = 320.0
+    public var right: Double { min(max(width * 0.28, 320), 420) }
+    public var insets: (top: Double, bottom: Double) { (Self.top, Self.bottom) }
 
     public init(width: Double, height: Double) {
-        self.height = height
-        narrow = width < 1005
+        (self.width, self.height) = (width, height)
+        narrow = width < 980
     }
 
-    /// Wide, the day fills the page's height; narrow, it scrolls with what played below it.
-    public func hourHeight(hours: Int) -> Double {
-        guard !narrow else { return 32 }
-        return min(max((height - 51) / Double(hours), DayPlan.Rail.hourHeight), 120)
+    /// One column when narrow, or when there's nothing to put beside the rail.
+    public func oneColumn(others: Int, played: Int) -> Bool { narrow || others + played == 0 }
+
+    public func blockWidth(oneColumn: Bool) -> Double {
+        width - 2 * margin - (oneColumn ? 0 : right + Self.gap) - Self.blockLeft
+    }
+
+    private func othersHeight(_ others: Int) -> Double { others == 0 ? 0 : 42 + Double(others) * Self.line }
+
+    /// Height the rail has before it scrolls. 16: the first block sits a little above its time, the last can run past the foot.
+    public func railRoom(others: Int, played: Int) -> Double {
+        let page = height - Self.top - Self.bottom - 16
+        guard oneColumn(others: others, played: played) else { return page }
+        let shown = played == 0 ? 0 : 41 + Double(min(played, 3)) * Self.line
+        return page - 46 - othersHeight(others) - shown
+    }
+
+    /// `span`: the rail's hours once long gaps are drawn short. A long day scrolls.
+    public func hourHeight(span: Double, others: Int, played: Int) -> Double {
+        min(max(railRoom(others: others, played: played) / span, DayPlan.Rail.hourHeight), DayPlan.Rail.maxHourHeight)
+    }
+
+    /// Lines of What played on the page; the rest are behind All. Wide, whatever the column has left.
+    public func playedCap(others: Int) -> Int {
+        guard !narrow else { return 3 }
+        return max(8, Int((height - Self.top - Self.bottom - 42 - othersHeight(others) - 41) / Self.line))
+    }
+
+    /// A row's painting as large as its block allows, beside the words or over them, whichever lets it be larger.
+    public func painting(block: Double, blockWidth: Double) -> (side: Double, under: Bool) {
+        // padding, tick and dots across; padding and the words' two lines down
+        let beside = min(block - 12, blockWidth - 75 - 220)
+        let over = min(blockWidth - 63, block - 12 - 66)
+        return (max(40, max(beside, over)), over > beside)
     }
 }
