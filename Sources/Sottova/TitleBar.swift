@@ -128,12 +128,16 @@ private struct BarHit: NSViewRepresentable {
     @Binding var hovering: Bool
     let action: (NSView) -> Void
 
-    func makeNSView(context: Context) -> Hit { Hit() }
+    func makeNSView(context: Context) -> Hit {
+        let hit = Hit()
+        hit.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: hit))
+        return hit
+    }
 
     func updateNSView(_ hit: Hit, context: Context) {
         hit.control = self
         hit.enabled = context.environment.isEnabled
-        hit.toolTip = help
+        if hit.toolTip != help { hit.toolTip = help }
     }
 
     final class Hit: NSView {
@@ -146,12 +150,6 @@ private struct BarHit: NSViewRepresentable {
 
         private func inside(_ event: NSEvent) -> Bool {
             bounds.contains(convert(event.locationInWindow, from: nil))
-        }
-
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-            trackingAreas.forEach(removeTrackingArea)
-            addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
         }
 
         override func mouseEntered(with event: NSEvent) { control?.hovering = true }
