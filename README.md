@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/TheSecondComing123/sottova/releases/latest"><b>download</b></a> ·
   <a href="#build-it"><b>build it</b></a> ·
   <a href="#scripting"><b>scripting</b></a> ·
   <a href="#what-it-changes-on-your-mac"><b>what it changes on your mac</b></a> ·
@@ -77,9 +78,19 @@ no music yet? download a set of openly licensed albums in one click, like Kimiko
 
 Monochrome, Catppuccin, Everforest, Flexoki, Gruvbox, Kanagawa, Nord, Rosé Pine and Tokyo Night, in light or dark where the palette has both.
 
+## download
+
+get the zip from [releases](https://github.com/TheSecondComing123/sottova/releases/latest). it needs macOS 26 on Apple silicon.
+
+the build isn't signed by Apple yet, so macOS blocks it the first time. unzip it, move Sottova to Applications, then run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Sottova.app
+```
+
 ## build it
 
-there's no signed release yet, so build it yourself. you need Xcode 26.
+you need Xcode 26.
 
 ```sh
 git clone https://github.com/TheSecondComing123/sottova.git
@@ -88,7 +99,7 @@ scripts/run.sh        # debug build, then opens it
 scripts/release.sh    # release zip in .build/release
 ```
 
-`release.sh` signs with a Developer ID when `SOTTOVA_SIGN_ID` is set and notarizes when `SOTTOVA_NOTARY` names a `notarytool` keychain profile. without them the build only runs on the Mac that built it.
+`release.sh` signs with a Developer ID when `SOTTOVA_SIGN_ID` is set and notarizes when `SOTTOVA_NOTARY` names a `notarytool` keychain profile. without them the build is ad-hoc signed, and other Macs need the quarantine step above.
 
 `swift test` runs the engine headless: the state machine, offline renders of the audio graph, and the EBU Tech 3341 loudness signals.
 
@@ -156,6 +167,10 @@ sudo pmset schedule cancelall   # removes every scheduled wake, not only sottova
 ## what it isn't
 
 sottova is a music player. it makes no claims about sleep, focus, stress or health.
+
+## releases
+
+pushing a tag like `v0.1.0` makes GitHub Actions run the tests, build the app and publish the release. the tag has to match the version in `Support/Info.plist`.
 
 ## license
 
