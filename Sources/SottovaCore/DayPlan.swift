@@ -17,7 +17,10 @@ public struct DayPlan: Sendable {
     public struct Quiet: Equatable, Sendable {
         public let headline: String
         public let line: String
+        /// A miss today, or that the Mac will wake.
         public let foot: String?
+        /// What comes after an hour that's open, as the headline has that hour.
+        public var next: String?
     }
 
     /// Today's rows by time, including those turned off and one still running from last night.
@@ -142,23 +145,29 @@ public struct DayPlan: Sendable {
     /// today takes the foot, which is where you'd look for it.
     public func quiet(wakeScheduled: Bool = false) -> Quiet {
         let plan = quietPlan(wakeScheduled: wakeScheduled)
-        return missedLine.map { Quiet(headline: plan.headline, line: plan.line, foot: $0) } ?? plan
+        return missedLine.map { Quiet(headline: plan.headline, line: plan.line, foot: $0, next: plan.next) } ?? plan
     }
 
     private func quietPlan(wakeScheduled: Bool) -> Quiet {
-        // the sidebar reads the same windows, so this can't say the day is done while it says "till 9"
+        let foot = { (next: (alarm: Alarm, at: Date)) in wakeScheduled && !next.alarm.whileHere ? "The Mac will wake for it." : nil }
+        // the sidebar reads the same windows, so this can't say nothing's on while it says "till 9"
         if let open = alarms.filter(\.on).compactMap({ alarm in alarm.window(containing: now, calendar: calendar).map { (alarm.name, $0.end) } }).max(by: { $0.1 < $1.1 }) {
-            return Quiet(headline: open.0, line: "till \(time(open.1)), not playing", foot: nil)
+            let next = following(after: open.1 - 1)
+            return Quiet(headline: open.0, line: "till \(time(open.1)), not playing", foot: next.flatMap(foot), next: next.map(nextLine))
         }
         guard let next = following(after: now) else {
-            return Quiet(headline: "Nothing on your day", line: "Press play.", foot: nil)
+            return Quiet(headline: "Nothing on your day", line: "", foot: nil)
         }
-        if calendar.isDate(next.at, inSameDayAs: now) {
-            return Quiet(headline: "Nothing on yet", line: "\(next.alarm.name) at \(time(next.at)).", foot: nil)
-        }
-        let word = dayWord(next.at).isEmpty ? " tomorrow" : dayWord(next.at)
-        return Quiet(headline: rows.contains(where: \.alarm.on) ? "The day is done" : "Nothing on today", line: "\(next.alarm.name) at \(time(next.at))\(word).",
-                     foot: wakeScheduled && !next.alarm.whileHere ? "The Mac will wake for it." : nil)
+        return Quiet(headline: next.alarm.name, line: when(next.at), foot: foot(next))
+    }
+
+    /// "3 PM today", "7:02 tomorrow", "7:02 Monday"
+    private func when(_ date: Date) -> String {
+        let clock = calendar.dateComponents([.hour, .minute], from: date)
+        let bare = time(date)
+        // as the sidebar has it: 7:02 alone reads as morning
+        let halved = clock.minute == 0 && twelveHour ? "\(bare) \((clock.hour ?? 0) < 12 ? "AM" : "PM")" : bare
+        return halved + (calendar.isDate(date, inSameDayAs: now) ? " today" : dayName(date))
     }
 
     /// Beside a collection in the sidebar: "till 7" while it has the time, otherwise "7:02" or "8 PM". Nil if it has no row on.
@@ -222,10 +231,6 @@ public struct DayPlan: Sendable {
 
     private func following(after date: Date) -> (alarm: Alarm, at: Date)? {
         alarms.filter(\.on).compactMap { alarm in alarm.next(after: date, calendar: calendar).map { (alarm, $0) } }.min { $0.1 < $1.1 }
-    }
-
-    private func dayWord(_ date: Date) -> String {
-        calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: 1, to: now) ?? now) ? "" : " " + date.formatted(Date.FormatStyle(locale: Locale(identifier: "en_US"), timeZone: calendar.timeZone).weekday(.wide))
     }
 
     private func dayName(_ date: Date) -> String {

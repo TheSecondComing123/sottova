@@ -52,19 +52,24 @@ struct DayPlanTests {
         off.on = false
         let day = plan([off, compline], date(2, 12))
         #expect(day.rows.map(\.alarm.name) == ["Overworld", "Compline"])
-        #expect(day.quiet().line == "Compline at 8.")
+        #expect(day.quiet().headline == "Compline")
+        #expect(day.quiet().line == "8 PM today")
     }
 
     @Test func anOpenWindowIsntADayThatsDone() {
-        // 8:30 on Compline's own hour, nothing playing: the sidebar says till 9, so Now can't say the day is done
+        // 8:30 on Compline's own hour, nothing playing: the sidebar says till 9, so Now names that hour
         let quiet = plan([lauds, compline], date(2, 20, 30)).quiet()
         #expect(quiet.headline == "Compline")
         #expect(says(quiet.line, "till 9", "not playing"))
-        // an hour that's off is no window, and past it the day is done
+        // what comes after it still shows, and whether the Mac will wake for that
+        let after = plan([lauds, compline], date(2, 20, 30)).quiet(wakeScheduled: true)
+        #expect(after.next == "Lauds at 7:02 tomorrow")
+        #expect(after.foot == "The Mac will wake for it.")
+        // an hour that's off is no window, and past it the next row has the page
         var off = compline
         off.on = false
-        #expect(plan([lauds, off], date(2, 20, 30)).quiet().headline == "The day is done")
-        #expect(plan([lauds, compline], date(2, 21, 30)).quiet().headline == "The day is done")
+        #expect(plan([lauds, off], date(2, 20, 30)).quiet().headline == "Lauds")
+        #expect(plan([lauds, compline], date(2, 21, 30)).quiet().headline == "Lauds")
     }
 
     @Test func aRowWithNoEndIsAsLongAsItsCollection() {
@@ -177,13 +182,13 @@ struct DayPlanTests {
     }
 
     @Test func whatNowSaysInSilenceOfTheDay() {
-        #expect(plan([], date(2, 12)).quiet() == .init(headline: "Nothing on your day", line: "Press play.", foot: nil))
-        #expect(plan([lauds, overworld, compline], date(2, 12)).quiet() == .init(headline: "Nothing on yet", line: "Overworld at 3.", foot: nil))
-        #expect(plan([lauds, overworld, compline], date(2, 22)).quiet(wakeScheduled: true) == .init(headline: "The day is done", line: "Lauds at 7:02 tomorrow.", foot: "The Mac will wake for it."))
+        #expect(plan([], date(2, 12)).quiet() == .init(headline: "Nothing on your day", line: "", foot: nil))
+        #expect(plan([lauds, overworld, compline], date(2, 12)).quiet() == .init(headline: "Overworld", line: "3 PM today", foot: nil))
+        #expect(plan([lauds, overworld, compline], date(2, 22)).quiet(wakeScheduled: true) == .init(headline: "Lauds", line: "7:02 tomorrow", foot: "The Mac will wake for it."))
         #expect(plan([lauds], date(2, 22)).quiet().foot == nil)
         #expect(plan([overworld], date(2, 22)).quiet(wakeScheduled: true).foot == nil)
-        #expect(plan([lauds], date(8, 12)).quiet(wakeScheduled: true) == .init(headline: "Nothing on today", line: "Lauds at 7:02 tomorrow.", foot: "The Mac will wake for it."))
-        #expect(plan([lauds], date(7, 12)).quiet().line == "Lauds at 7:02 Monday.")
+        #expect(plan([lauds], date(8, 12)).quiet(wakeScheduled: true) == .init(headline: "Lauds", line: "7:02 tomorrow", foot: "The Mac will wake for it."))
+        #expect(plan([lauds], date(7, 12)).quiet().line == "7:02 Monday")
     }
 
     @Test func sidebarLabels() {
@@ -210,7 +215,7 @@ struct DayPlanTests {
         let today = plan([row, overworld], date(2, 12))
         #expect(today.missedToday(row) == "Missed at 7:02. The Mac was off.")
         #expect(today.quiet().foot == "Missed Lauds at 7:02. The Mac was off.")
-        #expect(today.quiet().line == "Overworld at 3.")
+        #expect(today.quiet().line == "3 PM today")
         let tomorrow = plan([row, overworld], date(3, 12))
         #expect(tomorrow.missedToday(row) == nil)
         #expect(tomorrow.quiet().foot == nil)

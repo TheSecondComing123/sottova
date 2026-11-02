@@ -56,7 +56,7 @@ extension Controller {
         }
         guard status != .idle else {
             let quiet = dayPlan(now: now).quiet()
-            return NowScreen(kind: .quiet, title: quiet.headline, sub: quiet.line, action: alarms.contains(where: \.on) ? nil : .openDay)
+            return NowScreen(kind: .quiet, title: quiet.headline, sub: quiet.line, action: quiet.line.isEmpty ? .openDay : nil)
         }
         if silent || inSilence || status == .resting {
             if let hold, status != .paused { return .waiting(hold) }
@@ -69,7 +69,8 @@ extension Controller {
     public func nowFoot(now: Date = .now, wakeScheduled: Bool = false) -> NowFoot? {
         if catalog.albums.isEmpty, status == .idle { return nil }
         if status == .idle {
-            return dayPlan(now: now).quiet(wakeScheduled: wakeScheduled).foot.map { NowFoot(note: $0) }
+            let quiet = dayPlan(now: now).quiet(wakeScheduled: wakeScheduled)
+            return quiet.next == nil && quiet.foot == nil ? nil : NowFoot(next: quiet.next, note: quiet.foot)
         }
         if let row = soundingRow { return dayPlan(now: now).next(sounding: row).map { NowFoot(next: $0) } }
         return sourceName.map { NowFoot(note: "\($0), then everything shuffled.") }

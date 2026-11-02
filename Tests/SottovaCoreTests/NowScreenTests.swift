@@ -121,9 +121,11 @@ struct NowScreenTests {
         let screen = c.nowScreen()
         #expect(screen.kind == .quiet)
         #expect(screen.title == "Nothing on your day")
+        #expect(screen.sub == "")
         #expect(screen.action == .openDay)
         c.addAlarm(Alarm(source: c.catalog.albums[0].id, name: "Overworld", hour: LiveClock.farHour, minute: 0, weekdays: Set(1...7)))
         #expect(c.nowScreen().action == nil)
+        #expect(c.nowScreen().title == "Overworld")
     }
 
     @Test func aRowThatsSoundingSaysWhatFollowsAsALink() async throws {
