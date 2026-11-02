@@ -347,9 +347,7 @@ private struct DayRow: View {
                 .buttonStyle(.plain)
                 .help("open \(alarm.name)")
                 WordFlow {
-                    ForEach(Array(pieces.enumerated()), id: \.offset) { _, piece in
-                        word(piece)
-                    }
+                    ForEach(pieces, id: \.text) { word($0) }
                 }
                 .foregroundStyle(alarm.on ? Theme.muted : Theme.faint)
             }
@@ -373,14 +371,16 @@ private struct DayRow: View {
             ThemeLink(text: piece.text, underlined: true) { SystemWake.shared.schedule(for: controller.alarms) }.role(.body)
         case .days?:
             WordMenu(text: piece.text, on: alarm.on) { DayWords(alarm: alarm, change: change) }
+        case .kind?:
+            WordMenu(text: piece.text, on: alarm.on) { KindWords(alarm: alarm, change: change) }
         case .order?:
             WordMenu(text: piece.text, on: alarm.on) { OrderWords(alarm: alarm, change: change) }
         case .volume?:
             WordMenu(text: piece.text, on: alarm.on) { VolumeWords(alarm: alarm, change: change) }
         case .calendar?:
             WordMenu(text: piece.text, on: alarm.on) {
-                Toggle("Unless your calendar is busy", isOn: calendarBinding(true))
-                Toggle("Whatever your calendar says", isOn: calendarBinding(false))
+                Toggle("Unless my calendar is busy", isOn: calendarBinding(true))
+                Toggle("Whatever my calendar says", isOn: calendarBinding(false))
             }
         case .part?:
             WordMenu(text: piece.text, on: alarm.on) {
@@ -496,20 +496,16 @@ private struct DayWords: View {
         ForEach(choices, id: \.0) { name, days in
             Toggle(name, isOn: Binding(get: { alarm.weekdays == days }, set: { _ in change { $0.weekdays = days } }))
         }
-        Divider()
+    }
+}
+
+private struct KindWords: View {
+    let alarm: Alarm
+    let change: ((inout Alarm) -> Void) -> Void
+
+    var body: some View {
         Toggle("Starts by itself", isOn: Binding(get: { !alarm.whileHere }, set: { _ in change { $0.whileHere = false } }))
-        Toggle("While you're at the Mac", isOn: Binding(get: { alarm.whileHere }, set: { _ in
-            // a stretch of the day has to end
-            change { row in
-                row.whileHere = true
-                row.minutes = row.minutes ?? 60
-            }
-        }))
-        Divider()
-        Toggle("Unless your calendar is busy", isOn: Binding(get: { alarm.heedsCalendar }, set: { on in
-            change { $0.heedsCalendar = on }
-            if on { Task { await Presence.askForCalendars() } }
-        }))
+        Toggle("While you're at the Mac", isOn: Binding(get: { alarm.whileHere }, set: { _ in change({ row in row.whileHere = true; row.minutes = row.minutes ?? 60 }) }))
     }
 }
 
@@ -527,8 +523,10 @@ private struct VolumeWords: View {
     }
 }
 
-/// Words left to right, wrapping between them.
+/// Words left to right, spaced, wrapping between them; one too long for a line wraps inside itself.
 private struct WordFlow: Layout {
+    private static let spacing: CGFloat = 10
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let placed = place(subviews, width: proposal.width ?? .infinity)
         return CGSize(width: placed.map { $0.x + $0.size.width }.max() ?? 0, height: placed.map { $0.y + $0.size.height }.max() ?? 0)
@@ -541,11 +539,14 @@ private struct WordFlow: Layout {
     }
 
     private func place(_ subviews: Subviews, width: CGFloat) -> [(x: CGFloat, y: CGFloat, size: CGSize)] {
-        var (x, y): (CGFloat, CGFloat) = (0, 0)
+        var (x, y, tallest): (CGFloat, CGFloat, CGFloat) = (0, 0, 0)
         return subviews.map { subview in
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width { (x, y) = (0, y + size.height) }
-            defer { x += size.width }
+            let size = subview.sizeThatFits(ProposedViewSize(width: width.isFinite ? width : nil, height: nil))
+            if x > 0, x + size.width > width { (x, y, tallest) = (0, y + tallest, 0) }
+            defer {
+                x += size.width + Self.spacing
+                tallest = max(tallest, size.height)
+            }
             return (x, y, size)
         }
     }

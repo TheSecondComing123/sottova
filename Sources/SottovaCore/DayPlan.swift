@@ -8,8 +8,8 @@ public struct DayPlan: Sendable {
         public let start: Date
         /// Its window's end, or when its collection runs out; `start` if neither is known.
         public let end: Date
-        /// "Overlaps Overworld. This one plays, Overworld waits.", on the one that started later, which is the one that has the time.
-        public let overlapNote: String?
+        /// The row this one overlaps, which waits: on the one that started later, which is the one that has the time.
+        public let waits: String?
         public var id: Alarm.ID { alarm.id }
     }
 
@@ -46,7 +46,7 @@ public struct DayPlan: Sendable {
         rows = spans.map { span in
             let earlier = on.prefix { $0.alarm.id != span.alarm.id }.last { span.start < $0.end }
             return Row(alarm: span.alarm, start: span.start, end: span.end,
-                       overlapNote: span.alarm.on ? earlier.map { "Overlaps \($0.alarm.name). This one plays, \($0.alarm.name) waits." } : nil)
+                       waits: span.alarm.on ? earlier?.alarm.name : nil)
         }
         let clock = { (date: Date) in calendar.dateComponents([.hour, .minute], from: date) }
         let midnight = calendar.startOfDay(for: now)
@@ -205,7 +205,7 @@ public struct DayPlan: Sendable {
 
 /// A row's line on Your day, in pieces so each word can open its own menu.
 extension DayPlan {
-    public enum Word: Sendable { case days, order, volume, calendar, part, playNow, wake }
+    public enum Word: Sendable { case days, kind, order, volume, calendar, part, playNow, wake }
 
     public struct Piece: Equatable, Sendable {
         public let text: String
@@ -216,12 +216,12 @@ extension DayPlan {
         }
     }
 
-    /// "Weekdays, shuffled, at 25%. Strings next." Whatever's happening to the row takes the line's place. `nextPart`
-    /// is its part's name when it rotates.
+    /// Weekdays, shuffled, 25%, Strings next, as separate words. Whatever's happening to the row takes their place, and
+    /// warnings stay sentences. `nextPart` is its part's name when it rotates.
     public func line(for row: Row, nextPart: String?, rising: Bool = false, waiting: Hold? = nil, cantWake: Bool = false) -> [Piece] {
         let alarm = row.alarm
         if rising {
-            let level = alarm.volume.map { "Rising to \(Self.percent($0)). " } ?? "Rising. "
+            let level = alarm.volume.map { "Rising to \(Self.percent($0))" } ?? "Rising"
             return [Piece(level)] + sentence(alarm, nextPart: nextPart, volume: false)
         }
         if let waiting {
@@ -231,48 +231,40 @@ extension DayPlan {
             case .busy: "your calendar is busy"
             case .media: "something else is playing"
             }
-            return [Piece("Waiting, \(why).")]
+            return [Piece("Waiting, \(why)")]
         }
         if let missed = missedToday(alarm) {
-            let wake = cantWake ? [Piece(". The Mac won't wake for the next one. "), Piece("Wake it", .wake)] : []
-            return [Piece(missed + " "), Piece("Play it now", .playNow)] + wake
+            let wake = cantWake ? [Piece("The Mac won't wake for the next one."), Piece("Wake it", .wake)] : []
+            return [Piece(missed), Piece("Play it now", .playNow)] + wake
         }
         if cantWake { return wakeLine(alarm: alarm, nextPart: nextPart, cantWake: true) }
-        guard let note = row.overlapNote else { return sentence(alarm, nextPart: nextPart) }
-        // word by word, as it's long enough to wrap
-        let words = note.components(separatedBy: " ")
-        return sentence(alarm, nextPart: nextPart) + [Piece(" ")] + words.indices.map { Piece(words[$0] + ($0 < words.count - 1 ? " " : "")) }
+        guard let waits = row.waits else { return sentence(alarm, nextPart: nextPart) }
+        return sentence(alarm, nextPart: nextPart) + [Piece("\(waits) waits")]
     }
 
     /// A row with no place on today's rail still says if the Mac can't wake for it.
     public func wakeLine(alarm: Alarm, nextPart: String?, cantWake: Bool) -> [Piece] {
-        cantWake ? [Piece("The Mac won't wake for this. "), Piece("Wake it", .wake)] : sentence(alarm, nextPart: nextPart)
+        cantWake ? [Piece("The Mac won't wake for this."), Piece("Wake it", .wake)] : sentence(alarm, nextPart: nextPart)
     }
 
-    /// Off today or any other day, it says the same.
+    /// Off today or any other day, it says the same. Every day goes without saying on a row for while you're at the Mac.
     public func sentence(_ alarm: Alarm, nextPart: String?, volume showsVolume: Bool = true) -> [Piece] {
-        var clauses = [Piece(daysWords(alarm), .days)]
+        var pieces: [Piece] = []
+        if !alarm.whileHere || alarm.weekdays != Set(1...7) { pieces.append(Piece(days(alarm), .days)) }
+        if alarm.whileHere { pieces.append(Piece("At the Mac", .kind)) }
         if alarm.shuffled {
-            clauses.append(Piece("shuffled", .order))
+            pieces.append(Piece("shuffled", .order))
         } else if !alarm.rotates {
-            clauses.append(Piece("in order", .order))
+            pieces.append(Piece("in order", .order))
         }
         if showsVolume, let volume = alarm.volume {
-            clauses.append(Piece("at \(Self.percent(volume))", .volume))
+            pieces.append(Piece(Self.percent(volume), .volume))
         }
-        if alarm.heedsCalendar { clauses.append(Piece("unless your calendar is busy", .calendar)) }
-        var pieces: [Piece] = []
-        for (index, clause) in clauses.enumerated() {
-            if index > 0 { pieces.append(Piece(", ")) }
-            pieces.append(clause)
+        if alarm.heedsCalendar { pieces.append(Piece("unless busy", .calendar)) }
+        if alarm.rotates, let nextPart {
+            pieces.append(Piece(nextPart.prefix(1).uppercased() + nextPart.dropFirst() + " next", .part))
         }
-        guard alarm.rotates, let nextPart else { return pieces + [Piece(".")] }
-        return pieces + [Piece(". "), Piece(nextPart.prefix(1).uppercased() + nextPart.dropFirst() + " next", .part), Piece(".")]
-    }
-
-    private func daysWords(_ alarm: Alarm) -> String {
-        guard alarm.whileHere else { return days(alarm) }
-        return alarm.weekdays == Set(1...7) ? "While you're at the Mac" : "\(days(alarm)), while you're at the Mac"
+        return pieces
     }
 
     private static func percent(_ level: Double) -> String { "\(Int((level * 100).rounded()))%" }
@@ -350,7 +342,7 @@ extension DayPlan {
         var marks: [Rail.Mark] = []
         for row in rows {
             let top = max(y(row.start) - 11, marks.last?.bottom ?? -.infinity)
-            marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: y(row.start)...max(y(row.end), y(row.start) + 3), aside: row.overlapNote != nil))
+            marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: y(row.start)...max(y(row.end), y(row.start) + 3), aside: row.waits != nil))
         }
         var wanted: [Rail.Label] = []
         for (mark, row) in zip(marks, rows) {

@@ -152,12 +152,12 @@ struct DayPlanTests {
         var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
         (chopin.whileHere, chopin.minutes) = (true, 60)
         let day = plan([overworld, chopin, compline], date(2, 12))
-        #expect(day.rows[0].overlapNote == nil)
-        #expect(day.rows[1].overlapNote == "Overlaps Overworld. This one plays, Overworld waits.")
-        #expect(day.rows[2].overlapNote == nil)
+        #expect(day.rows[0].waits == nil)
+        #expect(day.rows[1].waits == "Overworld")
+        #expect(day.rows[2].waits == nil)
         var off = overworld
         off.on = false
-        #expect(plan([off, chopin], date(2, 12)).rows[1].overlapNote == nil)
+        #expect(plan([off, chopin], date(2, 12)).rows[1].waits == nil)
     }
 
     @Test func whatSoundingLeadsTo() {
@@ -223,7 +223,7 @@ struct DayPlanTests {
     @Test func twoRowsStartingTogetherDontBothClaimTheTime() {
         var twin = overworld
         twin.name = "Twin"
-        let notes = plan([overworld, twin], date(2, 12)).rows.map(\.overlapNote)
+        let notes = plan([overworld, twin], date(2, 12)).rows.map(\.waits)
         #expect(notes.compactMap { $0 }.count == 1)
     }
 
@@ -250,27 +250,27 @@ struct DayPlanTests {
         #expect(day.shortHours(of: "nothing") == nil)
     }
 
-    private func text(_ pieces: [DayPlan.Piece]) -> String { pieces.map(\.text).joined() }
+    private func text(_ pieces: [DayPlan.Piece]) -> String { pieces.map(\.text).joined(separator: " · ") }
 
     @Test func rowsSayTheirWords() {
         var morning = lauds
         morning.shuffled = true
         morning.rotates = true
         let day = plan([morning, overworld, compline], date(2, 12))
-        #expect(text(day.sentence(morning, nextPart: "Strings")) == "Weekdays, shuffled, at 25%. Strings next.")
+        #expect(text(day.sentence(morning, nextPart: "Strings")) == "Weekdays · shuffled · 25% · Strings next")
         var here = overworld
         (here.shuffled, here.heedsCalendar) = (true, true)
-        #expect(says(text(day.sentence(here, nextPart: nil)), "at the Mac", "shuffled", "busy"))
+        #expect(text(day.sentence(here, nextPart: nil)) == "At the Mac · shuffled · unless busy")
         var evening = compline
         (evening.volume, evening.rotates) = (0.15, true)
         #expect(says(text(day.sentence(evening, nextPart: "part 2")), "Every day", "15%", "Part 2"))
         var plain = compline
         plain.volume = nil
-        #expect(says(text(day.sentence(plain, nextPart: nil)), "Every day", "in order"))
+        #expect(text(day.sentence(plain, nextPart: nil)) == "Every day · in order")
         var some = overworld
         some.weekdays = [2, 3, 4, 5, 6]
-        #expect(says(text(day.sentence(some, nextPart: nil)), "Weekdays", "at the Mac", "in order"))
-        #expect(day.sentence(here, nextPart: nil).compactMap(\.word) == [.days, .order, .calendar])
+        #expect(text(day.sentence(some, nextPart: nil)) == "Weekdays · At the Mac · in order")
+        #expect(day.sentence(here, nextPart: nil).compactMap(\.word) == [.kind, .order, .calendar])
     }
 
     @Test func whatsHappeningTakesTheLine() {
@@ -279,15 +279,15 @@ struct DayPlanTests {
         morning.missed = Alarm.Missed(at: date(2, 7, 2), why: .off)
         let day = plan([morning, overworld], date(2, 12))
         let row = day.rows[0]
-        #expect(text(day.line(for: row, nextPart: nil)) == "Missed at 7:02. The Mac was off. Play it now")
+        #expect(text(day.line(for: row, nextPart: nil)) == "Missed at 7:02. The Mac was off. · Play it now")
         #expect(day.line(for: row, nextPart: nil).last?.word == .playNow)
         #expect(says(text(day.line(for: row, nextPart: nil, rising: true)), "Rising", "25%", "shuffled"))
         #expect(says(text(day.line(for: day.rows[1], nextPart: nil, waiting: .call)), "Waiting", "call"))
-        #expect(text(day.line(for: day.rows[1], nextPart: nil, cantWake: true)) == "The Mac won't wake for this. Wake it")
+        #expect(text(day.line(for: day.rows[1], nextPart: nil, cantWake: true)) == "The Mac won't wake for this. · Wake it")
         // a miss today mustn't hide that the next one can't wake either
-        #expect(text(day.line(for: row, nextPart: nil, cantWake: true)) == "Missed at 7:02. The Mac was off. Play it now. The Mac won't wake for the next one. Wake it")
-        #expect(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: true)) == "The Mac won't wake for this. Wake it")
-        #expect(says(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: false)), "at the Mac", "in order"))
+        #expect(text(day.line(for: row, nextPart: nil, cantWake: true)) == "Missed at 7:02. The Mac was off. · Play it now · The Mac won't wake for the next one. · Wake it")
+        #expect(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: true)) == "The Mac won't wake for this. · Wake it")
+        #expect(says(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: false)), "At the Mac", "in order"))
     }
 
     @Test func anOverlapIsAddedToTheRowsWords() {
@@ -295,8 +295,8 @@ struct DayPlanTests {
         (chopin.whileHere, chopin.minutes, chopin.shuffled) = (true, 60, true)
         let day = plan([overworld, chopin], date(2, 12))
         let line = day.line(for: day.rows[1], nextPart: nil)
-        #expect(says(text(line), "at the Mac", "shuffled", "Overworld"))
-        #expect(line.compactMap(\.word) == [.days, .order])
+        #expect(text(line) == "At the Mac · shuffled · Overworld waits")
+        #expect(line.compactMap(\.word) == [.kind, .order])
     }
 
     @Test func anOverlapWrapsWordByWordAndTheNextRowLeavesRoom() {
@@ -305,7 +305,6 @@ struct DayPlanTests {
         var soon = compline
         soon.hour = 18
         let day = plan([overworld, chopin, soon], date(2, 12))
-        #expect(day.line(for: day.rows[1], nextPart: nil).filter { $0.text.contains("Overlaps") }.map(\.text) == ["Overlaps "])
         let marks = day.rail.marks
         #expect(marks[2].top >= marks[1].bottom)
         #expect(day.rail.height >= marks[2].top + DayPlan.Rail.rowHeight)
