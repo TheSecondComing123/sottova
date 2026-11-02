@@ -29,7 +29,7 @@ private struct NowLayout {
         let p = min(1, max(0, (size.width - 679) / (1024 - 679)))
         let margin = (32 + 16 * p).rounded()
         gap = (32 + 8 * p).rounded()
-        side = max(min(height - 48, width - 2 * margin - gap - (260 + 40 * p).rounded()), 160).rounded()
+        side = max(min(height - 48, width - 2 * margin - gap - (240 + 60 * p).rounded()), 160).rounded()
         left = max(margin, ((width - side - gap - 456) / 2).rounded())
     }
 
