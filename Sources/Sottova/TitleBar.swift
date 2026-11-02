@@ -191,8 +191,11 @@ private struct Moon: View {
                 }
             }
         } access: {
-            Menu("sleep timer") { SleepChoices(controller: controller) }
-                .accessibilityValue(timer.map { Format.sleep($0, resting: resting, at: .now) } ?? "off")
+            // a Menu here would list its choices as buttons beside it, even closed
+            Button("sleep timer") {
+                NSMenu(StatusMenu.sleepChoices(controller)).popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+            }
+            .accessibilityValue(timer.map { Format.sleep($0, resting: resting, at: .now) } ?? "off")
         }
         .fixedSize()
     }
