@@ -53,14 +53,14 @@ struct FreeMusicPage: View {
                     .foregroundStyle(Theme.muted)
                 // what's already downloaded stays on disk, so this isn't a Cancel
                 ThemeButton(title: "Stop") { ShelfDownload.tasks[set.id]?.cancel() }
+            } else if shelf.failed[set.id] != nil {
+                ThemeButton(title: "Try again") { start(set) }
             } else if ShelfDownload.isDone(set) {
                 Ph.check.icon(.bold, size: 12)
                     .foregroundStyle(Theme.muted)
                     .frame(width: 28, height: 28)
                     .help("in your library")
                     .accessibilityLabel("in your library")
-            } else if shelf.failed[set.id] != nil {
-                ThemeButton(title: "Try again") { start(set) }
             } else {
                 IconButton(icon: .trayArrowDown, help: "download \(set.title)", size: 28) { start(set) }
             }
