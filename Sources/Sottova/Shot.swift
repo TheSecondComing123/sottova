@@ -15,6 +15,10 @@ struct ShotReady: ViewModifier {
             if defaults.string(forKey: "shotAppearance") == "light" { NSApp.appearance = NSAppearance(named: .aqua) }
             try? await controller.shotEnter(defaults.string(forKey: "shotState") ?? "idle",
                                             covers: defaults.string(forKey: "shotCovers").map { URL(filePath: $0) })
+            // before the route: resized during a page's transition, the window's width runs away and AppKit throws
+            let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
+            let window = NSApp.windows.first { $0.title == "Sottova" }
+            window?.setContentSize(NSSize(width: width, height: 800))
             let routes: [String: Route] = ["home": .home, "songs": .songs, "collections": .collections, "artists": .artists, "alarms": .alarms, "shelf": .shelf]
             let asked = defaults.string(forKey: "shotRoute") ?? "home"
             if asked.hasPrefix("collection:") {
@@ -74,9 +78,6 @@ struct ShotReady: ViewModifier {
                 controller.volume = 0.62
                 if router.showsQueue { controller.playNext(Array(controller.catalog.songs.prefix(4))) }
             }
-            let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
-            let window = NSApp.windows.first { $0.title == "Sottova" }
-            window?.setContentSize(NSSize(width: width, height: 800))
             // a covered window stops drawing, by design, so it can't be measured: on top in every space, but nearly
             // clear and letting clicks through, so whoever's at the Mac isn't interrupted
             if defaults.bool(forKey: "shotFront") {
