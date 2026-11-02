@@ -45,6 +45,8 @@ struct LibraryLine: View {
             }
             if let width = columns.who {
                 name(song.who) { navigate(.artist(song.who)) }
+                    // a name cut short still doesn't touch the title
+                    .padding(.trailing, 12)
                     .frame(width: width, alignment: .leading)
             }
             LineTitle(song: song)
@@ -188,7 +190,8 @@ struct SongList: View {
                             }
                             .environment(\.songOrder, songs.map(\.id))
                         }
-                        .padding(.horizontal, -12)
+                        .padding(.leading, -22)
+                        .padding(.trailing, -12)
                     }
                 }
             }
@@ -212,8 +215,9 @@ struct SongList: View {
             return min(max(widest + 23, 76), most).rounded()
         }
         let who = fit(songs.map(\.who), 160)
-        return narrow ? LineColumns(who: who) : LineColumns(who: who, performer: fit(songs.compactMap(\.performer), 190),
-                                                            collection: fit(songs.map { controller.copy(ofAlbum: $0.albumID)?.name ?? $0.album }, 180))
+        return narrow ? LineColumns(who: who, gutter: 22, markerX: 0)
+            : LineColumns(who: who, performer: fit(songs.compactMap(\.performer), 190),
+                          collection: fit(songs.map { controller.copy(ofAlbum: $0.albumID)?.name ?? $0.album }, 180), gutter: 22, markerX: 0)
     }
 
     private func count(of shown: Int, in all: Int, filtered: Bool) -> String {
@@ -232,7 +236,6 @@ struct SongList: View {
             }
             heading("Time", .longest).frame(width: 40, alignment: .trailing)
         }
-        .padding(.leading, 20)
         .frame(height: 22)
     }
 
