@@ -76,15 +76,17 @@ struct CoverPicker: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.faint)
                     }
-                    ScrollView {
-                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(136), spacing: 16, alignment: .top), count: 3), alignment: .leading, spacing: 16) {
-                            ForEach(results) { painting in
-                                tile(painting)
+                    if !results.isEmpty {
+                        ScrollView {
+                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(136), spacing: 16, alignment: .top), count: 3), alignment: .leading, spacing: 16) {
+                                ForEach(results) { painting in
+                                    tile(painting)
+                                }
                             }
+                            .overlayScrollers()
                         }
-                        .overlayScrollers()
+                        .frame(height: 340)
                     }
-                    .frame(height: 340)
                 }
             }
 
@@ -157,7 +159,6 @@ struct CoverPicker: View {
 
     private var status: String {
         if searching { return "asking the Met, the Art Institute and Cleveland…" }
-        if searched.isEmpty { return "try a painter or a mood: hammershøi, nocturne, moonlight" }
         if results.isEmpty { return silent.count == 3 ? "no connection. you can still drop an image" : "no public-domain paintings match “\(searched)”" }
         if !silent.isEmpty { return "\(silent.joined(separator: " and ")) didn't answer; showing the rest" }
         return "\(results.count) public-domain paintings"
@@ -167,6 +168,7 @@ struct CoverPicker: View {
         Button {
             picked = painting
             file = nil
+            failure = nil
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 AsyncImage(url: painting.thumbnail) { image in
