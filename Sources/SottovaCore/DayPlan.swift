@@ -31,8 +31,6 @@ public struct DayPlan: Sendable {
     fileprivate let calendar: Calendar
     fileprivate let twelveHour: Bool
 
-    /// After a stretch this long the next row stops being "then".
-    private static let longGap: TimeInterval = 2 * 3600
     /// A break's drawn hours, and the gap it takes to make one.
     private static let breakHours = 2.0
 
@@ -117,18 +115,15 @@ public struct DayPlan: Sendable {
 
     public func y(hour: Int, hourHeight: Double) -> Double { drawn(hour: Double(hour)) * hourHeight }
 
-    /// "Overworld until 7, then Compline at 8." under a row that's sounding.
-    public func foot(sounding row: Alarm) -> String {
-        let end = row.window(containing: now, calendar: calendar)?.end
-        let head = end.map { "\(row.name) until \(time($0))" } ?? "\(row.name) at \(Self.time(hour: row.hour, minute: row.minute, twelveHour: twelveHour))"
-        let after = end ?? now
+    /// "Compline at 8" under a row that's sounding: what comes after it. Nil if nothing does.
+    public func next(sounding row: Alarm) -> String? {
         // a second back, so one starting as this ends counts
-        guard let next = following(after: after - 1) else { return head + "." }
-        if !calendar.isDate(next.at, inSameDayAs: after) {
-            return "\(head). Then nothing until \(next.alarm.name) at \(time(next.at))\(dayWord(next.at))."
-        }
-        return next.at.timeIntervalSince(after) < Self.longGap ? "\(head), then \(next.alarm.name) at \(time(next.at))."
-                                                                : "\(head). Then nothing until \(time(next.at))."
+        following(after: (row.window(containing: now, calendar: calendar)?.end ?? now) - 1).map(nextLine)
+    }
+
+    /// "Compline at 8", "Lauds at 7:02 tomorrow"
+    private func nextLine(_ next: (alarm: Alarm, at: Date)) -> String {
+        "\(next.alarm.name) at \(time(next.at))\(calendar.isDate(next.at, inSameDayAs: now) ? "" : dayName(next.at))"
     }
 
     /// On its row: "Missed at 7:02. The Mac was off."
@@ -231,6 +226,10 @@ public struct DayPlan: Sendable {
 
     private func dayWord(_ date: Date) -> String {
         calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: 1, to: now) ?? now) ? "" : " " + date.formatted(Date.FormatStyle(locale: Locale(identifier: "en_US"), timeZone: calendar.timeZone).weekday(.wide))
+    }
+
+    private func dayName(_ date: Date) -> String {
+        calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: 1, to: now) ?? now) ? " tomorrow" : " " + date.formatted(Date.FormatStyle(locale: Locale(identifier: "en_US"), timeZone: calendar.timeZone).weekday(.wide))
     }
 
     private func time(_ date: Date) -> String {

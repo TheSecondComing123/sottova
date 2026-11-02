@@ -13,7 +13,7 @@ private final class NowMotion {
     var text = 1.0
     var silent = false
     var screen = NowScreen(kind: .quiet, title: "")
-    var foot: String?
+    var foot: NowFoot?
 
     /// Nothing in the cover's place, so the words have the page.
     var bare: Bool { over == nil && (screen.kind == .quiet || screen.kind == .silence) }
@@ -71,7 +71,10 @@ struct NowPage: View {
 
     @ViewBuilder
     private var foot: some View {
-        if let line = motion.foot, line != router.dismissedFoot {
+        if let next = motion.foot?.next {
+            ThemeLink(text: next, underlined: true) { navigate(.alarms) }.role(.body)
+        }
+        if let line = motion.foot?.note, line != router.dismissedFoot {
             HStack(spacing: 8) {
                 let missed = line.hasPrefix("Missed")
                 Text(line).role(.body).foregroundStyle(missed ? Theme.text : Theme.muted)

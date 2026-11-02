@@ -126,9 +126,19 @@ struct NowScreenTests {
         #expect(c.nowScreen().action == nil)
     }
 
+    @Test func aRowThatsSoundingSaysWhatFollowsAsALink() async throws {
+        let (c, album) = try await controller()
+        let row = Alarm(source: album.id, name: "Overworld", hour: LiveClock.farHour, minute: 0, weekdays: Set(1...7))
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        let foot = try #require(c.nowFoot())
+        #expect(foot.note == nil)
+        #expect(foot.next?.hasPrefix("Overworld at") == true)
+    }
+
     @Test func aPieceWithNoRowSaysWhatFollows() async throws {
         let (c, _) = try await playing()
-        #expect(c.nowFoot() == "Overworld, then everything shuffled.")
+        #expect(c.nowFoot() == NowFoot(note: "Overworld, then everything shuffled."))
     }
 
     @Test func aSkipIsCountedSoNowCanStartOver() async throws {

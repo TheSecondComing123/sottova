@@ -163,17 +163,17 @@ struct DayPlanTests {
     }
 
     @Test func whatSoundingLeadsTo() {
-        #expect(plan([lauds, overworld, compline], date(2, 15, 40)).foot(sounding: overworld) == "Overworld until 7, then Compline at 8.")
-        #expect(says(plan([lauds, overworld, compline], date(2, 20, 5)).foot(sounding: compline), "Compline", "until 9", "Lauds", "7:02"))
-        #expect(says(plan([lauds, overworld, compline], date(2, 7, 5)).foot(sounding: lauds), "Lauds", "7:02", "until 3"))
-        #expect(says(plan([overworld], date(2, 15, 40)).foot(sounding: overworld), "Overworld", "until 7", "at 3"))
+        #expect(plan([lauds, overworld, compline], date(2, 15, 40)).next(sounding: overworld) == "Compline at 8")
+        #expect(plan([lauds, overworld, compline], date(2, 20, 5)).next(sounding: compline) == "Lauds at 7:02 tomorrow")
+        #expect(plan([lauds, overworld, compline], date(2, 7, 5)).next(sounding: lauds) == "Overworld at 3")
+        #expect(plan([overworld], date(2, 15, 40)).next(sounding: overworld) == "Overworld at 3 tomorrow")
         let once = Alarm(source: "x", name: "Once", hour: 9, minute: 5, day: date(2, 0))
-        #expect(plan([once], date(2, 9, 6)).foot(sounding: once) == "Once at 9:05.")
+        #expect(plan([once], date(2, 9, 6)).next(sounding: once) == nil)
     }
 
     @Test func aFarDayIsNamed() {
-        #expect(says(plan([lauds, compline], date(6, 20, 5)).foot(sounding: compline), "until 9", "Compline at 8"))
-        #expect(says(plan([lauds], date(6, 7, 5)).foot(sounding: lauds), "Lauds", "7:02", "Monday"))
+        #expect(plan([lauds, compline], date(6, 20, 5)).next(sounding: compline) == "Compline at 8 tomorrow")
+        #expect(plan([lauds], date(6, 7, 5)).next(sounding: lauds) == "Lauds at 7:02 Monday")
     }
 
     @Test func whatNowSaysInSilenceOfTheDay() {
@@ -219,7 +219,7 @@ struct DayPlanTests {
     @Test func backToBackRowsFollowEachOther() {
         var next = compline
         next.hour = 19
-        #expect(says(plan([overworld, next], date(2, 15, 40)).foot(sounding: overworld), "until 7", "Compline at 7"))
+        #expect(plan([overworld, next], date(2, 15, 40)).next(sounding: overworld) == "Compline at 7")
     }
 
     @Test func twoRowsStartingTogetherDontBothClaimTheTime() {

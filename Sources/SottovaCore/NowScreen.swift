@@ -34,6 +34,12 @@ public struct NowScreen: Equatable, Sendable {
     }
 }
 
+/// The foot of Now: the row coming next, which opens Your day, and a plain line.
+public struct NowFoot: Equatable, Sendable {
+    public var next: String?
+    public var note: String?
+}
+
 extension Controller {
     /// `silent`: the screen's own fall has ended, which comes before the audio's. Polled, like the state it reads.
     public func nowScreen(now: Date = .now, silent: Bool = false) -> NowScreen {
@@ -60,11 +66,13 @@ extension Controller {
     }
 
     /// The line at the foot of the page. Reads the whole day, so it's asked for rarely.
-    public func nowFoot(now: Date = .now, wakeScheduled: Bool = false) -> String? {
+    public func nowFoot(now: Date = .now, wakeScheduled: Bool = false) -> NowFoot? {
         if catalog.albums.isEmpty, status == .idle { return nil }
-        if status == .idle { return dayPlan(now: now).quiet(wakeScheduled: wakeScheduled).foot }
-        if let row = soundingRow { return dayPlan(now: now).foot(sounding: row) }
-        return sourceName.map { "\($0), then everything shuffled." }
+        if status == .idle {
+            return dayPlan(now: now).quiet(wakeScheduled: wakeScheduled).foot.map { NowFoot(note: $0) }
+        }
+        if let row = soundingRow { return dayPlan(now: now).next(sounding: row).map { NowFoot(next: $0) } }
+        return sourceName.map { NowFoot(note: "\($0), then everything shuffled.") }
     }
 
     public var sourceName: String? {
