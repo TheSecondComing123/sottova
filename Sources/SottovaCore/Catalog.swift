@@ -81,6 +81,8 @@ public struct Artist: Identifiable, Hashable, Sendable {
 
 /// Songs grouped into albums and artists, rebuilt from the library cache whenever it changes.
 public struct Catalog: Sendable {
+    /// New with each build, for what's worked out from a whole library and kept until the next.
+    public let version = UUID()
     public private(set) var songs: [Song] = []
     /// Every order the Songs page offers, sorted here off the main actor: by title takes 100 ms at 10k.
     private var orders: [SongSort: [Song]] = [:]

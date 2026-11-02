@@ -107,6 +107,7 @@ private struct LineTitle: View {
             .fontWeight(sounding ? .medium : .regular)
             .foregroundStyle(Theme.text)
             .lineLimit(1)
+            .truncationMode(.middle)
             .accessibilityValue(sounding ? "playing" : "")
     }
 }
@@ -123,6 +124,35 @@ private struct LineMarker: View {
     }
 }
 
+/// Column widths from the whole library, so typing in the filter doesn't move them.
+private struct ColumnFit {
+    struct Key: Equatable {
+        let catalog: UUID
+        let names: [String]
+    }
+
+    var who: CGFloat = 160
+    var performer: CGFloat = 190
+    var collection: CGFloat = 180
+
+    init() {}
+
+    init(songs: [Song], collection name: (Song) -> String) {
+        let fit = { (names: [String], most: CGFloat) -> CGFloat in
+            let widest = Set(names).map { ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13)]).width }.max() ?? 0
+            return min(max(widest + 23, 76), most).rounded()
+        }
+        who = fit(songs.map(\.who), 160)
+        performer = fit(songs.compactMap(\.performer), 190)
+        collection = fit(songs.map(name), 180)
+    }
+
+    func columns(narrow: Bool) -> LineColumns {
+        narrow ? LineColumns(who: who, gutter: 22, markerX: 0)
+            : LineColumns(who: who, performer: performer, collection: collection, gutter: 22, markerX: 0)
+    }
+}
+
 /// Songs: name first, the filter always there, a click on a heading sorts by it.
 struct SongList: View {
     @Environment(Controller.self) private var controller
@@ -132,6 +162,7 @@ struct SongList: View {
     @FocusState private var filtering: Bool
     @Environment(\.listLayout) private var layout
     @MainActor private static var answeredSearch = 0
+    @State private var fit = ColumnFit()
 
     private var narrow: Bool { layout.narrow }
     private var margin: CGFloat { layout.margin }
@@ -146,7 +177,7 @@ struct SongList: View {
                 let needle = Song.folded(router.songFilter)
                 let sorted = controller.catalog.songs(by: sort, matching: needle)
                 let songs: [Song] = reversed ? sorted.reversed() : sorted
-                let columns = columns(all)
+                let columns = fit.columns(narrow: narrow)
                 PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: margin)) {
                     HStack(spacing: 16) {
                         HStack(alignment: .top, spacing: 18) {
@@ -196,6 +227,10 @@ struct SongList: View {
                 }
             }
         }
+        // a library's every name measured, so only when they change: not on each redraw
+        .onChange(of: ColumnFit.Key(catalog: controller.catalog.version, names: controller.playlists.map(\.name)), initial: true) {
+            fit = ColumnFit(songs: all, collection: { controller.copy(ofAlbum: $0.albumID)?.name ?? $0.album })
+        }
         .onAppear(perform: answerSearch)
         .onChange(of: router.searchRequests) { answerSearch() }
         .onDisappear { router.typing = false }
@@ -205,18 +240,6 @@ struct SongList: View {
         guard router.searchRequests != Self.answeredSearch else { return }
         Self.answeredSearch = router.searchRequests
         filtering = true
-    }
-
-    /// From the whole library, so typing in the filter doesn't move them.
-    private func columns(_ songs: [Song]) -> LineColumns {
-        let fit = { (names: [String], most: CGFloat) -> CGFloat in
-            let widest = Set(names).map { ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13)]).width }.max() ?? 0
-            return min(max(widest + 23, 76), most).rounded()
-        }
-        let who = fit(songs.map(\.who), 160)
-        return narrow ? LineColumns(who: who, gutter: 22, markerX: 0)
-            : LineColumns(who: who, performer: fit(songs.compactMap(\.performer), 190),
-                          collection: fit(songs.map { controller.copy(ofAlbum: $0.albumID)?.name ?? $0.album }, 180), gutter: 22, markerX: 0)
     }
 
     private func count(of shown: Int, in all: Int, filtered: Bool) -> String {
@@ -242,9 +265,15 @@ struct SongList: View {
         Button {
             if sort == column { reversed.toggle() } else { (sort, reversed) = (column, false) }
         } label: {
-            Text(title)
-                .role(.column)
-                .foregroundStyle(sort == column ? Theme.muted : Theme.faint)
+            HStack(spacing: 3) {
+                Text(title)
+                if sort == column {
+                    // up from the top of the order, down when the order starts at its largest
+                    Ph.caretDown.icon(.bold, size: 8).rotationEffect(reversed == (column == .longest) ? .degrees(180) : .zero)
+                }
+            }
+            .role(.column)
+            .foregroundStyle(sort == column ? Theme.muted : Theme.faint)
         }
         .buttonStyle(.plain)
         .accessibilityValue(sort == column ? (reversed ? "sorted, reversed" : "sorted") : "")
