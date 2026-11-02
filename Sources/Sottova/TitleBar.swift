@@ -39,10 +39,10 @@ struct TitleBar: View {
     private var nowPlaying: some View {
         if router.route != .home, controller.status == .playing || controller.status == .paused, let song = controller.current {
             // not on the click that brings the window forward: going to Now would clear a picked row's selection
-            BarControl(firstClick: false, pressScale: 0.99, help: "show what's playing", action: { _ in router.go(to: .home) }) { _ in
+            BarControl(firstClick: false, pressScale: 0.99, help: "show what's playing", action: { _ in router.go(to: .home) }) { hovering in
                 HStack(spacing: 6) {
-                    Text(song.title).foregroundStyle(Theme.text)
-                    Text(song.artist).foregroundStyle(Theme.muted).layoutPriority(-1)
+                    Text(song.title).underline(hovering).foregroundStyle(Theme.text)
+                    Text(song.artist).underline(hovering).foregroundStyle(Theme.muted).layoutPriority(-1)
                 }
                 .role(.body)
                 .lineLimit(1)
