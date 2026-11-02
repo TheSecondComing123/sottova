@@ -196,7 +196,7 @@ struct DayPage: View {
         if !rest.isEmpty {
             Text("Other days").role(.body).fontWeight(.semibold).foregroundStyle(Theme.text).padding(.top, 18).padding(.bottom, 8)
             ForEach(rest) { alarm in
-                HStack(alignment: .top, spacing: 24) {
+                HStack(alignment: .top, spacing: 23) {
                     RailTime(label: DayPlan.Rail.Label(text: DayPlan.startText(alarm), y: 0, kind: alarm.on ? .row : .off, row: alarm.id), alarm: alarm)
                         .padding(.top, 2)
                     DayRow(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id))
