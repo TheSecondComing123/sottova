@@ -69,15 +69,14 @@ private struct BarIcon: View {
     let icon: Ph
     var strong = false
     var on = false
+    let hovering: Bool
     @Environment(\.isEnabled) private var enabled
-    @State private var hovering = false
 
     var body: some View {
         icon.icon(.line, size: 18)
             .foregroundStyle(!enabled ? Theme.disabled : strong || on ? Theme.text : Theme.muted)
             .frame(width: 32, height: 28)
             .background(on ? Theme.selection : enabled && hovering ? Theme.hover : .clear, in: .rect(cornerRadius: Radius.small))
-            .onHover { hovering = $0 }
     }
 }
 
@@ -96,16 +95,91 @@ private struct BarButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) { BarIcon(icon: icon, strong: strong, on: on) }
-            .buttonStyle(BarPress())
-            .help(help)
-            .accessibilityLabel(help)
+        BarControl(help: help, action: { _ in action() }) { hovering in
+            BarIcon(icon: icon, strong: strong, on: on, hovering: hovering)
+        } access: {
+            Button(help, action: action)
+        }
+    }
+}
+
+/// A control in the title bar's band, pressed through a plain view as `Strip` is, so the window can't take the press
+/// as a drag. `firstClick`: whether the click that brings an inactive window forward acts too.
+private struct BarControl<Label: View, Access: View>: View {
+    var firstClick = true
+    let help: String
+    let action: (NSView) -> Void
+    @ViewBuilder let label: (_ hovering: Bool) -> Label
+    @ViewBuilder let access: () -> Access
+    @State private var pressed = false
+    @State private var hovering = false
+
+    var body: some View {
+        label(hovering)
+            .scaleEffect(pressed ? 0.96 : 1)
+            .overlay(BarHit(firstClick: firstClick, help: help, pressed: $pressed, hovering: $hovering, action: action))
+            .accessibilityRepresentation(representation: access)
+    }
+}
+
+private struct BarHit: NSViewRepresentable {
+    let firstClick: Bool
+    let help: String
+    @Binding var pressed: Bool
+    @Binding var hovering: Bool
+    let action: (NSView) -> Void
+
+    func makeNSView(context: Context) -> Hit { Hit() }
+
+    func updateNSView(_ hit: Hit, context: Context) {
+        hit.control = self
+        hit.enabled = context.environment.isEnabled
+        hit.toolTip = help
+    }
+
+    final class Hit: NSView {
+        var control: BarHit?
+        var enabled = true
+        private var armed = false
+
+        override var mouseDownCanMoveWindow: Bool { false }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { control?.firstClick ?? false }
+
+        private func inside(_ event: NSEvent) -> Bool {
+            bounds.contains(convert(event.locationInWindow, from: nil))
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach(removeTrackingArea)
+            addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+        }
+
+        override func mouseEntered(with event: NSEvent) { control?.hovering = true }
+        override func mouseExited(with event: NSEvent) { control?.hovering = false }
+
+        override func mouseDown(with event: NSEvent) {
+            armed = enabled
+            control?.pressed = armed
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            control?.pressed = armed && inside(event)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            let fires = armed && enabled && inside(event)
+            armed = false
+            control?.pressed = false
+            if fires { control?.action(self) }
+        }
     }
 }
 
 /// Set, it says how long is left beside it.
 private struct Moon: View {
     @Environment(Controller.self) private var controller
+    @State private var hovering = false
 
     var body: some View {
         let timer = controller.sleepTimer
@@ -121,9 +195,10 @@ private struct Moon: View {
                             .monospacedDigit()
                             .foregroundStyle(Theme.muted)
                     }
-                    BarIcon(icon: .barMoon, strong: timer != nil)
+                    BarIcon(icon: .barMoon, strong: timer != nil, hovering: hovering)
                 }
             }
+            .onHover { hovering = $0 }
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
