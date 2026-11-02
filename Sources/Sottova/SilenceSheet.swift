@@ -59,11 +59,18 @@ struct SilenceSheet: View {
                 length($shortest, .shortest, unit: 60)
                 Text("to").foregroundStyle(Theme.muted)
                 length($longest, .longest, unit: 60)
+                unread(shortest, longest, unit: 60)
             }
             .disabled(draft.crossfade)
             .opacity(draft.crossfade ? 0.5 : 1)
-            row("Fade in") { length($fadeIn, .fadeIn, unit: 1) }
-            row("Fade out") { length($fadeOut, .fadeOut, unit: 1) }
+            row("Fade in") {
+                length($fadeIn, .fadeIn, unit: 1)
+                unread(fadeIn, unit: 1)
+            }
+            row("Fade out") {
+                length($fadeOut, .fadeOut, unit: 1)
+                unread(fadeOut, unit: 1)
+            }
             row("Overlap") { overlap }
             HStack(spacing: 8) {
                 if let name = edit.replacing {
@@ -124,6 +131,14 @@ struct SilenceSheet: View {
             .modifier(FieldLook(focused: focus == field))
             .frame(width: 64)
             .accessibilityValue(readable ? "" : "can't read this")
+    }
+
+    /// In the row's spare room, so nothing moves while a length is half typed.
+    @ViewBuilder
+    private func unread(_ texts: String..., unit: Double) -> some View {
+        if texts.contains(where: { TypedDuration.parse($0, unit: unit) == nil }) {
+            Text("Can't read this").foregroundStyle(Theme.text)
+        }
     }
 
     /// Leaving a field shows what it was read as.
