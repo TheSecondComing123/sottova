@@ -12,6 +12,7 @@ struct TrimSheet: View {
     @State private var end = 0.0
     @State private var length = 0.0
     @State private var peaks: [Float] = []
+    @State private var unreadable = false
     @State private var preview: AVAudioPlayer?
     @State private var previewStop: Task<Void, Never>?
     /// Whether hearing a handle paused the music, which comes back when the sheet closes.
@@ -32,7 +33,7 @@ struct TrimSheet: View {
                     .foregroundStyle(Theme.muted)
             }
 
-            Waveform(peaks: peaks, length: length, start: $start, end: $end, playhead: preview?.isPlaying == true ? preview?.currentTime : nil)
+            Waveform(peaks: peaks, unreadable: unreadable, length: length, start: $start, end: $end, playhead: preview?.isPlaying == true ? preview?.currentTime : nil)
                 .frame(height: 112)
 
             HStack(alignment: .top, spacing: 24) {
@@ -149,12 +150,16 @@ struct TrimSheet: View {
 
     private func load() async {
         let url = URL(filePath: song.id)
-        guard let file = try? AVAudioFile(forReading: url) else { return }
+        guard let file = try? AVAudioFile(forReading: url) else {
+            unreadable = true
+            return
+        }
         length = Double(file.length) / file.processingFormat.sampleRate
         let trim = controller.trims[song.id] ?? Trim()
         start = min(trim.start, length)
         end = min(trim.end ?? length, length)
         peaks = await Task.detached(priority: .userInitiated) { Self.peaks(of: url, buckets: 480) }.value
+        unreadable = peaks.isEmpty
     }
 
     /// The loudest sample in each slice of the file, read in chunks so a long piece never sits in memory whole.
@@ -189,6 +194,7 @@ struct TrimSheet: View {
 /// The file's shape, with the part that's cut dimmed and a handle at each end to drag.
 private struct Waveform: View {
     let peaks: [Float]
+    let unreadable: Bool
     let length: Double
     @Binding var start: Double
     @Binding var end: Double
@@ -215,9 +221,9 @@ private struct Waveform: View {
                     }
                 }
                 if peaks.isEmpty {
-                    Text("reading the file…")
+                    Text(unreadable ? "can't read this file" : "reading the file…")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.faint)
+                        .foregroundStyle(unreadable ? Theme.text : Theme.faint)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 if let playhead {
