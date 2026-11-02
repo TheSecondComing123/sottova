@@ -107,6 +107,10 @@ public struct DayPlan: Sendable {
     }
 
     private func quietPlan(wakeScheduled: Bool) -> Quiet {
+        // the sidebar reads the same windows, so this can't say the day is done while it says "till 9"
+        if let open = alarms.filter(\.on).compactMap({ alarm in alarm.window(containing: now, calendar: calendar).map { (alarm.name, $0.end) } }).max(by: { $0.1 < $1.1 }) {
+            return Quiet(headline: open.0, line: "till \(time(open.1)), not playing", foot: nil)
+        }
         guard let next = following(after: now) else {
             return Quiet(headline: "Nothing on your day", line: "Press play.", foot: nil)
         }

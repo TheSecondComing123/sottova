@@ -55,6 +55,18 @@ struct DayPlanTests {
         #expect(day.quiet().line == "Compline at 8.")
     }
 
+    @Test func anOpenWindowIsntADayThatsDone() {
+        // 8:30 on Compline's own hour, nothing playing: the sidebar says till 9, so Now can't say the day is done
+        let quiet = plan([lauds, compline], date(2, 20, 30)).quiet()
+        #expect(quiet.headline == "Compline")
+        #expect(says(quiet.line, "till 9", "not playing"))
+        // an hour that's off is no window, and past it the day is done
+        var off = compline
+        off.on = false
+        #expect(plan([lauds, off], date(2, 20, 30)).quiet().headline == "The day is done")
+        #expect(plan([lauds, compline], date(2, 21, 30)).quiet().headline == "The day is done")
+    }
+
     @Test func aRowWithNoEndIsAsLongAsItsCollection() {
         let row = lauds
         let day = plan([row], date(2, 12), lengths: [row.id: 69 * 60])
