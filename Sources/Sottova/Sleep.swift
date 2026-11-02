@@ -1,7 +1,7 @@
 import SwiftUI
 import SottovaCore
 
-/// The sleep timer's choices, here and in the Controls menu.
+/// The sleep timer's choices in the Controls menu.
 struct SleepChoices: View {
     let controller: Controller
 

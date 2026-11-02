@@ -103,6 +103,8 @@ private struct BarButton: View {
 private struct BarControl<Label: View, Access: View>: View {
     var firstClick = true
     var pressScale = 0.96
+    /// A menu opens on the press, so the pointer can drag to a choice.
+    var actsOnPress = false
     let help: String
     let action: (NSView) -> Void
     @ViewBuilder let label: (_ hovering: Bool) -> Label
@@ -113,13 +115,14 @@ private struct BarControl<Label: View, Access: View>: View {
     var body: some View {
         label(hovering)
             .scaleEffect(pressed ? pressScale : 1)
-            .overlay(BarHit(firstClick: firstClick, help: help, pressed: $pressed, hovering: $hovering, action: action))
+            .overlay(BarHit(firstClick: firstClick, actsOnPress: actsOnPress, help: help, pressed: $pressed, hovering: $hovering, action: action))
             .accessibilityRepresentation(representation: access)
     }
 }
 
 private struct BarHit: NSViewRepresentable {
     let firstClick: Bool
+    let actsOnPress: Bool
     let help: String
     @Binding var pressed: Bool
     @Binding var hovering: Bool
@@ -155,6 +158,10 @@ private struct BarHit: NSViewRepresentable {
         override func mouseExited(with event: NSEvent) { control?.hovering = false }
 
         override func mouseDown(with event: NSEvent) {
+            if enabled, control?.actsOnPress == true {
+                control?.action(self)
+                return
+            }
             armed = enabled
             control?.pressed = armed
         }
@@ -179,7 +186,7 @@ private struct Moon: View {
     var body: some View {
         let timer = controller.sleepTimer
         let resting = controller.status == .resting
-        BarControl(help: "sleep timer", action: open) { hovering in
+        BarControl(actsOnPress: true, help: "sleep timer", action: open) { hovering in
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 HStack(spacing: 2) {
                     if let timer {
