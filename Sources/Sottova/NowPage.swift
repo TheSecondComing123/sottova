@@ -57,6 +57,9 @@ struct NowPage: View {
             let bottom = layout.coverBottom(shown)
             ZStack(alignment: .topLeading) {
                 NowCover(motion: motion, layout: layout, shown: shown, album: controller.current?.album, dragging: router.droppingMusic)
+                    .onTapGesture { if let route = shownRoute { navigate(route) } }
+                    .pointerStyle(shownRoute == nil ? nil : .link)
+                    .help(shownRoute == nil ? "" : "open the collection")
                 VStack(alignment: bare ? .center : .leading, spacing: 12) {
                     NowText(motion: motion, width: width, size: titleSize, detail: detail, lines: under ? 4 : 6, centered: bare, dragging: router.droppingMusic, act: act,
                             choose: controller.chooseFolders, freeMusic: { navigate(.shelf) })
@@ -88,6 +91,40 @@ struct NowPage: View {
                     .accessibilityLabel("dismiss")
                 }
             }
+        }
+        // nothing sounding: what the words name, a click from playing; while it plays, the title bar has the controls
+        if controller.status == .idle, let source = controller.dayPlan(now: clock).quietSource, let route = route(of: source) {
+            HStack(spacing: 6) {
+                if case .playlist(let id) = route {
+                    PlayButton(songs: songs(of: route), source: id)
+                } else {
+                    PlayButton(songs: songs(of: route))
+                }
+                ThemeButton(title: "Open") { navigate(route) }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    /// The collection whose painting is up: the playing piece's, or the one the words name.
+    private var shownRoute: Route? {
+        if controller.status == .idle { return controller.dayPlan(now: clock).quietSource.flatMap(route) }
+        guard let song = controller.current else { return nil }
+        return controller.copy(ofAlbum: song.albumID).map { .playlist($0.id) } ?? .album(song.albumID)
+    }
+
+    /// A made-yours folder opens as yours.
+    private func route(of source: String) -> Route? {
+        if controller.playlists.contains(where: { $0.id == source }) { return .playlist(source) }
+        if let copy = controller.copy(ofAlbum: source) { return .playlist(copy.id) }
+        return controller.catalog.albums.contains { $0.id == source } ? .album(source) : nil
+    }
+
+    private func songs(of route: Route) -> [Song] {
+        switch route {
+        case .playlist(let id): controller.playlists.first { $0.id == id }.map(controller.songs) ?? []
+        case .album(let id): controller.catalog.albums.first { $0.id == id }?.songs ?? []
+        default: []
         }
     }
 
