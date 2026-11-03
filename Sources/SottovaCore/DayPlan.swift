@@ -465,7 +465,7 @@ extension DayPlan {
             pieces.append(Piece("in order", .order))
         }
         if showsVolume, let volume = alarm.volume {
-            pieces.append(Piece(Self.percent(volume), .volume))
+            pieces.append(Piece(Self.percent(volume) + " volume", .volume))
         }
         if alarm.heedsCalendar { pieces.append(Piece("unless busy", .calendar)) }
         if alarm.rotates, let nextPart {

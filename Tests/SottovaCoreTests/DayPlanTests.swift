@@ -275,7 +275,7 @@ struct DayPlanTests {
         morning.shuffled = true
         morning.rotates = true
         let day = plan([morning, overworld, compline], date(2, 12))
-        #expect(text(day.sentence(morning, nextPart: "Strings")) == "Weekdays · shuffled · 25% · Strings next")
+        #expect(text(day.sentence(morning, nextPart: "Strings")) == "Weekdays · shuffled · 25% volume · Strings next")
         var here = overworld
         (here.shuffled, here.heedsCalendar) = (true, true)
         #expect(text(day.sentence(here, nextPart: nil)) == "At the Mac · shuffled · unless busy")
@@ -618,5 +618,10 @@ struct DayPlanTests {
         #expect(day.timeText(minute: 16 * 60) == "4 PM")
         #expect(day.timeText(minute: 16 * 60 + 15) == "4:15 PM")
         #expect(day.timeText(minute: 12 * 60) == "noon")
+    }
+
+    @Test func theVolumeWordSaysWhatItIs() {
+        let pieces = plan([lauds], date(2, 12)).sentence(lauds, nextPart: nil)
+        #expect(pieces.contains(DayPlan.Piece("25% volume", .volume)))
     }
 }

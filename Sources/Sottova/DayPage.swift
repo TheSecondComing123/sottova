@@ -125,7 +125,7 @@ struct DayPage: View {
         // room beside a painting at its usual size, and more than enough under one
         let blockWidth = layout.blockWidth(oneColumn: oneColumn(plan))
         let room = blockWidth - 12 - 23 - 72 - 12 - 28
-        let rail = plan.rail(hourHeight: scale, lines: pieces.mapValues { WordFlow.lines($0.map(\.text), width: room) })
+        let rail = plan.rail(hourHeight: scale, lines: pieces.mapValues { WordFlow.lines($0, width: room) })
         var drop = dropHour.map { ($0, controller.alarmName(of: router.draggingCollection ?? "")) }
         #if SHOT
         if let shot = router.shotDrop { drop = (shot.hour, shot.name) }
@@ -173,7 +173,7 @@ struct DayPage: View {
             ForEach(rail.marks) { mark in
                 let height = mark.block.upperBound - mark.block.lowerBound
                 DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
-                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines((pieces[mark.id] ?? []).map(\.text), width: blockWidth - 67)), sounding: sounding == mark.id)
+                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines(pieces[mark.id] ?? [], width: blockWidth - 67)), sounding: sounding == mark.id)
                     .frame(height: height)
                     .padding(.leading, DayLayout.blockLeft)
                     .offset(y: mark.block.lowerBound)

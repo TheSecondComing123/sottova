@@ -87,18 +87,24 @@ struct WordMenu<Content: View>: View {
         Menu {
             content
         } label: {
-            Text(text)
-                .underline(color: Theme.faint)
-                .role(.body)
-                // a Menu's label doesn't inherit the row's foreground
-                .foregroundStyle(hovering ? Theme.text : on ? Theme.muted : Theme.faint)
-                .background { RoundedRectangle(cornerRadius: 4).fill(hovering ? Theme.selection : .clear).padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: -4)) }
+            HStack(spacing: 3) {
+                Text(text).underline(color: Theme.faint)
+                // its room kept at rest, so showing it moves nothing
+                Ph.caretDown.icon(.bold, size: 8).opacity(hovering ? 1 : 0).animation(Theme.quick, value: hovering)
+            }
+            .role(.body)
+            // a Menu's label doesn't inherit the row's foreground
+            .foregroundStyle(hovering ? Theme.text : on ? Theme.muted : Theme.faint)
+            .background { RoundedRectangle(cornerRadius: 4).fill(hovering ? Theme.selection : .clear).padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: -4)) }
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .fixedSize()
         .onHover { hovering = $0 }
+        #if SHOT
+        .onAppear { hovering = UserDefaults.standard.string(forKey: "shotHoverWord") == text }
+        #endif
     }
 }
 
@@ -185,11 +191,13 @@ struct WordFlow: Layout {
     }
 
     /// How many lines these words take at `width`, for a row to leave them room before it's laid out.
-    static func lines(_ words: [String], width: Double) -> Int {
+    static func lines(_ pieces: [DayPlan.Piece], width: Double) -> Int {
         let font = [NSAttributedString.Key.font: NSFont.systemFont(ofSize: Role.body.size)]
         var (x, lines) = (0.0, 1)
-        for word in words {
-            let size = Double(ceil((word as NSString).size(withAttributes: font).width))
+        for piece in pieces {
+            // a menu's word keeps room for its chevron
+            let menu = piece.word.map { $0 != .playNow && $0 != .wake } ?? false
+            let size = Double(ceil((piece.text as NSString).size(withAttributes: font).width)) + (menu ? 11 : 0)
             if x > 0, x + size > width { (x, lines) = (0, lines + 1) }
             lines += max(0, Int(size / width))
             x += size.truncatingRemainder(dividingBy: width) + Double(spacing)
