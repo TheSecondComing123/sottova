@@ -803,7 +803,7 @@ private struct RowEdits: ViewModifier {
                         .contentShape(.rect)
                 }
                 .buttonStyle(PressStyle())
-                .help("Remove from this collection")
+                .help("remove from this collection")
                 .accessibilityLabel("Remove from this collection")
                 .onHover { cross = $0 }
                 .opacity(shown ? 1 : 0)
@@ -847,7 +847,7 @@ private struct SplitTarget: ViewModifier {
                     .offset(y: -4)
                     .onHover { seam = $0 }
                     .onTapGesture(perform: split)
-                    .help("Start a new part here")
+                    .help("start a new part here")
                     .accessibilityElement()
                     .accessibilityLabel("Start a new part here")
                     .accessibilityAddTraits(.isButton)
@@ -1019,7 +1019,7 @@ struct CollectionGrid: View {
                     .foregroundStyle(Theme.text)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 16)
-                ThemeButton(title: "New", icon: .plus, iconWeight: .bold) {
+                ThemeButton(title: "New", icon: .plus, iconWeight: .line) {
                     guard let id = controller.newPlaylist() else { return }
                     renaming.wrappedValue = id
                     navigate(.playlist(id))

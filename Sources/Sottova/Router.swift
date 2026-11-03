@@ -276,7 +276,7 @@ struct SottovaCommands: Commands {
             MenuEntries(entries: songEntries)
         }
         CommandMenu("Day") {
-            Button("New row…") {
+            Button("New…") {
                 openWindow(id: "main")
                 router.alarm = .new(nil)
             }
