@@ -54,15 +54,15 @@ final class Router {
     var run: SongRun?
     /// The song the arrows moved to, for the page to bring into view.
     private(set) var scrollTo: String?
-    /// The click under way, read at the press because a tap ends after the window has come forward.
-    @ObservationIgnored var press = (activating: false, picks: 0)
+    /// The click under way brings the window forward: read at the press, because a tap ends after the window has come.
+    @ObservationIgnored var pressActivates = false
 
     private var currentRun: SongRun? { run?.route == route ? run : nil }
     var canSelectAll: Bool { currentRun != nil }
 
     func select(_ id: String, in order: [String]) {
         // the click that brings the window forward leaves the pick as it was
-        guard !press.activating else { return }
+        guard !pressActivates else { return }
         let keys = NSEvent.modifierFlags
         if keys.contains(.shift), let anchor, let a = order.firstIndex(of: anchor), let b = order.firstIndex(of: id) {
             selected = Set(order[min(a, b)...max(a, b)])
@@ -78,7 +78,7 @@ final class Router {
     }
 
     func clearPick() {
-        guard !press.activating else { return }
+        guard !pressActivates else { return }
         selected = []
     }
 

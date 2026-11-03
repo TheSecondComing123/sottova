@@ -177,7 +177,7 @@ struct MainWindow: View {
             return !(window.firstResponder is NSTableView) && router.key(event) ? nil : event
         }
         _ = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-            router.press = (activating: !(event.window?.isKeyWindow ?? true), picks: router.selected.count)
+            router.pressActivates = !(event.window?.isKeyWindow ?? true)
             return event
         }
         _ = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: swipe)

@@ -55,7 +55,7 @@ struct LibraryLine: View {
                     .padding(.trailing, 10)
             }
             if let width = columns.who {
-                name(song.who) { navigate(.artist(song.who)) }
+                name(song.who)
                     // a name cut short still doesn't touch the title
                     .padding(.trailing, 12)
                     .frame(width: width, alignment: .leading)
@@ -67,12 +67,12 @@ struct LibraryLine: View {
                 // the clear keeps the column where a song has no performer, so no title runs under the heading
                 ZStack(alignment: .leading) {
                     Color.clear
-                    if let performer { name(performer) { navigate(.artist(performer)) } }
+                    if let performer { name(performer) }
                 }
                 .frame(width: width)
             }
             if let width = columns.collection {
-                name(controller.copy(ofAlbum: song.albumID)?.name ?? song.album) { navigate(.album(song.albumID)) }
+                name(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)
                     .frame(width: width, alignment: .leading)
             }
             Text(Format.time(song.duration))
@@ -108,13 +108,10 @@ struct LibraryLine: View {
         .popover(isPresented: $naming, arrowEdge: .bottom) { NameCollection(songs: picked, open: $naming, name: MenuEntry.name(for: picked, controller: controller)) }
     }
 
-    private func name(_ text: String, go: @escaping () -> Void) -> some View {
-        LinkText(text: text) {
-            // the row's own tap has picked it; while picking, or on the click that brings the window forward, stay here
-            let keys = NSEvent.modifierFlags
-            guard !router.press.activating, router.press.picks < 2, !keys.contains(.command), !keys.contains(.shift) else { return }
-            go()
-        }
+    /// Plain words: a click on a row picks it, wherever it lands. Go to is in the right-click and the Song menu.
+    private func name(_ text: String) -> some View {
+        Text(text)
+            .lineLimit(1)
             .role(.body)
             .foregroundStyle(Theme.muted)
     }
