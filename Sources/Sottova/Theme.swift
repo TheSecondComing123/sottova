@@ -143,7 +143,7 @@ extension EnvironmentValues {
     @Entry var windowVisible = true
     /// Read once, at the window. Each page reads what it needs, so a list isn't redrawn for every point of a resize.
     @Entry var pageLayout = PageLayout(windowWidth: 1240, pageHeight: 748)
-    @Entry var listLayout = ListLayout(width: 1024, height: 748)
+    @Entry var listLayout = ListLayout(width: 1024)
     /// The songs of the list a row sits in, in order, so ⇧-click can pick the run between two.
     @Entry var songOrder: [String] = []
     @Entry var songDrag: Namespace.ID?

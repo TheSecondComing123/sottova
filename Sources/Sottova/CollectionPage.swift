@@ -21,11 +21,6 @@ struct CollectionColumns {
                            art: art, height: art ? 32 : 28, gutter: 22, markerX: 0)
     }
 
-    /// Who to Time, at most 880 and with the title at most 512.
-    var width: CGFloat {
-        min(CGFloat(ListLayout.listMax), (line.art ? 34 : 0) + (line.who ?? 0) + 512 + (line.performer ?? 0) + 40)
-    }
-
     /// One of yours: the plate reaches over the × past the time.
     var edited: LineColumns {
         var line = line
@@ -49,7 +44,7 @@ struct CoverImage: View {
     }
 }
 
-/// Cover and words over the songs, all scrolling together; on a wide window pinned left, with the songs scrolling beside them.
+/// Cover and words over the songs, all scrolling together, at every width.
 struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     let cover: String?
     /// Nothing in it yet: the only place here an empty frame belongs.
@@ -66,38 +61,13 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     @Environment(\.listLayout) private var layout
 
     var body: some View {
-        Group {
-            if layout.pinned {
-                HStack(alignment: .top, spacing: 0) {
-                    // scrolls only in a wide, short window, where Play would otherwise fall off the bottom
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            art
-                            words
-                        }
-                        .frame(width: layout.cover, alignment: .leading)
-                        .padding(.top, 16)
-                        .padding(.bottom, 24)
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.leading, layout.margin)
-                    .padding(.trailing, ListLayout.gap - 22)
-                    // the speaker sits 22 left of the rows, and a scroll view clips
-                    PageScroll(insets: EdgeInsets(top: 16, leading: 22, bottom: 24, trailing: layout.margin)) {
-                        songs(false)
-                    }
-                }
-            } else {
-                PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
-                    HStack(alignment: .bottom, spacing: 20) {
-                        art
-                        words
-                    }
-                    .padding(.bottom, 28)
-                    songs(layout.narrow)
-                }
+        PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
+            HStack(alignment: .bottom, spacing: 24) {
+                art
+                words
             }
+            .padding(.bottom, 32)
+            songs(layout.narrow)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -117,13 +87,13 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     private var words: some View {
         VStack(alignment: .leading, spacing: 0) {
             name
-            if let row { RowLine(row: row).padding(.top, 8) }
-            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                Text(line)
+            if !lines.isEmpty {
+                Text(lines.joined(separator: ", "))
                     .role(.body)
                     .foregroundStyle(Theme.muted)
-                    .padding(.top, index == 0 && row == nil ? 8 : 0)
+                    .padding(.top, 6)
             }
+            if let row { RowLine(row: row).padding(.top, 2) }
             CoverCredit(url: credit.url, key: credit.key).padding(.top, 4)
             actions.padding(.top, 14)
         }
@@ -139,7 +109,7 @@ private struct RowLine: View {
     var body: some View {
         let plan = DayPlan(alarms: controller.alarms)
         WordFlow {
-            ThemeLink(text: plan.when(row), underlined: true) { router.alarm = .edit(row) }.role(.body)
+            ThemeLink(text: plan.when(row), underlined: true, color: Theme.muted) { router.alarm = .edit(row) }.role(.body)
             // a collection's own parts say "next" on their heading
             let ownParts = controller.playlists.contains { $0.id == row.source && !$0.breaks.isEmpty }
             ForEach(plan.sentence(row, nextPart: row.rotates && !ownParts ? controller.nextPartName(for: row) : nil), id: \.text) { RowWord(alarm: row, piece: $0) }
@@ -308,7 +278,6 @@ struct AlbumCollection: View {
                 })
                 .padding(.leading, -22)
                 .padding(.trailing, -12)
-                .frame(maxWidth: columns.width, alignment: .leading)
             }
         } else {
             Missing(text: "this collection isn't in your library anymore")
@@ -369,7 +338,7 @@ struct YourCollection: View {
                             .padding(.leading, 24)
                     }
                     .padding(.leading, -22)
-                    .frame(maxWidth: CollectionColumns(songs: [], narrow: narrow).width, minHeight: 400, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: 400, alignment: .topLeading)
                     .contentShape(.rect)
                     .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
                 } else {
@@ -454,7 +423,6 @@ struct YourCollection: View {
         }))
         .padding(.leading, -22)
         .padding(.trailing, -12)
-        .frame(maxWidth: columns.width, alignment: .leading)
     }
 
     private func partLength(_ playlist: Playlist, from start: Int) -> Double {
