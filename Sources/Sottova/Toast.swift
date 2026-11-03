@@ -7,6 +7,8 @@ struct Toast: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
+    /// Edit › Undo's name now, which typing in a field can change under the toast.
+    @State private var top: String?
 
     var body: some View {
         ZStack {
@@ -25,6 +27,10 @@ struct Toast: View {
             }
         }
         .animation(Theme.curve(0.2), value: controller.notice?.id)
+        .onAppear { top = undoManager?.undoActionName }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidCloseUndoGroup)) { _ in top = undoManager?.undoActionName }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in top = undoManager?.undoActionName }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in top = undoManager?.undoActionName }
     }
 
     private func bar(_ notice: Controller.Notice) -> some View {
@@ -33,7 +39,7 @@ struct Toast: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(Theme.text)
-            if notice.undoable {
+            if notice.undoable, top == notice.action {
                 Button { undoManager?.undo() } label: {
                     HStack(spacing: 5) {
                         Text("Undo").foregroundStyle(Theme.primary)

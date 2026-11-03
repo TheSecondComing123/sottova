@@ -427,9 +427,11 @@ public final class Controller {
         public let text: String
         /// The toast offers Undo.
         public let undoable: Bool
+        /// Edit › Undo's name for it: the toast's Undo only stands while it's still the one on top.
+        public let action: String?
 
-        public init(_ text: String, undoable: Bool) {
-            (self.text, self.undoable) = (text, undoable)
+        public init(_ text: String, undoable: Bool, action: String? = nil) {
+            (self.text, self.undoable, self.action) = (text, undoable, action)
         }
     }
 
@@ -438,13 +440,13 @@ public final class Controller {
     public func did(_ action: String, _ text: String, back: String) {
         undo?.setActionName(action)
         if let undo, undo.isUndoing || undo.isRedoing { return }
-        say(text, undoable: undo != nil, then: back)
+        say(text, undoable: undo != nil, then: back, action: action)
     }
 
     /// Registered after the change, so an undo runs it first and a can't-undo said by the change itself wins.
-    private func say(_ text: String, undoable: Bool, then other: String) {
-        notice = Notice(text, undoable: undoable)
-        undo?.registerUndo(withTarget: self) { $0.say(other, undoable: !undoable, then: text) }
+    private func say(_ text: String, undoable: Bool, then other: String, action: String) {
+        notice = Notice(text, undoable: undoable, action: action)
+        undo?.registerUndo(withTarget: self) { $0.say(other, undoable: !undoable, then: text, action: action) }
     }
 
     /// "Weep you no more", or "3 songs".

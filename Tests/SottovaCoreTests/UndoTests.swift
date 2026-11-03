@@ -59,6 +59,18 @@ struct UndoTests {
         #expect(c.notice?.id != shown)
     }
 
+    @Test func aNoticeNamesTheUndoItOffers() {
+        let c = Controller(storage: nil)
+        let lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: [2])
+        c.addAlarm(lauds)
+        let undo = undoing(c) { c.removeAlarm(lauds.id) }
+        #expect(c.notice?.action == "Delete Lauds")
+        #expect(c.notice?.action == undo.undoActionName)
+        undo.undo()
+        undo.redo()
+        #expect(c.notice?.action == undo.undoActionName)
+    }
+
     @Test func aDeleteAndAClearSayWhatWent() {
         let c = Controller(storage: nil)
         let lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: [2])

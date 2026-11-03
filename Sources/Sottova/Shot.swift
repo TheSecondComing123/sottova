@@ -100,7 +100,7 @@ struct ShotReady: ViewModifier {
             // for someone watching: in front, but still not activated
             if defaults.bool(forKey: "shotRaise") { window?.orderFrontRegardless() }
             // setting up the state leaves notices of its own
-            controller.notice = defaults.string(forKey: "shotNotice").map { .init($0, undoable: true) }
+            controller.notice = defaults.string(forKey: "shotNotice").map { .init($0, undoable: true, action: "") }  // an empty Edit › Undo is named ""
             try? await Task.sleep(for: .seconds(1))
             // a covered window holds an animated change undrawn: a route with no resize to push it showed the old page
             window?.contentView?.layoutSubtreeIfNeeded()
