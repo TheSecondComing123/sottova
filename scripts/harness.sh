@@ -21,6 +21,7 @@ cp Support/Info.plist "$plist"
 cp Support/AppIcon.icns Support/Assets.car "$app/Contents/Resources/"
 cp -R Support/Icons "$app/Contents/Resources/"
 cp -R Support/Themes "$app/Contents/Resources/"
+cp -R Support/Covers "$app/Contents/Resources/"
 $buddy -c "Delete :CFBundleURLTypes" -c "Set :CFBundleExecutable SottovaShot" -c "Set :CFBundleName SottovaShot" \
     -c "Set :CFBundleIdentifier com.alanbagel.sottova.shot" "$plist"
 codesign -f -s - "$app" 2>/dev/null

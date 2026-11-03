@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SottovaCore
 
@@ -34,14 +35,26 @@ struct FreeMusicPage: View {
         }
     }
 
-    /// Set from type: the real covers come down with the album, and this page fetches nothing until asked.
+    /// A painting shipped with the app: this page fetches nothing until asked.
     private func tile(_ set: ShelfSet) -> some View {
         let running = shelf.downloading.contains(set.id)
         let progress = shelf.progress[set.id] ?? 0
         return VStack(alignment: .leading, spacing: 8) {
-            Artwork(key: nil, radius: Radius.small, title: set.title, subtitle: set.creator)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(set.title), \(set.creator)")
+            Group {
+                if let url = Bundle.main.url(forResource: set.id, withExtension: "jpg", subdirectory: "Covers"), let image = NSImage(contentsOf: url) {
+                    Image(nsImage: image).resizable().scaledToFill()
+                } else {
+                    Rectangle().fill(Theme.hover)
+                }
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: Radius.small))
+            .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Color(white: 0.5, opacity: 0.28), lineWidth: 1))
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(set.title).role(.body).fontWeight(.medium).foregroundStyle(Theme.text).lineLimit(2)
+                Text(set.creator).role(.body).foregroundStyle(Theme.muted).lineLimit(1)
+            }
             HStack(spacing: 4) {
                 // a failure takes the line, whole
                 Group {
