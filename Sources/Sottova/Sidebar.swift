@@ -189,7 +189,7 @@ private struct SilenceFoot: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 3) {
-                Text("Silence").foregroundStyle(Theme.muted).padding(.top, 1)
+                Text("Between songs").foregroundStyle(Theme.muted).padding(.top, 1)
                 Spacer(minLength: 8)
                 Text(controller.settings.name).foregroundStyle(Theme.text).lineLimit(1).padding(.top, 1)
                 Ph.caretUpDown.icon(.line, size: 11).foregroundStyle(Theme.muted)
@@ -199,7 +199,7 @@ private struct SilenceFoot: View {
         }
         .buttonStyle(.plain)
         .background(AnchorView(view: anchor))
-        .accessibilityLabel("Silence")
+        .accessibilityLabel("Silence between songs")
         .accessibilityValue(controller.settings.name)
     }
 

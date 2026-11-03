@@ -76,7 +76,7 @@ extension MenuEntry {
         if gaps == "Custom" {
             choices.append(.item("Custom", checked: true, enabled: false) {})
         }
-        let choicesName = "Silence"
+        let choicesName = "Silence between songs"
         var goToArtist: [MenuEntry] = [.item("Go to artist") { navigate(.artist(album.artist)) }]
         // a name opens Songs filtered, and no song is tagged with Catalog's word for a compilation
         if album.artist == "Various Artists" { goToArtist = [] }

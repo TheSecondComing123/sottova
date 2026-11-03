@@ -181,7 +181,7 @@ struct SilenceChoices: View {
     @Environment(Router.self) private var router
 
     var body: some View {
-        Menu("Silence") {
+        Menu("Silence between songs") {
             Toggle("Your setting", isOn: Binding(get: { chosen == nil }, set: { _ in choose(nil) }))
             ForEach(controller.allPresets, id: \.name) { preset in
                 Toggle(preset.name, isOn: Binding(get: { chosen?.name == preset.name }, set: { _ in choose(preset) }))

@@ -98,7 +98,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     private func silence() -> MenuEntry {
         let controller = controller
-        var entry = MenuEntry.submenu("Silence", controller.allPresets.map { preset in
+        var entry = MenuEntry.submenu("Silence between songs", controller.allPresets.map { preset in
             .item(preset.name, checked: preset.name == controller.settings.name) { controller.apply(preset) }
         })
         entry.detail = controller.settings.name
