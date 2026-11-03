@@ -142,6 +142,43 @@ struct UndoTests {
         #expect(undo.undoActionName == "")
     }
 
+    @Test func splittingOrJoiningKeepsNextOnItsPart() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let id = try #require(c.newPlaylist(songs: ["/1", "/2", "/3", "/4", "/5", "/6"].map(song)))
+        c.setBreak(true, at: 2, in: id)
+        c.setBreak(true, at: 4, in: id)
+        var row = Alarm(source: id, name: "Compline", hour: 20, minute: 0, weekdays: [2])
+        (row.rotates, row.nextPart) = (true, 2)
+        c.addAlarm(row)
+        var next: Int { c.alarms[0].nextPart }
+
+        // a new part before it pushes it along; one after it doesn't
+        var undo = undoing(c) { c.setBreak(true, at: 1, in: id) }
+        #expect(next == 3)
+        undo.undo()
+        #expect(next == 2)
+        undo.redo()
+        #expect(next == 3)
+        undo.undo()
+        c.undo = nil
+        c.setBreak(true, at: 5, in: id)
+        #expect(next == 2)
+        c.setBreak(false, at: 5, in: id)
+        #expect(next == 2)
+
+        // joining the part before pulls it back; joining it into that part keeps it there
+        undo = undoing(c) { c.setBreak(false, at: 2, in: id) }
+        #expect(next == 1)
+        undo.undo()
+        #expect(next == 2)
+        c.undo = nil
+        c.setBreak(false, at: 4, in: id)
+        #expect(next == 1)
+        #expect(c.playlists[0].partPaths[next] == ["/3", "/4", "/5", "/6"])
+    }
+
     @Test func aClearedQueueComesBack() {
         let c = Controller(storage: nil)
         c.playNext(["/1", "/2"].map(song))

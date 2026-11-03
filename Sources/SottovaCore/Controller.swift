@@ -1259,16 +1259,29 @@ public final class Controller {
         undo?.setActionName("Remove from collection")
     }
 
-    /// A part of the collection starts at this song, or stops starting there.
+    /// A part of the collection starts at this song, or stops starting there. Each row's next part stays the same
+    /// songs: the parts after a split move up one, and a joined part's rows go to the part it joined.
     public func setBreak(_ on: Bool, at index: Int, in id: String) {
         editParts(id, on ? "New part" : "Join parts") {
+            var split: Int?, joined: Int?, parts = 0
             update(id) { playlist in
-                guard index > 0, index < playlist.paths.count else { return }
-                if on { playlist.breaks.insert(index) } else {
+                guard index > 0, index < playlist.paths.count, playlist.breaks.contains(index) != on else { return }
+                let part = playlist.breaks.filter { $0 < index }.count
+                parts = playlist.breaks.count + 1
+                if on {
+                    playlist.breaks.insert(index)
+                    split = part
+                } else {
                     playlist.breaks.remove(index)
                     playlist.partNames[index] = nil
+                    joined = part + 1
                 }
             }
+            for i in alarms.indices where alarms[i].source == id && alarms[i].nextPart < parts {
+                if let split, alarms[i].nextPart > split { alarms[i].nextPart += 1 }
+                if let joined, alarms[i].nextPart >= joined { alarms[i].nextPart -= 1 }
+            }
+            if split != nil || joined != nil { alarmsChanged() }
         }
     }
 
