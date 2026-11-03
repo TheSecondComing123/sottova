@@ -134,6 +134,7 @@ struct CollectionMenu<Content: View>: View {
                 .foregroundStyle(Theme.muted)
                 .frame(width: 24, height: 24)
                 .contentShape(.rect)
+                .hoverable(radius: 4)
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
@@ -804,11 +805,13 @@ private struct RowEdits: ViewModifier {
     }
 }
 
-/// On the seam over a row: hovered, a hairline says "New part", and a click starts one there.
+/// On the seam over a row: after a moment's hover on the row's top edge, a hairline says "New part", and a click
+/// starts one there. Until it shows it takes no clicks, so picking near a row's edge never splits.
 private struct SplitTarget: ViewModifier {
     let index: Int
     let on: Bool
     let split: () -> Void
+    @State private var near = false
     @State private var seam = false
 
     func body(content: Content) -> some View {
@@ -824,24 +827,33 @@ private struct SplitTarget: ViewModifier {
                             .padding(.trailing, 46)
                     }
                     .opacity(seam ? 1 : 0)
+                    .animation(Theme.curve(seam ? 0.12 : 0.08), value: seam)
                     // thin, so the rows keep nearly all of their height for picking
                     .frame(height: 8)
                     .contentShape(.rect)
                     .padding(.leading, 22)
                     .padding(.trailing, 12)
                     .offset(y: -4)
-                    .onHover { seam = $0 }
                     .onTapGesture(perform: split)
+                    .allowsHitTesting(seam)
                     .help("start a new part here")
                     .accessibilityElement()
                     .accessibilityLabel("Start a new part here")
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction(.default, split)
                 }
+                .onContinuousHover { phase in
+                    if case .active(let point) = phase { near = point.y < 6 } else { near = false }
+                }
+                .task(id: near) {
+                    guard near else { seam = false; return }
+                    try? await Task.sleep(for: .milliseconds(400))
+                    if !Task.isCancelled { seam = true }
+                }
                 .onAppear {
                     #if SHOT
                     let defaults = UserDefaults.standard
-                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { seam = true }
+                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { near = true }
                     #endif
                 }
         } else {
@@ -899,19 +911,23 @@ private struct PartHeading: View {
             }
             .frame(height: 22)
             .overlay(alignment: .trailing) {
-                if hovering && !editing {
-                    CollectionMenu {
-                        ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
-                            if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
-                        }
+                let shown = hovering && !editing
+                CollectionMenu {
+                    ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                        if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
                     }
                 }
+                .opacity(shown ? 1 : 0)
+                .allowsHitTesting(shown)
+                .animation(Theme.curve(shown ? 0.12 : 0.08), value: shown)
             }
             Rectangle().fill(Theme.hairline).frame(height: 1).padding(.top, 6).padding(.bottom, 4)
         }
         .padding(.top, first ? 0 : 28)
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        // the whole heading drags; the name inside keeps its text cursor for renaming
+        .pointerStyle(.grabIdle)
         .onDrag(drag)
         .sottovaMenu { entries }
         .onChange(of: naming, initial: true) { _, new in
