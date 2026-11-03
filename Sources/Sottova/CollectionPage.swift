@@ -322,6 +322,8 @@ struct YourCollection: View {
     @State private var name = ""
     @State private var target: Int?
     @State private var dragFrom: Int?
+    /// A part heading on its way somewhere: the lines show only between parts.
+    @State private var draggingPart: Int?
     /// A part just started, whose name field opens.
     @State private var naming: Int?
     /// Bumped by the header's Add songs: the field at the foot comes into view and takes the keys.
@@ -399,9 +401,17 @@ struct YourCollection: View {
                             withAnimation(Theme.quick) { controller.movePart(part, to: part + by, in: pid) }
                         } join: {
                             withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
+                        } drag: {
+                            draggingPart = part
+                            return NSItemProvider(object: Self.partURL(part) as NSURL)
                         }
                         .padding(.leading, 22)
                         .padding(.trailing, 12)
+                        // in the gap over the heading
+                        .overlay(alignment: .top) { insertionLine(at: index, part: true).padding(.top, index == 0 ? 0 : 14) }
+                        .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
+                            if on { target = index } else if target == index { target = nil }
+                        }
                     }
                     row(path, at: index, in: playlist, songs: songs, columns: columns)
                         .modifier(SplitTarget(index: index, on: index > 0 && !playlist.breaks.contains(index)) {
@@ -449,9 +459,20 @@ struct YourCollection: View {
             LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song), remove: { _ in
                 // the menu offers the pick only when this row is in it
                 remove(router.selected.count > 1 && router.selected.contains(key) ? playlist.rows(router.selected) : [index])
-            }, dragStarted: { dragFrom = index }, part: index == 0 ? nil : (playlist.breaks.contains(index), {
+            }, dragStarted: {
+                dragFrom = index
+                draggingPart = nil
+            }, part: index == 0 ? nil : (playlist.breaks.contains(index), {
                 withAnimation(Theme.quick) { controller.setBreak(!playlist.breaks.contains(index), at: index, in: pid) }
-            }), key: key) {
+            }), key: key, more: {
+                guard router.selected.count > 1, router.selected.contains(key) else { return [] }
+                return [.item("New part from selection") {
+                    let rows = playlist.rows(router.selected)
+                    withAnimation(Theme.quick) { controller.newPart(from: rows, in: pid) }
+                    router.selected = []
+                    if let first = rows.first { naming = first }
+                }]
+            }) {
                 controller.play(songs, from: playable, source: pid)
             }
             .modifier(RowEdits(index: index, sounding: controller.sounding?.id == path) { remove([index]) })
@@ -473,18 +494,28 @@ struct YourCollection: View {
         }
     }
 
-    private func insertionLine(at index: Int) -> some View {
+    /// Over a row while songs are dragged; over a heading, or the foot, while a part is.
+    private func insertionLine(at index: Int, part: Bool = false) -> some View {
         Rectangle()
             .fill(Theme.primary)
             .frame(height: 2)
             .padding(.leading, 22)
             .offset(y: -1)
-            .opacity(target == index ? 1 : 0)
+            .opacity(target == index && (part == (draggingPart != nil) || index == controller.playlists.first { $0.id == pid }?.paths.count) ? 1 : 0)
     }
 
-    /// A song already here moves to `index`; anything else is added there, a folder as the songs of it you have.
+    private static func partURL(_ part: Int) -> URL { URL(string: "sottova-part:\(part)")! }
+
+    /// A song already here moves to `index`; anything else is added there, a folder as the songs of it you have. A
+    /// part lands only between parts.
     private func drop(_ urls: [URL], at index: Int, in playlist: Playlist) -> Bool {
         target = nil
+        if let url = urls.first, url.scheme == "sottova-part", let part = Int(url.absoluteString.dropFirst("sottova-part:".count)) {
+            draggingPart = nil
+            guard let place = (playlist.partStarts + [playlist.paths.count]).firstIndex(of: index) else { return false }
+            withAnimation(Theme.quick) { controller.movePart(part, to: place > part ? place - 1 : place, in: pid) }
+            return true
+        }
         let paths = urls.map { $0.standardizedFileURL.path }
         let folders = urls.filter(\.hasDirectoryPath).map { $0.standardizedFileURL.path(percentEncoded: false) }
         withAnimation(Theme.quick) {
@@ -758,51 +789,40 @@ private struct RowEdits: ViewModifier {
     }
 }
 
-/// Left of a row, on its top edge: a new part can start here.
+/// On the seam over a row: hovered, a hairline says "New part", and a click starts one there.
 private struct SplitTarget: ViewModifier {
     let index: Int
     let on: Bool
     let split: () -> Void
-    @State private var row = false
-    @State private var gutter = false
+    @State private var seam = false
 
     func body(content: Content) -> some View {
         if on {
             content
-                .overlay(alignment: .topLeading) {
-                    Color.clear
-                        .frame(width: 22)
-                        .contentShape(.rect)
-                        .onHover { gutter = $0 }
-                        .onTapGesture(perform: split)
-                        .help("Start a new part here")
-                        .accessibilityElement()
-                        .accessibilityLabel("Start a new part here")
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityAction(.default, split)
-                }
                 .overlay(alignment: .top) {
-                    if gutter {
-                        Rectangle().fill(Theme.muted).frame(height: 1).padding(.leading, 22).padding(.trailing, 12).offset(y: -0.5)
-                            .allowsHitTesting(false)
+                    HStack(spacing: 8) {
+                        Text("New part").role(.column).foregroundStyle(Theme.muted).fixedSize()
+                        Rectangle().fill(Theme.muted).frame(height: 1)
                     }
+                    .opacity(seam ? 1 : 0)
+                    // thin, so the rows keep nearly all of their height for picking
+                    .frame(height: 8)
+                    .contentShape(.rect)
+                    .padding(.leading, 22)
+                    .padding(.trailing, 12)
+                    .offset(y: -4)
+                    .onHover { seam = $0 }
+                    .onTapGesture(perform: split)
+                    .help("Start a new part here")
+                    .accessibilityElement()
+                    .accessibilityLabel("Start a new part here")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction(.default, split)
                 }
-                .overlay(alignment: .topLeading) {
-                    if row || gutter {
-                        // on the seam, centered where the speaker sits
-                        Ph.plus.icon(.bold, size: 10)
-                            .foregroundStyle(gutter ? Theme.text : Theme.faint)
-                            .frame(width: 14, height: 14)
-                            .offset(y: -7)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .onHover { row = $0 }
                 .onAppear {
                     #if SHOT
                     let defaults = UserDefaults.standard
-                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { (row, gutter) = (true, true) }
-                    if defaults.object(forKey: "shotSplitRow") != nil, defaults.integer(forKey: "shotSplitRow") == index { row = true }
+                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { seam = true }
                     #endif
                 }
         } else {
@@ -823,6 +843,7 @@ private struct PartHeading: View {
     let rename: (String) -> Void
     let move: (Int) -> Void
     let join: () -> Void
+    let drag: () -> NSItemProvider
     @Environment(Router.self) private var router
     @State private var editing = false
     @State private var hovering = false
@@ -871,6 +892,7 @@ private struct PartHeading: View {
         .padding(.top, first ? 0 : 28)
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        .onDrag(drag)
         .sottovaMenu { entries }
         .onChange(of: naming, initial: true) { _, new in
             if new == index {

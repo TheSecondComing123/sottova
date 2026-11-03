@@ -25,6 +25,8 @@ struct LibraryLine: View {
     var part: (starts: Bool, flip: () -> Void)?
     /// What it's picked by, when that isn't the song: a collection's row.
     var key: String?
+    /// The page's own lines, after the song's in the right-click.
+    var more: (() -> [MenuEntry])?
     let play: () -> Void
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -90,6 +92,7 @@ struct LibraryLine: View {
         .modifier(RowDrag(several: isPicked && router.selected.count > 1, id: id, path: song.id, namespace: drag) { dragStarted?() })
         .sottovaMenu {
             MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, controller: controller, router: router, navigate: navigate)
+                + (more?() ?? [])
         }
     }
 

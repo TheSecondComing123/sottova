@@ -1285,6 +1285,16 @@ public final class Controller {
         }
     }
 
+    /// The rows gather where the first of them is and become a part of their own. Each step registers its own
+    /// undo, so one Undo walks them back in order.
+    public func newPart(from rows: IndexSet, in id: String) {
+        guard let first = rows.first else { return }
+        movePlaylistSongs(id, fromOffsets: rows, toOffset: first)
+        setBreak(true, at: first, in: id)
+        setBreak(true, at: first + rows.count, in: id)
+        undo?.setActionName("New part")
+    }
+
     /// Calls the part starting at this song `name`; an empty name puts its number back.
     public func namePart(_ name: String, at index: Int, in id: String) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)

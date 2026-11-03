@@ -225,6 +225,22 @@ struct UndoTests {
         #expect(p.name == "Compline")
     }
 
+    @Test func pickedRowsBecomeAPartInOneUndo() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let id = try #require(c.newPlaylist(songs: ["/1", "/2", "/3", "/4", "/5"].map(song)))
+        var p: Playlist { c.playlists[0] }
+        let undo = undoing(c) { c.newPart(from: [1, 3], in: id) }
+        #expect(undo.undoActionName == "New part")
+        #expect(p.partPaths == [["/1"], ["/2", "/4"], ["/3", "/5"]])
+        undo.undo()
+        #expect(p.paths == ["/1", "/2", "/3", "/4", "/5"])
+        #expect(p.breaks.isEmpty)
+        undo.redo()
+        #expect(p.partPaths == [["/1"], ["/2", "/4"], ["/3", "/5"]])
+    }
+
     @Test func aClearedQueueComesBack() {
         let c = Controller(storage: nil)
         c.playNext(["/1", "/2"].map(song))
