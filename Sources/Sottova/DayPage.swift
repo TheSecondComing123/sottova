@@ -241,7 +241,7 @@ struct DayPage: View {
     }
 
     /// Dragging a block moves its start, its bottom edge its end, by five minutes. Only letting go on the rail changes
-    /// the row, as one change to undo; Esc or letting go off the rail leaves it as it was.
+    /// the row, as one change to undo; Esc or letting go off to the side leaves it as it was.
     private func drag(_ mark: DayPlan.Rail.Mark, end: Bool, plan: DayPlan, scale: Double) -> RowDrag {
         let alarm = mark.alarm
         let start = alarm.hour * 60 + alarm.minute
@@ -264,7 +264,8 @@ struct DayPage: View {
             .onEnded { drag in
                 guard let moved = moving, moved.id == alarm.id else { return }
                 endMove()
-                guard CGRect(origin: .zero, size: railSize).contains(drag.location) else { return }
+                // above or below is still a time: the first and last rows go earlier and later that way
+                guard (0...railSize.width).contains(drag.location.x) else { return }
                 if end {
                     guard let length = alarm.length(endingAt: moved.minute), length != alarm.minutes else { return }
                     controller.changeAlarm(alarm.id, action: "Change End of \(alarm.name)") { $0.minutes = length }
