@@ -29,6 +29,26 @@ struct PickTests {
         #expect(c.playlists.first?.paths == ["/1", "/2"])
     }
 
+    @Test func undoLeavesANewCollectionAYourDayRowPlays() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-pick-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        c.undo = undo
+        undo.beginUndoGrouping()
+        let id = try #require(c.newCollection(named: "Vespers", songs: ["/1", "/2"].map(song)))
+        undo.endUndoGrouping()
+        c.undo = nil
+        c.addAlarm(Alarm(source: id, name: "Vespers", hour: 18, minute: 0, weekdays: [2]))
+        c.undo = undo
+        undo.undo()
+        #expect(c.playlists.map(\.id) == [id])
+        #expect(FileManager.default.fileExists(atPath: id))
+        #expect(c.alarms.map(\.source) == [id])
+        #expect(c.problem != nil)
+    }
+
     @Test func addToQueueGoesAfterWhatsQueued() {
         let c = Controller(storage: nil)
         c.playNext(["/1", "/2"].map(song))

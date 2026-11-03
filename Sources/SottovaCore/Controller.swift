@@ -1244,6 +1244,11 @@ public final class Controller {
     public func newCollection(named name: String, songs: [Song]) -> String? {
         guard let id = newPlaylist(named: name, songs: songs), let made = playlists.first(where: { $0.id == id })?.name else { return nil }
         undo?.registerUndo(withTarget: self) { controller in
+            // trashing it would take those rows with it, and nothing brings them back
+            guard !controller.alarms.contains(where: { $0.source == id }) else {
+                controller.problem = "\(made) is on your day now, so undo leaves it. delete it from its page if you mean to"
+                return
+            }
             controller.trashPlaylist(id)
             controller.undo?.registerUndo(withTarget: controller) { $0.newCollection(named: made, songs: songs) }
         }
