@@ -369,7 +369,11 @@ struct YourCollection: View {
             .onChange(of: router.newPartRequests) { if router.selected.count > 1 { newPartFromPick(playlist) } }
         } else {
             Missing(text: "this collection isn't in your library anymore")
-                .onAppear { router.shownCollection = nil }
+                .onAppear {
+                    router.shownCollection = nil
+                    // gone by an undo of New collection or Make it yours: leave, as Move to Trash does
+                    router.leave(.playlist(id))
+                }
         }
     }
 
