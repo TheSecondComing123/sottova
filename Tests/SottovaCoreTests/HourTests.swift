@@ -282,6 +282,16 @@ struct HourTests {
         #expect(c.soundingRow?.id == row.id)
     }
 
+    @Test func nowNamesTheRowAndTheNextSongInItsSilence() async throws {
+        let (c, album) = try await controller()
+        _ = open(c, album)
+        c.checkHours()
+        let screen = c.nowScreen()
+        #expect(screen.title == "Overworld")
+        #expect(screen.sub.hasPrefix("till "))
+        #expect(screen.sub.hasSuffix("next song in under a minute"))
+    }
+
     @Test func anHourInOrderPlaysInOrder() async throws {
         let (c, album) = try await controller(songs: 3)
         var alarm = open(c, album)
