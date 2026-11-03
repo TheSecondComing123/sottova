@@ -402,7 +402,7 @@ struct YourCollection: View {
         let keys = playlist.paths.indices.filter { controller.catalog.songsByID[playlist.paths[$0]] != nil }.map { Playlist.rowKey($0, playlist.paths[$0]) }
         return VStack(alignment: .leading, spacing: 0) {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
+                ForEach(playlist.identifiedPaths, id: \.id) { _, index, path in
                     if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
                         let part = playlist.breaks.count { $0 <= index }
                         PartHeading(index: index, number: part + 1, name: playlist.partNames[index], length: partLength(playlist, from: index),
@@ -429,7 +429,8 @@ struct YourCollection: View {
                             withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
                             naming = index
                         })
-                        .id(Playlist.rowKey(index, path))
+                        // the arrows' scroll target on a stand-in: on the row, an id with the index in it would make a moved row new
+                        .background { Color.clear.id(Playlist.rowKey(index, path)) }
                         .overlay(alignment: .top) { insertionLine(at: index) }
                         .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
                             if on { target = index } else if target == index { target = nil }

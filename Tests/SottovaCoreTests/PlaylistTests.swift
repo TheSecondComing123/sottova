@@ -30,6 +30,18 @@ struct PlaylistTests {
         #expect(Playlist.parse(text, at: file) == p)
     }
 
+    @Test func aRowKeepsItsIdentityWhenOneAboveItGoes() {
+        var p = Playlist(id: "/l/x.m3u8", name: "x", paths: ["/1", "/2", "/3", "/2"])
+        let before = p.identifiedPaths
+        #expect(Set(before.map(\.id)).count == 4)
+        #expect(before.map(\.index) == [0, 1, 2, 3])
+        p.paths.remove(at: 0)
+        // every row but the one removed keeps the identity it had, so its view stays and slides up
+        #expect(p.identifiedPaths.map(\.id) == Array(before.map(\.id).dropFirst()))
+        p.paths.swapAt(0, 1)
+        #expect(p.identifiedPaths.map(\.id) == [before[2].id, before[1].id, before[3].id])
+    }
+
     @Test func aSongInTwiceIsTwoRowsToPick() {
         let p = Playlist(id: "/l/x.m3u8", name: "x", paths: ["/1", "/2", "/3", "/2"])
         let second = Playlist.rowKey(3, "/2")

@@ -36,7 +36,9 @@ struct LibraryLine: View {
     @Environment(\.songOrder) private var order
     @Environment(\.appearsActive) private var active
     @Environment(\.songDrag) private var drag
+    @Environment(\.songsLifted) private var liftedPick
     @State private var hovering = false
+    @State private var lifted = false
     @State private var naming = false
 
     private var id: String { key ?? song.id }
@@ -100,6 +102,8 @@ struct LibraryLine: View {
         .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityAction(named: "Play", play)
         .modifier(RowDrag(several: isPicked && router.selected.count > 1, id: id, path: song.id, namespace: drag) { dragStarted?() })
+        .opacity(lifted || liftedPick.contains(id) ? 0.4 : 1)
+        .onDragSessionUpdated { lifted = $0.phase.lifted }
         .sottovaMenu {
             MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, naming: { naming = true },
                            controller: controller, router: router, navigate: navigate)
@@ -144,16 +148,25 @@ struct SongListRun: ViewModifier {
     var remove: ((Set<String>) -> Void)?
     @Environment(Router.self) private var router
     @Namespace private var drag
+    @State private var lifted: Set<String> = []
 
     func body(content: Content) -> some View {
         content
             .environment(\.songDrag, drag)
+            .environment(\.songsLifted, lifted)
+            .onDragSessionUpdated { session in
+                lifted = session.phase.lifted ? Set(session.draggedItemIDs(for: String.self)) : []
+            }
             .dragContainer(for: URL.self, itemID: \.path, in: drag) { (ids: [String]) in ids.map { URL(filePath: Playlist.path(ofRow: $0)) } }
             .dragContainerSelection(order.filter(router.selected.contains), containerNamespace: drag)
             .onChange(of: order, initial: true) {
                 router.run = SongRun(route: router.route, order: order, play: play, remove: remove)
             }
     }
+}
+
+private extension DragSession.Phase {
+    var lifted: Bool { self == .initial || self == .active }
 }
 
 /// Their own views, so a change of track re-renders them and not the row.

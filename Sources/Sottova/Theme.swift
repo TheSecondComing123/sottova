@@ -153,6 +153,8 @@ extension EnvironmentValues {
     /// The songs of the list a row sits in, in order, so ⇧-click can pick the run between two.
     @Entry var songOrder: [String] = []
     @Entry var songDrag: Namespace.ID?
+    /// The rows of a pick on its way somewhere, drawn dimmed until it lands.
+    @Entry var songsLifted: Set<String> = []
 }
 
 /// A row or tile that lights up under the pointer, instantly, as in Finder and Music.
