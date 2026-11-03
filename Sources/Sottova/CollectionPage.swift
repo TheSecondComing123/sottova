@@ -830,9 +830,13 @@ private struct SplitTarget: ViewModifier {
         if on {
             content
                 .overlay(alignment: .top) {
-                    HStack(spacing: 8) {
-                        Text("New part").role(.column).foregroundStyle(Theme.muted).fixedSize()
+                    // the label on the line at its end, just short of the times so it doesn't crowd them
+                    ZStack(alignment: .trailing) {
                         Rectangle().fill(Theme.muted).frame(height: 1)
+                        Text("New part").role(.column).foregroundStyle(Theme.muted).fixedSize()
+                            .padding(.horizontal, 6)
+                            .background(Theme.background)
+                            .padding(.trailing, 46)
                     }
                     .opacity(seam ? 1 : 0)
                     // thin, so the rows keep nearly all of their height for picking
