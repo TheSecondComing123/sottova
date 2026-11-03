@@ -124,6 +124,21 @@ struct UndoTests {
         #expect(c.alarms == [lauds])
     }
 
+    @Test func aCollectionThatCantComeBackNamesItsRowsAndLeavesNoRedo() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let id = try #require(c.newPlaylist(named: "Compline", songs: ["/1"].map(song)))
+        c.addAlarm(Alarm(source: id, name: "Night", hour: 20, minute: 0, weekdays: [2]))
+        let undo = undoing(c) { c.trashPlaylist(id) }
+        // something new in its place: the move back fails
+        try Data().write(to: URL(filePath: id))
+        undo.undo()
+        #expect(c.notice?.text.contains("Night") == true)
+        #expect(c.notice?.undoable == false)
+        #expect(!undo.canRedo)
+    }
+
     @Test func aCopyMadeYoursGoesOnUndoAndTheAlbumGetsItsRowsBack() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

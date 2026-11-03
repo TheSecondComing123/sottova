@@ -1510,7 +1510,10 @@ public final class Controller {
             guard let file = gone.file else { throw CocoaError(.fileNoSuchFile) }
             try FileManager.default.moveItem(at: file, to: URL(filePath: id))
         } catch {
-            notice = Notice("couldn't get \(gone.playlist.name) back from the Trash: \(error.localizedDescription)", undoable: false)
+            let rows = gone.rows.isEmpty ? "" : ", so \(ListFormatter.localizedString(byJoining: gone.rows.map(\.1.name))) stay off your day"
+            notice = Notice("couldn't get \(gone.playlist.name) back from the Trash\(rows): \(error.localizedDescription)", undoable: false)
+            // its redo would only say it was trashed again
+            undo?.removeAllActions(withTarget: self)
             return
         }
         if let cover = gone.cover { try? FileManager.default.moveItem(at: cover, to: Self.coverURL(forPlaylist: id)) }
