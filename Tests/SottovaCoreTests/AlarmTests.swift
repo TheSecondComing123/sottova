@@ -129,6 +129,15 @@ struct AlarmTests {
         #expect(row.daysOff.isEmpty)
     }
 
+    @Test func aRowMadeOnceDropsItsDaysOff() {
+        var row = weekdays
+        row.daysOff = ["2026-11-03"]
+        row.weekdays = []
+        row.scheduleOnce(after: date(2026, 11, 2, 8, 0), calendar: calendar)
+        #expect(row.daysOff.isEmpty)
+        #expect(row.next(after: date(2026, 11, 2, 8, 0), calendar: calendar) == date(2026, 11, 3, 7, 2))
+    }
+
     @Test func aWindowOffForTheDayItStartsDoesntOpen() {
         var desk = Alarm(source: "o", name: "Overworld", hour: 15, minute: 0, weekdays: Set(1...7))
         (desk.whileHere, desk.minutes, desk.daysOff) = (true, 240, ["2026-11-02"])

@@ -147,9 +147,11 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         return row
     }
 
-    /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.
+    /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow. It has no days off: one kept
+    /// from when it repeated could fall on that day, and it would never play.
     public mutating func scheduleOnce(after now: Date = .now, calendar: Calendar = .current) {
         guard weekdays.isEmpty else { return }
+        daysOff = []
         day = now
         // one that plays while you're there and is already under way is for now
         if next(after: now, calendar: calendar) == nil, !(whileHere && window(containing: now, calendar: calendar) != nil) {
