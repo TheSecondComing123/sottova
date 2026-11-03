@@ -151,7 +151,7 @@ struct AlarmSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             let unnamed = "New row"
             Text(kind == .whileHere ? name.map { "Play \($0) while you're here" } ?? "Music while you're here"
-                                    : name.map { "Start \($0) at…" } ?? unnamed)
+                                    : name.map { "Start \($0)" } ?? unnamed)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
@@ -173,10 +173,10 @@ struct AlarmSheet: View {
                             .foregroundStyle(Theme.muted)
                     }
                     .font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 12)
-                    .frame(height: 32)
-                    .background(Theme.raised, in: .rect(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+                    .padding(.horizontal, 9)
+                    .frame(height: 24)
+                    .background(Theme.raised, in: .rect(cornerRadius: Radius.small))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.border))
                     .contentShape(.rect)
                 }
                 .menuStyle(.button)
@@ -357,11 +357,11 @@ private struct Strip<Option: CaseIterable & Hashable & RawRepresentable>: View w
                         .foregroundStyle(chosen ? Theme.text : Theme.muted)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 30)
+                        .frame(height: 22)
                         .background {
                             // the fill alone is barely lighter than the strip in monochrome; the edge says which
                             if chosen {
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: Radius.small - 1)
                                     .fill(Theme.hover)
                                     .strokeBorder(Theme.faint, lineWidth: 1)
                                     .matchedGeometryEffect(id: "fill", in: fill)
@@ -373,9 +373,9 @@ private struct Strip<Option: CaseIterable & Hashable & RawRepresentable>: View w
                 .accessibilityAddTraits(chosen ? .isSelected : [])
             }
         }
-        .padding(2)
-        .background(Theme.raised, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+        .padding(1)
+        .background(Theme.raised, in: .rect(cornerRadius: Radius.small))
+        .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.border))
         .animation(Theme.settle, value: selection)
     }
 }

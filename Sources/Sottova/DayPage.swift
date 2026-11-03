@@ -7,6 +7,7 @@ import SottovaCore
 struct DayPage: View {
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
+    @Environment(\.navigate) private var navigate
     @State private var dropHour: Int?
     /// The time under the pointer on an empty stretch of the rail, where a click adds a row.
     @State private var adding: Int?
@@ -401,8 +402,23 @@ struct DayPage: View {
                 }
                 .role(.body)
                 .frame(height: 24)
+                .playedLine(line, play: replay, entries: playedEntries)
             }
         }
+    }
+
+    private func replay(_ line: Controller.Played) {
+        if let song = controller.catalog.songsByID[line.path] { controller.play([song]) }
+    }
+
+    private func playedEntries(_ line: Controller.Played) -> [MenuEntry] {
+        guard let song = controller.catalog.songsByID[line.path] else { return [] }
+        return [
+            .item("Play") { controller.play([song]) },
+            .divider,
+            .item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) },
+            .item("Go to artist") { navigate(.artist(song.artist)) },
+        ]
     }
 
     private func allPlayedList(_ plan: DayPlan) -> some View {
@@ -416,12 +432,23 @@ struct DayPage: View {
                     }
                     .role(.body)
                     .frame(height: 24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .playedLine(line, play: replay, entries: playedEntries)
                 }
             }
             .padding(12)
         }
         .frame(width: 380)
         .frame(maxHeight: 420)
+    }
+}
+
+private extension View {
+    /// A line of What played: a double-click plays it again, right-click has where it's from.
+    func playedLine(_ line: Controller.Played, play: @escaping (Controller.Played) -> Void, entries: @escaping (Controller.Played) -> [MenuEntry]) -> some View {
+        contentShape(.rect)
+            .onTapGesture(count: 2) { play(line) }
+            .sottovaMenu { entries(line) }
     }
 }
 
