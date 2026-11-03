@@ -140,7 +140,7 @@ extension MenuEntry {
                     router.trashing = playlist.id
                     return
                 }
-                if router.route == .playlist(playlist.id) { navigate(.home) }
+                router.leave(.playlist(playlist.id))
                 controller.trashPlaylist(playlist.id)
             },
         ]

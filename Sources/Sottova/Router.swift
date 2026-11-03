@@ -190,6 +190,12 @@ final class Router {
         }
     }
 
+    /// Off a page that's going away, as a trashed collection's: back to where you came from, or Now.
+    func leave(_ gone: Route) {
+        guard route == gone else { return }
+        if back.isEmpty { go(to: .home) } else { goBack() }
+    }
+
     func goForward() {
         guard let next = forward.popLast() else { return }
         selected = []

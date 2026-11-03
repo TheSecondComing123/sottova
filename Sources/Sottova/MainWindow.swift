@@ -71,7 +71,7 @@ struct MainWindow: View {
         .confirmationDialog(trashQuestion, isPresented: Binding(get: { router.trashing != nil }, set: { if !$0 { router.trashing = nil } })) {
             Button("Move to Trash", role: .destructive) {
                 guard let id = router.trashing else { return }
-                if router.route == .playlist(id) { router.go(to: .home) }
+                router.leave(.playlist(id))
                 controller.trashPlaylist(id)
             }
         } message: {

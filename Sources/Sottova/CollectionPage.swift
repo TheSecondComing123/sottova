@@ -603,7 +603,7 @@ struct YourCollection: View {
             Divider()
             Button("Move to Trash") {
                 if controller.alarmsLost(trashing: playlist).isEmpty {
-                    navigate(.home)
+                    router.leave(.playlist(pid))
                     controller.trashPlaylist(pid)
                 } else {
                     router.trashing = pid
