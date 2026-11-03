@@ -154,9 +154,9 @@ public struct DayPlan: Sendable {
     private func quietPlan(wakeScheduled: Bool) -> Quiet {
         let foot = { (next: (alarm: Alarm, at: Date)) in wakeScheduled && !next.alarm.whileHere ? "The Mac will wake for it." : nil }
         // the sidebar reads the same windows, so this can't say nothing's on while it says "till 9"
-        if let open = alarms.filter(\.on).compactMap({ alarm in alarm.window(containing: now, calendar: calendar).map { (alarm.name, $0.end) } }).max(by: { $0.1 < $1.1 }) {
+        if let open = openRow {
             let next = following(after: now)
-            return Quiet(headline: open.0, line: "till \(fullTime(open.1)), not playing", foot: next.flatMap(foot), next: next.map(nextLine))
+            return Quiet(headline: open.alarm.name, line: "till \(fullTime(open.window.end)), not playing", foot: next.flatMap(foot), next: next.map(nextLine))
         }
         guard let next = following(after: now) else {
             return Quiet(headline: "Nothing on your day", line: "", foot: nil)
@@ -175,8 +175,12 @@ public struct DayPlan: Sendable {
 
     /// The collection Now's words name when nothing's sounding, for its painting.
     public var quietSource: String? {
-        alarms.filter(\.on).compactMap { alarm in alarm.window(containing: now, calendar: calendar).map { (alarm.source, $0.end) } }.max { $0.1 < $1.1 }?.0
-            ?? following(after: now)?.alarm.source
+        openRow?.alarm.source ?? following(after: now)?.alarm.source
+    }
+
+    /// The row whose window is open now; of two open at once, the one that started later, as the player picks.
+    private var openRow: (alarm: Alarm, window: DateInterval)? {
+        alarms.filter(\.on).compactMap { alarm in alarm.window(containing: now, calendar: calendar).map { (alarm, $0) } }.max { $0.1.start < $1.1.start }
     }
 
     /// Beside a collection in the sidebar: "till 7 PM" while it has the time, otherwise "7:02 AM" or "8 PM". Nil if it has no row on.
