@@ -97,15 +97,23 @@ final class Router {
             guard run.order.contains(where: selected.contains) else { return false }
             playPick()
         case 51, 117:
-            guard let remove = run.remove, !selected.isEmpty else { return false }
-            remove(selected)
-            selected = []
+            guard let removePick, !selected.isEmpty else { return false }
+            removePick()
         case 53:
             guard !selected.isEmpty else { return false }
             selected = []
         default: return false
         }
         return true
+    }
+
+    /// Delete on the pick, and the Song menu's Remove: nil where the list isn't yours to take songs out of.
+    var removePick: (() -> Void)? {
+        guard let remove = currentRun?.remove else { return nil }
+        return { [self] in
+            remove(selected)
+            selected = []
+        }
     }
 
     private func step(_ by: Int, in order: [String]) {
@@ -299,7 +307,7 @@ struct SottovaCommands: Commands {
         guard router.presetEdit == nil, let first = songs.first else {
             return ["Play", "Play next", "Add to queue", "Add to collection", "Trim…", "Show in Finder"].map { .item($0, enabled: false) {} }
         }
-        return MenuEntry.song(first, picked: songs, play: router.playPick, remove: nil, part: nil, naming: {
+        return MenuEntry.song(first, picked: songs, play: router.playPick, remove: router.removePick.map { remove in { _ in remove() } }, part: nil, naming: {
             guard let id = controller.newCollection(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
             router.renaming = id
             router.go(to: .playlist(id))
