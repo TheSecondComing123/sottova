@@ -247,7 +247,7 @@ struct DayPage: View {
                 } else if moving?.id != alarm.id {
                     return
                 }
-                let minute = plan.minute(at: (end ? mark.bar.upperBound : mark.bar.lowerBound) + drag.translation.height, hourHeight: scale)
+                let minute = plan.minute(end ? start + (alarm.minutes ?? 0) : start, draggedBy: drag.translation.height, hourHeight: scale)
                 moving = Moving(id: alarm.id, end: end, minute: end ? max(minute, start + 5) : minute)
             }
             .onEnded { drag in

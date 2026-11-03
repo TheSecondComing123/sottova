@@ -504,6 +504,13 @@ extension DayPlan {
         return min(max(Int((minutes / Double(snap)).rounded()) * snap, 0), 24 * 60)
     }
 
+    /// Where a start or end at `minute` goes when dragged `dy` points: on by whole five minutes, so 7:02 stays 7:02
+    /// until the drag goes somewhere.
+    public func minute(_ minute: Int, draggedBy dy: Double, hourHeight: Double = Rail.hourHeight) -> Int {
+        let raw = hour(drawn: (y(minute: minute, hourHeight: hourHeight) + dy) / hourHeight) * 60
+        return min(max(minute + Int(((raw - Double(minute)) / 5).rounded()) * 5, 0), 24 * 60)
+    }
+
     public func y(minute: Int, hourHeight: Double) -> Double { drawn(hour: Double(minute) / 60) * hourHeight }
 
     /// "4 PM", "4:15 PM", "noon", as the rail says a row's start; not `full`, "4:15" as it says an end.

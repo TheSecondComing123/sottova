@@ -603,6 +603,19 @@ struct DayPlanTests {
         }
     }
 
+    @Test func aDragMovesATimeByWholeFiveMinutes() {
+        let day = ownersDay
+        let scale = 50.0
+        let lauds = 7 * 60 + 2
+        // a drag that comes back leaves 7:02 where it was
+        #expect(day.minute(lauds, draggedBy: 0, hourHeight: scale) == lauds)
+        #expect(day.minute(lauds, draggedBy: scale / 60, hourHeight: scale) == lauds)
+        #expect(day.minute(lauds, draggedBy: scale / 12, hourHeight: scale) == lauds + 5)
+        #expect(day.minute(lauds, draggedBy: -scale / 2, hourHeight: scale) == lauds - 30)
+        #expect(day.minute(lauds, draggedBy: -99999, hourHeight: scale) == 0)
+        #expect(day.minute(lauds, draggedBy: 99999, hourHeight: scale) == 24 * 60)
+    }
+
     @Test func aPointOnTheRailIsATimeSnappedThroughBreaks() {
         let day = ownersDay
         let scale = 50.0
