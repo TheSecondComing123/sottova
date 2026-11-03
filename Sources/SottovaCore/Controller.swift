@@ -2377,6 +2377,15 @@ extension Controller {
             shotNow = Self.shotMonday(hour: clock[0], minute: clock[1])
         }
         if let name = defaults.string(forKey: "shotOff"), let row = alarms.first(where: { $0.name == name }) { changeAlarm(row.id) { $0.on = false } }
+        // "Lauds=1;Compline=49-63": days off, counted from the picture's today
+        for item in (defaults.string(forKey: "shotDaysOff") ?? "").split(separator: ";") {
+            let parts = item.split(separator: "=")
+            guard parts.count == 2, let row = alarms.first(where: { $0.name == parts[0] }) else { continue }
+            let span = parts[1].split(separator: "-").compactMap { Int($0) }
+            guard let first = span.first, let today = shotNow else { continue }
+            let days = (first...(span.last ?? first)).compactMap { Calendar.current.date(byAdding: .day, value: $0, to: today).map { Alarm.day($0) } }
+            changeAlarm(row.id) { $0.daysOff.formUnion(days) }
+        }
         if defaults.bool(forKey: "shotOverlap"), let chopin = catalog.albums.first(where: { $0.title == "Perfect Chopin" }) {
             var row = Alarm(source: chopin.id, name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
             row.minutes = 60

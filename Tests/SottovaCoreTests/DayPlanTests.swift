@@ -291,6 +291,62 @@ struct DayPlanTests {
         #expect(day.sentence(here, nextPart: nil).compactMap(\.word) == [.kind, .order, .calendar])
     }
 
+    // MARK: Days off
+
+    private func off(_ row: Alarm, _ days: [String]) -> Alarm {
+        var row = row
+        row.daysOff = Set(days)
+        return row
+    }
+
+    @Test func aDayOffSaysWhenRightAfterTheDays() {
+        let monday = plan([], date(2, 12))
+        let token = { (row: Alarm) in monday.sentence(row, nextPart: nil).first { $0.word == .daysOff }?.text }
+        #expect(monday.sentence(off(lauds, ["2026-11-03"]), nextPart: nil).prefix(2).map(\.text) == ["Weekdays", "Off tomorrow"])
+        #expect(token(off(lauds, ["2026-11-02"])) == "Off today")
+        #expect(token(off(lauds, ["2026-11-06"])) == "Off Friday")
+        #expect(token(off(lauds, ["2026-11-27"])) == "Off Nov 27")
+        #expect(token(off(lauds, (21...31).map { "2026-12-\($0)" } + (1...4).map { "2027-01-0\($0)" })) == "Off Dec 21 to Jan 4")
+        #expect(token(off(lauds, ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"])) == "Off till Nov 5")
+        // yesterday's is kept but over
+        #expect(token(off(lauds, ["2026-11-01"])) == nil)
+        #expect(token(lauds) == nil)
+        // with no days word, it leads
+        #expect(monday.sentence(off(overworld, ["2026-11-03"]), nextPart: nil).first?.text == "Off tomorrow")
+        let runs = monday.offRuns(off(lauds, ["2026-11-03", "2026-11-20", "2026-11-21"]))
+        #expect(runs.map(\.text) == ["Off tomorrow", "Off Nov 20 to Nov 21"])
+        #expect(runs.map(\.days) == [["2026-11-03"], ["2026-11-20", "2026-11-21"]])
+    }
+
+    @Test func theMenuNamesTheDayItsNextTimeIsOn() {
+        #expect(plan([], date(2, 12)).offChoice(lauds)?.title == "Off tomorrow")
+        #expect(plan([], date(2, 12)).offChoice(lauds)?.day == "2026-11-03")
+        // named for the day whether or not it's off already
+        #expect(plan([], date(2, 12)).offChoice(off(lauds, ["2026-11-03"]))?.title == "Off tomorrow")
+        #expect(plan([], date(2, 6)).offChoice(lauds)?.title == "Off today")
+        #expect(plan([], date(6, 12)).offChoice(lauds)?.title == "Off Monday")
+        #expect(plan([], date(2, 16)).offChoice(off(overworld, ["2026-11-02"]))?.title == "Off today")
+    }
+
+    @Test func aRowOffTodayDrawsLikeOneTurnedOffAndNobodyWaitsForIt() {
+        var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
+        (chopin.whileHere, chopin.minutes) = (true, 60)
+        let day = plan([off(overworld, ["2026-11-02"]), chopin], date(2, 16))
+        #expect(day.rows.map(\.alarm.name) == ["Overworld", "Perfect Chopin"])
+        #expect(day.rows.map(\.off) == [true, false])
+        #expect(day.rows[1].waits == nil)
+        #expect(day.rail.marks.map(\.off) == [true, false])
+        #expect(day.rail.labels.first { $0.row == day.rows[0].id && $0.kind != .end }?.kind == .off)
+        #expect(day.label(of: "overworld") == "3 PM")
+    }
+
+    @Test func whileTheNextTimeIsOffTheSidebarNamesTheNextOne() {
+        #expect(plan([off(lauds, ["2026-11-03"])], date(2, 12)).label(of: "lauds") == "7:02 Wed")
+        #expect(plan([off(lauds, (3...30).map { "2026-11-\(String(format: "%02d", $0))" })], date(2, 12)).label(of: "lauds") == "7:02 Dec 1")
+        #expect(plan([off(lauds, ["2026-11-04"])], date(2, 12)).label(of: "lauds") == "7:02")
+        #expect(plan([off(lauds, ["2026-11-03"])], date(2, 22)).quiet().line == "7:02 Wednesday")
+    }
+
     @Test func whatsHappeningTakesTheLine() {
         var morning = lauds
         morning.shuffled = true

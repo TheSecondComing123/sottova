@@ -101,6 +101,13 @@ struct ShotReady: ViewModifier {
             if let at = defaults.string(forKey: "shotMenuAt")?.split(separator: ",").compactMap({ Double($0) }), let window, let height = window.contentView?.bounds.height {
                 return shotMenu(at: NSPoint(x: at[0], y: height - at[1]), in: window)
             }
+            if let name = defaults.string(forKey: "shotDaysOffPopover"), let row = controller.alarms.first(where: { $0.name == name }) {
+                router.daysOff = row.id
+                try? await Task.sleep(for: .seconds(1))
+                let popover = NSApp.windows.first { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }
+                try? Data(String(popover?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
+                return
+            }
             if defaults.bool(forKey: "shotStatusMenu"), let window {
                 shotMenuReady()
                 _ = AppDelegate.statusMenu?.item.menu?.popUp(positioning: nil, at: NSPoint(x: window.frame.midX, y: window.frame.midY), in: nil)

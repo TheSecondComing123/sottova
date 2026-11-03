@@ -37,6 +37,8 @@ final class Router {
     var presetEdit: PresetEdit?
     /// The alarm being set or changed, shown as a sheet.
     var alarm: AlarmRequest?
+    /// The row whose days off are being picked, in a popover on it.
+    var daysOff: Alarm.ID?
     /// Songs picked in a list: a click picks one, ⌘-click adds or takes one away, ⇧-click picks the run from the
     /// last one picked. Gone when the page changes.
     var selected: Set<String> = []

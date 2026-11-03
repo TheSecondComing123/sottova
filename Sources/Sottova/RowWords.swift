@@ -6,7 +6,10 @@ import SottovaCore
 struct RowWord: View {
     let alarm: Alarm
     let piece: DayPlan.Piece
+    /// Off today: its words dim like a row turned off.
+    var off = false
     @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
 
     var body: some View {
         switch piece.word {
@@ -17,20 +20,28 @@ struct RowWord: View {
         case .wake:
             ThemeLink(text: piece.text, underlined: true) { SystemWake.shared.schedule(for: controller.alarms) }.role(.body)
         case .days?:
-            WordMenu(text: piece.text, on: alarm.on) { DayWords(alarm: alarm, change: change) }
+            WordMenu(text: piece.text, on: alarm.on && !off) { DayWords(alarm: alarm, change: change) }
+        case .daysOff?:
+            WordMenu(text: piece.text, on: alarm.on && !off) {
+                ForEach(DayPlan(alarms: [], now: controller.wallNow).offRuns(alarm), id: \.text) { run in
+                    Toggle(run.text, isOn: Binding(get: { true }, set: { _ in change { $0.daysOff.subtract(run.days) } }))
+                }
+                Divider()
+                Button("Days off…") { router.daysOff = alarm.id }
+            }
         case .kind?:
-            WordMenu(text: piece.text, on: alarm.on) { KindWords(alarm: alarm, change: change) }
+            WordMenu(text: piece.text, on: alarm.on && !off) { KindWords(alarm: alarm, change: change) }
         case .order?:
-            WordMenu(text: piece.text, on: alarm.on) { OrderWords(alarm: alarm, change: change) }
+            WordMenu(text: piece.text, on: alarm.on && !off) { OrderWords(alarm: alarm, change: change) }
         case .volume?:
-            WordMenu(text: piece.text, on: alarm.on) { VolumeWords(alarm: alarm, change: change) }
+            WordMenu(text: piece.text, on: alarm.on && !off) { VolumeWords(alarm: alarm, change: change) }
         case .calendar?:
-            WordMenu(text: piece.text, on: alarm.on) {
+            WordMenu(text: piece.text, on: alarm.on && !off) {
                 Toggle("Unless my calendar is busy", isOn: calendarBinding(true))
                 Toggle("Whatever my calendar says", isOn: calendarBinding(false))
             }
         case .part?:
-            WordMenu(text: piece.text, on: alarm.on) {
+            WordMenu(text: piece.text, on: alarm.on && !off) {
                 let parts = controller.partChoices(for: alarm)
                 ForEach(Array(parts.names.enumerated()), id: \.offset) { index, name in
                     Toggle(name.prefix(1).uppercased() + name.dropFirst(), isOn: Binding(get: { parts.next == index }, set: { _ in change { $0.nextPart = index } }))

@@ -10,6 +10,8 @@ public struct DayPlan: Sendable {
         public let end: Date
         /// The row this one overlaps, which waits: on the one that started later, which is the one that has the time.
         public let waits: String?
+        /// Turned off, or off today: it plays nothing today and draws dimmed.
+        public let off: Bool
         public var id: Alarm.ID { alarm.id }
     }
 
@@ -47,11 +49,12 @@ public struct DayPlan: Sendable {
                 ?? (today ? calendar.date(bySettingHour: alarm.hour, minute: alarm.minute, second: 0, of: now) : nil) else { return nil }
             return (alarm, start, start + (alarm.minutes.map { Double($0) * 60 } ?? lengths[alarm.id] ?? 0))
         }.sorted { $0.start < $1.start }
-        let on = spans.filter(\.alarm.on)
+        let resting = { (span: (alarm: Alarm, start: Date, end: Date)) in !span.alarm.on || span.alarm.isOff(span.start, calendar: calendar) }
+        let on = spans.filter { !resting($0) }
         rows = spans.map { span in
             let earlier = on.prefix { $0.alarm.id != span.alarm.id }.last { span.start < $0.end }
             return Row(alarm: span.alarm, start: span.start, end: span.end,
-                       waits: span.alarm.on ? earlier?.alarm.name : nil)
+                       waits: resting(span) ? nil : earlier?.alarm.name, off: resting(span))
         }
         let clock = { (date: Date) in calendar.dateComponents([.hour, .minute], from: date) }
         let midnight = calendar.startOfDay(for: now)
@@ -182,7 +185,58 @@ public struct DayPlan: Sendable {
         if let end = mine.compactMap({ $0.window(containing: now, calendar: calendar)?.end }).max() { return "till \(time(end))" }
         guard let first = mine.min(by: { ($0.hour, $0.minute) < ($1.hour, $1.minute) }) else { return nil }
         let bare = Self.time(hour: first.hour, minute: first.minute, twelveHour: twelveHour)
-        return first.minute == 0 && twelveHour ? "\(bare) \(first.hour < 12 ? "AM" : "PM")" : bare
+        let label = first.minute == 0 && twelveHour ? "\(bare) \(first.hour < 12 ? "AM" : "PM")" : bare
+        // its next time is a day off: the one it comes back on
+        guard let next = first.next(after: now, calendar: calendar), next != first.withoutDaysOff.next(after: now, calendar: calendar) else { return label }
+        let week = calendar.date(byAdding: .day, value: 7, to: calendar.startOfDay(for: now)) ?? now
+        return "\(label) \(next < week ? next.formatted(style.weekday(.abbreviated)) : shortDate(next))"
+    }
+
+    // MARK: Days off
+
+    /// The day a row's next time falls on, days off or not, and what the menu item that takes it off says: "Off
+    /// today", "Off tomorrow", "Off Monday". While its window is open, that's today.
+    public func offChoice(_ alarm: Alarm) -> (day: String, title: String)? {
+        let any = alarm.withoutDaysOff
+        guard let at = any.window(containing: now, calendar: calendar)?.start ?? any.next(after: now, calendar: calendar) else { return nil }
+        return (Alarm.day(at, calendar: calendar), "Off \(relativeDay(at))")
+    }
+
+    /// Each run of days off not yet over, with its days and what it says: "Off tomorrow", "Off Nov 27", "Off Dec 21 to
+    /// Jan 4", or "Off till Jan 5" for one under way.
+    public func offRuns(_ alarm: Alarm) -> [(days: [String], text: String)] {
+        let today = calendar.startOfDay(for: now)
+        return alarm.offRuns(calendar: calendar).compactMap { run in
+            guard let first = run.first, let last = run.last, last >= today else { return nil }
+            let text: String
+            if first <= today {
+                text = calendar.isDate(last, inSameDayAs: today) ? "Off today"
+                    : "Off till \(shortDate(calendar.date(byAdding: .day, value: 1, to: last) ?? last))"
+            } else if run.count == 1 {
+                text = "Off \(relativeDay(first))"
+            } else {
+                text = "Off \(shortDate(first)) to \(shortDate(last))"
+            }
+            return (run.map { Alarm.day($0, calendar: calendar) }, text)
+        }
+    }
+
+    /// "today", "tomorrow", "Friday" within the week, then "Nov 27".
+    private func relativeDay(_ date: Date) -> String {
+        let today = calendar.startOfDay(for: now)
+        if calendar.isDate(date, inSameDayAs: today) { return "today" }
+        if calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: 1, to: today) ?? today) { return "tomorrow" }
+        let week = calendar.date(byAdding: .day, value: 7, to: today) ?? today
+        return date < week ? date.formatted(style.weekday(.wide)) : shortDate(date)
+    }
+
+    /// "Nov 27"
+    private func shortDate(_ date: Date) -> String {
+        date.formatted(style.month(.abbreviated).day())
+    }
+
+    private var style: Date.FormatStyle {
+        Date.FormatStyle(locale: Locale(identifier: "en_US"), timeZone: calendar.timeZone)
     }
 
     /// Under a collection in the grid: "7:02 weekdays", "3 to 7 PM". Nil if it has no row on.
@@ -257,7 +311,7 @@ public struct DayPlan: Sendable {
 
 /// A row's line on Your day, in pieces so each word can open its own menu.
 extension DayPlan {
-    public enum Word: Sendable { case days, kind, order, volume, calendar, part, playNow, wake }
+    public enum Word: Sendable { case days, daysOff, kind, order, volume, calendar, part, playNow, wake }
 
     public struct Piece: Equatable, Sendable {
         public let text: String
@@ -303,6 +357,7 @@ extension DayPlan {
     public func sentence(_ alarm: Alarm, nextPart: String?, volume showsVolume: Bool = true) -> [Piece] {
         var pieces: [Piece] = []
         if !alarm.whileHere || alarm.weekdays != Set(1...7) { pieces.append(Piece(days(alarm), .days)) }
+        if let off = offRuns(alarm).first { pieces.append(Piece(off.text, .daysOff)) }
         if alarm.whileHere { pieces.append(Piece("At the Mac", .kind)) }
         if alarm.shuffled {
             pieces.append(Piece("shuffled", .order))
@@ -318,6 +373,9 @@ extension DayPlan {
         }
         return pieces
     }
+
+    /// After a row's words, while the Mac would still wake on a day off: the link asks once for the rule that cancels.
+    public static let stillWakes = [Piece("The Mac still wakes for it."), Piece("Let it sleep", .wake)]
 
     private static func percent(_ level: Double) -> String { "\(Int((level * 100).rounded()))%" }
 
@@ -363,6 +421,8 @@ extension DayPlan {
             public let bar: ClosedRange<Double>
             /// Beside the line: it overlaps the row before.
             public let aside: Bool
+            /// Turned off or off today.
+            public let off: Bool
             /// The block behind its words, from its bar's end or its lines' room, stopping short of the next.
             public fileprivate(set) var block: ClosedRange<Double>
             let bottom: Double
@@ -407,7 +467,7 @@ extension DayPlan {
             let room = Rail.rowHeight + Double((lines[row.id] ?? 1) - 1) * Rail.lineHeight
             let top = max(y(row.start) - 11, marks.last?.bottom ?? -.infinity)
             let bar = y(row.start)...max(y(row.end), y(row.start) + 3)
-            marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: bar, aside: row.waits != nil,
+            marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: bar, aside: row.waits != nil, off: row.off,
                                    block: top + 3...max(bar.upperBound, top + 3 + room - 4), bottom: top + room))
         }
         for index in marks.indices.dropLast() {
@@ -418,7 +478,7 @@ extension DayPlan {
         for (mark, row) in zip(marks, rows) {
             let clock = calendar.dateComponents([.hour, .minute], from: row.start)
             wanted.append(Rail.Label(text: railTime(hour: clock.hour ?? 0, minute: clock.minute ?? 0, full: true), y: mark.top + 11,
-                                     kind: row.alarm.on ? .row : .off, row: row.alarm.id))
+                                     kind: row.off ? .off : .row, row: row.alarm.id))
             if row.end > row.start {
                 let end = calendar.dateComponents([.hour, .minute], from: row.end)
                 wanted.append(Rail.Label(text: railTime(hour: end.hour ?? 0, minute: end.minute ?? 0, full: end.minute == 0), y: mark.bar.upperBound,

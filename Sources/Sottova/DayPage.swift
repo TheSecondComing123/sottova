@@ -105,6 +105,11 @@ struct DayPage: View {
             .min { $0.1 < $1.1 }?.0
     }
 
+    /// A day off the Mac still wakes for, until the rule that cancels is in.
+    private func stillWakes(_ row: Alarm) -> [DayPlan.Piece] {
+        wake.stillWakes(row, among: controller.alarms, now: nowDate) ? DayPlan.stillWakes : []
+    }
+
     private func rail(_ plan: DayPlan) -> some View {
         let scale = hourHeight(plan)
         let waiting = controller.status == .paused ? nil : controller.hold
@@ -112,7 +117,8 @@ struct DayPage: View {
         let unwoken = cantWake(now: nowDate)
         let pieces = Dictionary(plan.rows.map { row in
             let rising = sounding == row.id && controller.rising && controller.status != .paused
-            return (row.id, plan.line(for: row, nextPart: nextPart(row.alarm), rising: rising, waiting: sounding == row.id ? waiting : nil, cantWake: unwoken == row.id))
+            let line = plan.line(for: row, nextPart: nextPart(row.alarm), rising: rising, waiting: sounding == row.id ? waiting : nil, cantWake: unwoken == row.id)
+            return (row.id, line + stillWakes(row.alarm))
         }, uniquingKeysWith: { first, _ in first })
         // room beside a painting at its usual size, and more than enough under one
         let blockWidth = layout.blockWidth(oneColumn: oneColumn(plan))
@@ -131,7 +137,7 @@ struct DayPage: View {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Theme.faint)
                     .frame(width: 3, height: mark.bar.upperBound - mark.bar.lowerBound)
-                    .opacity(mark.alarm.on ? 1 : 0.35)
+                    .opacity(mark.off ? 0.35 : 1)
                     .offset(x: mark.aside ? 76 : 71, y: mark.bar.lowerBound)
             }
             if let y = rail.now {
@@ -160,7 +166,7 @@ struct DayPage: View {
             }
             ForEach(rail.marks) { mark in
                 let height = mark.block.upperBound - mark.block.lowerBound
-                DayRow(alarm: mark.alarm, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
+                DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
                        painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines((pieces[mark.id] ?? []).map(\.text), width: blockWidth - 67)), sounding: sounding == mark.id)
                     .frame(height: height)
                     .padding(.leading, DayLayout.blockLeft)
@@ -216,7 +222,7 @@ struct DayPage: View {
         if !rest.isEmpty {
             heading("Other days").padding(.top, 24).padding(.bottom, 6)
             ForEach(rest) { alarm in
-                OtherLine(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id))
+                OtherLine(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id) + stillWakes(alarm))
             }
         }
     }
@@ -403,9 +409,134 @@ private struct TimeField: View {
     }
 }
 
+extension Controller {
+    /// Now, or the picture's now in a shot.
+    var wallNow: Date {
+        #if SHOT
+        shotNow ?? .now
+        #else
+        .now
+        #endif
+    }
+}
+
+extension View {
+    /// Days off… on this row: a popover off its trailing edge, like its time's.
+    func daysOffPopover(_ alarm: Alarm) -> some View {
+        modifier(DaysOffPopover(alarm: alarm))
+    }
+}
+
+private struct DaysOffPopover: ViewModifier {
+    let alarm: Alarm
+    @Environment(Router.self) private var router
+
+    func body(content: Content) -> some View {
+        content.popover(isPresented: Binding(get: { router.daysOff == alarm.id }, set: { if !$0, router.daysOff == alarm.id { router.daysOff = nil } }),
+                        arrowEdge: .trailing) {
+            DaysOffField(alarm: alarm, open: Binding(get: { router.daysOff == alarm.id }, set: { if !$0 { router.daysOff = nil } }))
+        }
+    }
+}
+
+/// A run of days off, from one day to another, read back as it'll show on the row. Like the time popover, Return and a
+/// click away apply, Esc doesn't.
+private struct DaysOffField: View {
+    let alarm: Alarm
+    @Binding var open: Bool
+    @Environment(Controller.self) private var controller
+    @State private var from: Date
+    @State private var to: Date
+    @State private var keys: Any?
+    @State private var cancelled = false
+    private let today: Date
+
+    init(alarm: Alarm, open: Binding<Bool>) {
+        (self.alarm, _open) = (alarm, open)
+        let calendar = Calendar.current
+        let now: Date = {
+            #if SHOT
+            ShotEnv.now ?? .now
+            #else
+            .now
+            #endif
+        }()
+        today = calendar.startOfDay(for: now)
+        // the next day it would play
+        let start = calendar.startOfDay(for: alarm.window(containing: now)?.start ?? alarm.next(after: now) ?? now)
+        _from = State(initialValue: start)
+        _to = State(initialValue: start)
+    }
+
+    private var days: [String] {
+        let calendar = Calendar.current
+        var (day, days) = (calendar.startOfDay(for: from), [String]())
+        while day <= to, days.count < 366 {
+            days.append(Alarm.day(day))
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? to + 1
+        }
+        return days
+    }
+
+    private var readBack: String {
+        var picked = alarm
+        picked.daysOff = Set(days)
+        return DayPlan(alarms: [], now: today).offRuns(picked).first?.text ?? ""
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 8) {
+                GridRow {
+                    Text("From").role(.body).foregroundStyle(Theme.text)
+                    day($from, label: "From", from: today)
+                }
+                GridRow {
+                    Text("To").role(.body).foregroundStyle(Theme.text)
+                    day($to, label: "To", from: from)
+                }
+            }
+            Text(readBack).role(.body).foregroundStyle(Theme.muted)
+        }
+        .padding(12)
+        .onChange(of: from) { if to < from { to = from } }
+        .onAppear {
+            keys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                switch event.keyCode {
+                case 36, 76: open = false
+                case 53: (cancelled, open) = (true, false)
+                default: return event
+                }
+                return nil
+            }
+        }
+        .onDisappear {
+            keys.map(NSEvent.removeMonitor)
+            if !cancelled { apply() }
+        }
+    }
+
+    private func day(_ date: Binding<Date>, label: String, from first: Date) -> some View {
+        DatePicker(label, selection: date, in: first..., displayedComponents: .date)
+            .datePickerStyle(.stepperField)
+            .labelsHidden()
+            .fixedSize()
+    }
+
+    private func apply() {
+        NSDatePicker.commitTyping()
+        let days = days
+        guard !days.isEmpty, !Set(days).isSubset(of: alarm.daysOff) else { return }
+        controller.changeAlarm(alarm.id) { $0.daysOff.formUnion(days) }
+        SystemWake.shared.renew(for: controller.alarms)
+    }
+}
+
 /// A row's block: its tick, painting, name and words, with the rest of what it does behind the dots.
 private struct DayRow: View {
     let alarm: Alarm
+    /// Turned off or off today.
+    let off: Bool
     let pieces: [DayPlan.Piece]
     let artwork: String?
     let painting: (width: Double, height: Double, under: Bool)
@@ -434,12 +565,13 @@ private struct DayRow: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
             RoundedRectangle(cornerRadius: Radius.small)
-                .fill(sounding ? Theme.primary.opacity(0.1) : Theme.selection.opacity(alarm.on ? 1 : 0.4))
+                .fill(sounding ? Theme.primary.opacity(0.1) : Theme.selection.opacity(off ? 0.4 : 1))
         }
         // on the whole block, so the painting counts; its words and tick keep their own clicks
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
         .sottovaMenu { entries }
+        .daysOffPopover(alarm)
     }
 
     private var tick: some View {
@@ -448,14 +580,14 @@ private struct DayRow: View {
 
     private var art: some View {
         Artwork(key: artwork, size: painting.height, width: painting.width, radius: 3, outlined: true)
-            .opacity(alarm.on ? 1 : 0.4)
+            .opacity(off ? 0.4 : 1)
     }
 
     private var words: some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 6) {
                 Button { navigate(alarm.route(in: controller)) } label: {
-                    Text(alarm.name).role(.row).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
+                    Text(alarm.name).role(.row).foregroundStyle(off ? Theme.faint : Theme.text).lineLimit(1)
                 }
                 .buttonStyle(.plain)
                 .help("open \(alarm.name)")
@@ -463,9 +595,9 @@ private struct DayRow: View {
                 if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
             }
             WordFlow {
-                ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) }
+                ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0, off: off) }
             }
-            .foregroundStyle(alarm.on ? Theme.muted : Theme.faint)
+            .foregroundStyle(off ? Theme.faint : Theme.muted)
         }
     }
 
@@ -528,6 +660,7 @@ private struct OtherLine: View {
         }
         .contentShape(.rect)
         .sottovaMenu { RowActions(alarm: alarm, controller: controller, router: router).entries }
+        .daysOffPopover(alarm)
     }
 
     private func words(_ pieces: [DayPlan.Piece]) -> some View {
@@ -571,6 +704,9 @@ private struct RowActions {
             + (alarm.whileHere ? [] : [.item(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }])
             + [
                 .item(alarm.on ? "Turn off" : "Turn on") { change { $0.on = !alarm.on } },
+            ]
+            + daysOff
+            + [
                 .divider,
                 .item("Starts by itself", checked: !alarm.whileHere) { change { $0.whileHere = false } },
                 .item("While you're at the Mac", checked: alarm.whileHere) { change(KindWords.whileHere) },
@@ -582,6 +718,17 @@ private struct RowActions {
                 .divider,
                 .item("Delete") { controller.removeAlarm(alarm.id) },
             ]
+    }
+
+    /// "Off tomorrow", named for the day its next time falls on, and the popover for a run of days. Not on a row that
+    /// plays once; dimmed on one turned off.
+    private var daysOff: [MenuEntry] {
+        guard !alarm.weekdays.isEmpty, let next = DayPlan(alarms: [], now: controller.wallNow).offChoice(alarm) else { return [] }
+        let off = alarm.daysOff.contains(next.day)
+        return [
+            .item(next.title, checked: off, enabled: alarm.on) { change { if off { $0.daysOff.remove(next.day) } else { $0.daysOff.insert(next.day) } } },
+            .item("Days off…", enabled: alarm.on) { router.daysOff = alarm.id },
+        ]
     }
 
     private func change(_ edit: (inout Alarm) -> Void) {
@@ -601,13 +748,17 @@ private struct RowEntries: View {
             case .divider:
                 Divider()
             case .action(let action):
-                if entry.checked {
-                    Toggle(entry.title, isOn: Binding(get: { true }, set: { _ in action() }))
-                } else {
-                    Button(entry.title, action: action)
+                Group {
+                    if entry.checked {
+                        Toggle(entry.title, isOn: Binding(get: { true }, set: { _ in action() }))
+                    } else {
+                        Button(entry.title, action: action)
+                    }
                 }
-            case .submenu:
-                EmptyView()
+                .disabled(!entry.enabled)
+            case .submenu(let entries):
+                Menu(entry.title) { RowEntries(entries: entries) }
+                    .disabled(!entry.enabled)
             }
         }
     }
