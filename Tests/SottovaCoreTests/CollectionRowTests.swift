@@ -46,6 +46,30 @@ struct CollectionRowTests {
         return row
     }
 
+    @Test func renameKeepsCollectionPlaybackIdentity() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Before", songs: songs))
+        c.play(songs, source: id)
+        #expect(c.status == .playing)
+        #expect(c.collectionState(songs, source: id) != nil)
+        let renamed = try #require(c.rename(id, to: "After"))
+        #expect(c.collectionState(songs, source: renamed) != nil)
+        c.pause()
+    }
+
+    @Test func renameUpdatesSavedQueueBeforeCrash() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Before", songs: songs))
+        c.play(songs, source: id)
+        let renamed = try #require(c.rename(id, to: "After"))
+        let state = try JSONDecoder().decode(Controller.ResumeState.self, from: Data(contentsOf: dir.appending(path: "resume.json")))
+        #expect(state.playingFrom == renamed)
+        #expect(state.upNext.allSatisfy { $0.source == renamed })
+        c.pause()
+    }
+
     @Test func removingEarlierPartKeepsRowsNextPartOnItsSongs() async throws {
         let dir = try root(), c = try controller(dir)
         let songs = try await seed(c, in: dir)
@@ -119,6 +143,14 @@ struct CollectionRowTests {
         #expect(c.problem?.contains("couldn't save") == true)
         #expect(c.playlists[0].breaks == disk.breaks)
         #expect(saved[0].nextPart == row.nextPart)
+    }
+
+    @Test func unchangedRenameIsHarmless() throws {
+        let dir = try root(), c = try controller(dir)
+        let id = try #require(c.newPlaylist(named: "Same"))
+        let result = c.rename(id, to: "Same")
+        #expect(result == id)
+        #expect(c.problem == nil)
     }
 
     @Test func deletingSongsWithoutDeletingPartKeepsRotation() async throws {

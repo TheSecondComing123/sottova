@@ -1482,6 +1482,9 @@ public final class Controller {
         if playingAlbum == id {
             playingAlbum = url.path
         }
+        // what's playing is still this collection, so its Play and Shuffle still know it, and a relaunch finds it
+        if let origin, origin.key == id { self.origin = Origin(key: url.path, shuffled: origin.shuffled) }
+        if status != .idle { saveResume() }
         playlists.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         loadPlaylistCovers()
         if old != name {
