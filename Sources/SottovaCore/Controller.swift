@@ -435,7 +435,7 @@ public final class Controller {
 
     /// Next to an undo registration: names it in Edit › Undo and says it in the toast. Undo says `back`, redo says
     /// `text` again. Steps run by an undo or redo say nothing of their own.
-    func did(_ action: String, _ text: String, back: String) {
+    public func did(_ action: String, _ text: String, back: String) {
         undo?.setActionName(action)
         if let undo, undo.isUndoing || undo.isRedoing { return }
         say(text, undoable: undo != nil, then: back)
