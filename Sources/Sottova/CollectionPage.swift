@@ -1093,6 +1093,9 @@ private struct CollectionCard: View {
                     RoundedRectangle(cornerRadius: Radius.small)
                         .strokeBorder(Theme.frame, lineWidth: 1)
                         .frame(width: 200, height: 200)
+                        .overlay {
+                            if songs.isEmpty { Text("no songs yet").role(.body).foregroundStyle(Theme.faint) }
+                        }
                 }
                 RoundedRectangle(cornerRadius: Radius.small)
                     .fill(Theme.primary.opacity(0.1))
