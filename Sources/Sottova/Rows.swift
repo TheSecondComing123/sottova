@@ -32,6 +32,7 @@ extension MenuEntry {
                 // from the first picked, as Return does
                 .item("Play") { router.run?.play(songs[0].id) },
                 .item("Play \(songs.count) next") { controller.playNext(songs) },
+                .item("Add \(songs.count) to queue") { controller.playNext(songs, at: controller.upNext.count) },
                 .addToCollection(songs, name: "", controller: controller, naming: naming),
             ]
             if let remove {
@@ -42,6 +43,7 @@ extension MenuEntry {
         var entries: [MenuEntry] = [
             .item("Play", action: play),
             .item("Play next") { controller.playNext([song]) },
+            .item("Add to queue") { controller.playNext([song], at: controller.upNext.count) },
             .addToCollection([song], name: "", controller: controller, naming: naming),
         ]
         entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })

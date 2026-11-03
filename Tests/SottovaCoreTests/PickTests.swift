@@ -28,4 +28,11 @@ struct PickTests {
         #expect(c.playlists.map(\.name) == ["Vespers"])
         #expect(c.playlists.first?.paths == ["/1", "/2"])
     }
+
+    @Test func addToQueueGoesAfterWhatsQueued() {
+        let c = Controller(storage: nil)
+        c.playNext(["/1", "/2"].map(song))
+        c.playNext(["/3"].map(song), at: c.upNext.count)
+        #expect(c.upNext.map(\.path) == ["/1", "/2", "/3"])
+    }
 }
