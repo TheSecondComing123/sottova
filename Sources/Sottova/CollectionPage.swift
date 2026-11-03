@@ -117,7 +117,8 @@ private struct RowLine: View {
     var body: some View {
         let plan = DayPlan(alarms: controller.alarms)
         WordFlow {
-            ThemeLink(text: plan.when(row), underlined: true, color: Theme.muted) { router.alarm = .edit(row) }.role(.body)
+            // a word like the rest, with their caret's room so the gaps match
+            ThemeLink(text: plan.when(row), color: Theme.muted) { router.alarm = .edit(row) }.role(.body).padding(.trailing, WordMenu<EmptyView>.caret)
             // a collection's own parts say "next" on their heading
             let ownParts = controller.playlists.contains { $0.id == row.source && !$0.breaks.isEmpty }
             ForEach(plan.sentence(row, nextPart: row.rotates && !ownParts ? controller.nextPartName(for: row) : nil), id: \.text) { RowWord(alarm: row, piece: $0) }
