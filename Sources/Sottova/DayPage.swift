@@ -61,10 +61,27 @@ struct DayPage: View {
             .task(id: "\(controller.current?.id ?? "")\(controller.status)\(Calendar.current.component(.day, from: now))") {
                 played = controller.playedToday(now: now)
             }
+            .onChange(of: order(plan), initial: true) { pickable(order(plan)) }
         }
         .onAppear { wake.refresh() }
         .onChange(of: dragging) { if !dragging { endMove() } }
         .onDisappear(perform: endMove)
+    }
+
+    private func order(_ plan: DayPlan) -> [String] { plan.rows.map(\.id.uuidString) }
+
+    /// Blocks pick like songs: a click picks, Delete deletes, Return edits, through the page's keys.
+    private func pickable(_ order: [String]) {
+        router.run = SongRun(route: .alarms, order: order, play: { id in
+            if let alarm = controller.alarms.first(where: { $0.id.uuidString == id }) { router.alarm = .edit(alarm) }
+        }, remove: { ids in
+            for alarm in controller.alarms where ids.contains(alarm.id.uuidString) { controller.removeAlarm(alarm.id) }
+        })
+        #if SHOT
+        if let name = UserDefaults.standard.string(forKey: "shotPickRow"), let row = controller.alarms.first(where: { $0.name == name }) {
+            router.selected = [row.id.uuidString]
+        }
+        #endif
     }
 
     private func endMove() {
@@ -197,7 +214,7 @@ struct DayPage: View {
                 let movable = canMove(mark.id, plan: plan)
                 let edge: RowDrag? = movable && mark.alarm.endsByMidnight ? drag(mark, end: true, plan: plan, scale: scale) : nil
                 DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
-                       height: height, nameWidth: DayRow.nameWidth(mark.alarm.name, blockWidth: blockWidth), sounding: sounding == mark.id, edge: edge)
+                       height: height, nameWidth: DayRow.nameWidth(mark.alarm.name, blockWidth: blockWidth), sounding: sounding == mark.id, edge: edge, order: order(plan))
                     .frame(height: height)
                     .gesture(drag(mark, end: false, plan: plan, scale: scale), isEnabled: movable)
                     .zIndex(moving?.id == mark.id ? 1 : 0)
@@ -293,6 +310,7 @@ struct DayPage: View {
                 if case .active(let point) = phase { adding = empty(point) } else { adding = nil }
             }
             .onTapGesture { point in
+                router.clearPick()
                 if let minute = empty(point) { router.alarm = .newAt(minute) }
             }
             .sottovaMenu {
@@ -816,6 +834,8 @@ private struct DayRow: View {
     let sounding: Bool
     /// Dragging its bottom edge changes its end; nil for one with no end of its own.
     let edge: RowDrag?
+    /// The rail's blocks, for ⇧-click.
+    let order: [String]
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
@@ -824,7 +844,7 @@ private struct DayRow: View {
     static let strip = 72.0
     private static let nameFont = NSFont.systemFont(ofSize: Role.row.size, weight: .medium)
     /// Strip, gap, tick, the gap after the name, the gap before the buttons, × and ••• with their gap, the inset.
-    private static let around = strip + 12 + 23 + 12 + 8 + 56 + 8
+    private static let around = strip + 7 + 28 + 12 + 8 + 56 + 8
 
     /// The name gets what it needs up to half the line, so a long one can't squeeze its words into a column.
     static func nameWidth(_ name: String, blockWidth: Double) -> Double {
@@ -850,20 +870,27 @@ private struct DayRow: View {
                 .daysOffPopover(alarm)
                 Spacer(minLength: 8)
             }
-            .padding(.leading, 12)
+            .padding(.leading, 7)
             .padding(.top, 8)
             buttons.padding(.top, 7).padding(.trailing, 8)
         }
+        .animation(.easeOut(duration: 0.15), value: off)
         .onHover { hovering = $0 }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
             // its own fill, not a button's: a card sits on the page, a button is pressed
             Rectangle().fill(sounding ? Theme.primary.opacity(0.1) : Theme.hover.opacity(off ? 0.5 : 1))
+            Rectangle().fill(picked ? Theme.selection : Theme.hairline.opacity(shown ? 0.4 : 0))
         }
         .clipShape(.rect(cornerRadius: Radius.small))
+        .overlay {
+            if picked { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1) }
+        }
         // on the whole block, so the painting counts; its words and tick keep their own clicks
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
+        .simultaneousGesture(TapGesture().onEnded { router.select(alarm.id.uuidString, in: order) })
+        .accessibilityAddTraits(picked ? .isSelected : [])
         .sottovaMenu { entries }
         .overlay(alignment: .bottom) {
             if let edge {
@@ -878,9 +905,11 @@ private struct DayRow: View {
     }
 
     private var tick: some View {
-        RowTick(alarm: alarm).frame(width: 23, alignment: .leading)
+        RowTick(alarm: alarm).frame(width: 28, alignment: .leading)
             .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4.5 }
     }
+
+    private var picked: Bool { router.selected.contains(alarm.id.uuidString) }
 
     /// A square a little past the block's height, cropped to the strip: sized in steps so dragging an end doesn't decode
     /// the painting again on every frame.
@@ -892,13 +921,10 @@ private struct DayRow: View {
             .opacity(off ? 0.4 : 1)
     }
 
+    /// Not a link: a click on it picks the block, like anywhere on it. ••• and right-click have Open collection.
     private var name: some View {
         HStack(spacing: 6) {
-            Button { navigate(alarm.route(in: controller)) } label: {
-                Text(alarm.name).role(.row).foregroundStyle(off ? Theme.faint : Theme.text).lineLimit(1)
-            }
-            .buttonStyle(.plain)
-            .help("open \(alarm.name)")
+            Text(alarm.name).role(.row).foregroundStyle(off ? Theme.faint : Theme.text).lineLimit(1)
             // so what's sounding doesn't rest on color alone
             if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
         }
@@ -906,7 +932,7 @@ private struct DayRow: View {
 
     /// Delete shows on hover, in its place all along so nothing moves; it's in the menus too.
     private var buttons: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 8) {
             Button { controller.removeAlarm(alarm.id) } label: {
                 Ph.x.icon(.bold, size: 11)
                     .foregroundStyle(Theme.muted)
@@ -919,7 +945,7 @@ private struct DayRow: View {
             .accessibilityLabel("delete \(alarm.name)")
             .opacity(shown ? 1 : 0)
             .allowsHitTesting(shown)
-            .animation(Theme.quick, value: shown)
+            .animation(.easeOut(duration: shown ? 0.12 : 0.08), value: shown)
             RowDots(alarm: alarm, entries: entries)
         }
     }
@@ -931,7 +957,7 @@ private struct DayRow: View {
         return hovering
     }
 
-    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }
+    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router, navigate: navigate).entries }
 }
 
 private struct RowDots: View {
@@ -970,12 +996,8 @@ private struct OtherLine: View {
             HStack(spacing: 8) {
                 RailTime(label: DayPlan.Rail.Label(text: DayPlan.startText(alarm), y: 0, kind: alarm.on ? .row : .off, row: alarm.id), alarm: alarm)
                 RowTick(alarm: alarm)
-                Button { navigate(alarm.route(in: controller)) } label: {
-                    Text(alarm.name).role(.body).fontWeight(.medium).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .help("open \(alarm.name)")
-                .layoutPriority(1)
+                Text(alarm.name).role(.body).fontWeight(.medium).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
+                    .layoutPriority(1)
                 if !warning {
                     ViewThatFits(in: .horizontal) {
                         words(pieces)
@@ -1000,7 +1022,7 @@ private struct OtherLine: View {
         .sottovaMenu { entries }
     }
 
-    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }
+    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router, navigate: navigate).entries }
 
     private func words(_ pieces: [DayPlan.Piece]) -> some View {
         HStack(spacing: 10) { ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) } }
@@ -1026,7 +1048,7 @@ private struct RowTick: View {
             SystemWake.shared.renew(for: controller.alarms)
         }))
         .toggleStyle(Tick())
-        .frame(width: 14, height: 14)
+        .frame(width: 24, height: 24)
     }
 }
 
@@ -1036,10 +1058,11 @@ private struct RowActions {
     let alarm: Alarm
     let controller: Controller
     let router: Router
+    let navigate: Navigate
     private var preview: AlarmPreview { .shared }
 
     var entries: [MenuEntry] {
-        [.item("Edit…") { router.alarm = .edit(alarm) }]
+        [.item("Edit…") { router.alarm = .edit(alarm) }, .item("Open collection") { navigate(alarm.route(in: controller)) }]
             + (alarm.whileHere ? [] : [.item(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }])
             + [
                 .item(alarm.on ? "Turn off" : "Turn on") { change { $0.on = !alarm.on } },
@@ -1084,7 +1107,7 @@ private struct RowActions {
 private struct Tick: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         Button { configuration.isOn.toggle() } label: {
-            CheckBox(on: configuration.isOn).contentShape(.rect)
+            CheckBox(on: configuration.isOn).frame(width: 24, height: 24).contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
