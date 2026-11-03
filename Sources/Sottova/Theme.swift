@@ -195,6 +195,7 @@ struct LinkText: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .pointerStyle(.link)
     }
 }
 
