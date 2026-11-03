@@ -47,7 +47,7 @@ struct CoverImage: View {
 /// Cover and words over the songs, all scrolling together, at every width.
 struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     let cover: String?
-    /// Set as a type cover when there's no painting, as Now does.
+    /// Picks the cover's ground when there's no painting.
     let title: String
     var dropTargeted = false
     /// The row it plays for, as words you can click.
@@ -77,7 +77,11 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
             if let cover {
                 CoverImage(key: cover, size: layout.cover)
             } else {
-                Artwork(key: nil, size: layout.cover, radius: Radius.small, title: title)
+                // its ground only: the name is the title beside it
+                RoundedRectangle(cornerRadius: Radius.small)
+                    .fill(Theme.coverGround(for: title))
+                    .strokeBorder(Theme.border, lineWidth: 1)
+                    .frame(width: layout.cover, height: layout.cover)
             }
         }
         .overlay {
