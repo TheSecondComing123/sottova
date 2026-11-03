@@ -31,12 +31,14 @@ struct MenuEntry {
 
     static var divider: MenuEntry { MenuEntry(kind: .divider) }
 
-    /// ⌘⌫ is a menu's key and a text field's: pressed while typing, it stays the field's.
+    /// ⌘⌫ is a menu's key and a text field's: pressed while typing, it stays the field's. Pressed over a sheet or
+    /// Settings, it does nothing: the pick it would take is out of sight.
     static func unlessTyping(_ action: @escaping () -> Void) -> () -> Void {
         {
-            if NSApp.currentEvent?.type == .keyDown, let field = NSApp.keyWindow?.firstResponder as? NSTextView {
+            guard NSApp.currentEvent?.type == .keyDown else { return action() }
+            if let field = NSApp.keyWindow?.firstResponder as? NSTextView {
                 field.deleteToBeginningOfLine(nil)
-            } else {
+            } else if let window = NSApp.keyWindow, window.frameAutosaveName == "main", window.attachedSheet == nil {
                 action()
             }
         }
