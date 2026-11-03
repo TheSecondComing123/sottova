@@ -276,6 +276,8 @@ struct Hairline: View {
                 guard seekable != nil else { return }
                 dragging = true
                 pointer = fraction * width
+                // the fill goes where the pointer is, so the drag shows where it will land
+                fill.show(width: fraction * width, level: reading(controller.status).level, paused: controller.status == .paused)
             }, ended: { fraction in
                 dragging = false
                 pointer = nil
@@ -310,7 +312,7 @@ struct Hairline: View {
             while !Task.isCancelled {
                 let status = controller.status
                 let (share, level) = reading(status)
-                fill.show(width: width * share, level: level, paused: status == .paused)
+                if !dragging { fill.show(width: width * share, level: level, paused: status == .paused) }
                 guard status == .playing, visible else { return }
                 try? await Task.sleep(for: .seconds(0.25))
             }
