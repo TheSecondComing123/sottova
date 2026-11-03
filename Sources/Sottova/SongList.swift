@@ -313,7 +313,7 @@ struct SongList: View {
             heading("Title", .title).frame(maxWidth: .infinity, alignment: .leading)
             if !narrow {
                 heading("Performer", .performer).frame(width: columns.performer, alignment: .leading)
-                heading("Collection", .album).frame(width: columns.collection, alignment: .leading)
+                heading("Folder", .album).frame(width: columns.collection, alignment: .leading)
             }
             heading("Time", .longest).frame(width: 40, alignment: .trailing)
         }
