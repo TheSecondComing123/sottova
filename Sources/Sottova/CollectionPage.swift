@@ -324,6 +324,8 @@ struct YourCollection: View {
     @State private var dragFrom: Int?
     /// A part just started, whose name field opens.
     @State private var naming: Int?
+    /// Bumped by the header's Add songs: the field at the foot comes into view and takes the keys.
+    @State private var addRequests = 0
     @FocusState private var typing: Bool
 
     private var pid: String { renamedTo.last { name in controller.playlists.contains { $0.id == name } } ?? id }
@@ -345,22 +347,33 @@ struct YourCollection: View {
                         PlayButton(songs: songs, source: pid)
                         ShuffleButton(songs: songs, source: pid)
                     }
+                    ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
                     menu(playlist, songs: songs)
                 }
             } songs: { narrow in
                 if isEmpty {
-                    Text("Drag songs or a folder here.")
-                        .role(.body)
-                        .foregroundStyle(Theme.muted)
-                        .frame(maxWidth: .infinity, minHeight: 400, alignment: .topLeading)
-                        .contentShape(.rect)
-                        .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
+                    VStack(alignment: .leading, spacing: 4) {
+                        addField
+                        Text("or drag songs or a folder here")
+                            .role(.body)
+                            .foregroundStyle(Theme.faint)
+                            .padding(.leading, 24)
+                    }
+                    .padding(.leading, -22)
+                    .frame(maxWidth: CollectionColumns(songs: [], narrow: narrow).width, minHeight: 400, alignment: .topLeading)
+                    .contentShape(.rect)
+                    .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
                 } else {
                     rows(playlist, songs: songs, narrow: narrow)
                 }
             }
             .onAppear {
                 if renaming.wrappedValue == pid { startRename(playlist) }
+                #if SHOT
+                if UserDefaults.standard.string(forKey: "shotAddQuery") != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { addRequests += 1 }
+                }
+                #endif
             }
             .onChange(of: renaming.wrappedValue) { _, new in
                 if new == pid { startRename(playlist) }
@@ -374,36 +387,39 @@ struct YourCollection: View {
         let columns = CollectionColumns(songs: songs, narrow: narrow)
         let next = Set(controller.alarms.filter { $0.source == pid && $0.rotates }.map { controller.partChoices(for: $0).next })
         let keys = playlist.paths.indices.filter { controller.catalog.songsByID[playlist.paths[$0]] != nil }.map { Playlist.rowKey($0, playlist.paths[$0]) }
-        return LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
-                if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
-                    let part = playlist.breaks.count { $0 <= index }
-                    PartHeading(index: index, number: part + 1, name: playlist.partNames[index], length: partLength(playlist, from: index),
-                                next: next.contains(part), last: part == playlist.breaks.count, naming: $naming) {
-                        controller.namePart($0, at: index, in: pid)
-                    } move: { by in
-                        withAnimation(Theme.quick) { controller.movePart(part, to: part + by, in: pid) }
-                    } join: {
-                        withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
+        return VStack(alignment: .leading, spacing: 0) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
+                    if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
+                        let part = playlist.breaks.count { $0 <= index }
+                        PartHeading(index: index, number: part + 1, name: playlist.partNames[index], length: partLength(playlist, from: index),
+                                    next: next.contains(part), last: part == playlist.breaks.count, naming: $naming) {
+                            controller.namePart($0, at: index, in: pid)
+                        } move: { by in
+                            withAnimation(Theme.quick) { controller.movePart(part, to: part + by, in: pid) }
+                        } join: {
+                            withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
+                        }
+                        .padding(.leading, 22)
+                        .padding(.trailing, 12)
                     }
-                    .padding(.leading, 22)
-                    .padding(.trailing, 12)
+                    row(path, at: index, in: playlist, songs: songs, columns: columns)
+                        .modifier(SplitTarget(index: index, on: index > 0 && !playlist.breaks.contains(index)) {
+                            withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
+                            naming = index
+                        })
+                        .id(Playlist.rowKey(index, path))
+                        .overlay(alignment: .top) { insertionLine(at: index) }
+                        .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
+                            if on { target = index } else if target == index { target = nil }
+                        }
                 }
-                row(path, at: index, in: playlist, songs: songs, columns: columns)
-                    .modifier(SplitTarget(index: index, on: index > 0 && !playlist.breaks.contains(index)) {
-                        withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
-                        naming = index
-                    })
-                    .id(Playlist.rowKey(index, path))
-                    .overlay(alignment: .top) { insertionLine(at: index) }
-                    .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
-                        if on { target = index } else if target == index { target = nil }
-                    }
+                .environment(\.songOrder, keys)
             }
-            .environment(\.songOrder, keys)
-            // below the last row: drop to add at the end
-            Color.clear
-                .frame(height: 48)
+            // below the last row, out of the lazy stack so Add songs can always reach it: drop to add at the end
+            addField
+                .padding(.top, 8)
+                .padding(.bottom, 40)
                 .overlay(alignment: .top) { insertionLine(at: playlist.paths.count) }
                 .dropDestination(for: URL.self) { urls, _ in drop(urls, at: playlist.paths.count, in: playlist) } isTargeted: { on in
                     if on { target = playlist.paths.count } else if target == playlist.paths.count { target = nil }
@@ -486,6 +502,12 @@ struct YourCollection: View {
             }
         }
         return true
+    }
+
+    private var addField: some View {
+        AddSongs(requests: addRequests) { song in
+            withAnimation(Theme.quick) { controller.add([song], to: pid) }
+        }
     }
 
     private func remove(_ rows: IndexSet) {
@@ -571,6 +593,121 @@ struct YourCollection: View {
     private func endRename() {
         editing = false
         typing = false
+    }
+}
+
+/// At the foot of a collection, and all of an empty one: type, and your library's songs come up under it to add.
+private struct AddSongs: View {
+    let requests: Int
+    let add: (Song) -> Void
+    @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
+    @State private var query = ""
+    @State private var hovering = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let needle = Song.folded(query)
+        let hits = needle.isEmpty ? [] : Array(controller.catalog.songs(by: .who, matching: needle).prefix(8))
+        ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 0) {
+                    // where a row's speaker sits
+                    Ph.plus.icon(.bold, size: 10)
+                        .foregroundStyle(focused ? Theme.muted : Theme.faint)
+                        .frame(width: 22, alignment: .leading)
+                        .padding(.leading, 2)
+                    TextField("Add songs", text: $query, prompt: Text(""))
+                        .textFieldStyle(.plain)
+                        .focusEffectDisabled()
+                        .role(.body)
+                        .foregroundStyle(Theme.text)
+                        // AppKit draws a prompt in its own gray, whatever color it's given
+                        .overlay(alignment: .leading) {
+                            if query.isEmpty { Text("Add songs").role(.body).foregroundStyle(focused ? Theme.muted : Theme.faint).allowsHitTesting(false) }
+                        }
+                        .focused($focused)
+                        .onSubmit {
+                            if let first = hits.first {
+                                add(first)
+                                query = ""
+                            }
+                            focused = true
+                        }
+                        .onExitCommand {
+                            query = ""
+                            focused = false
+                        }
+                }
+                .padding(.trailing, 12)
+                .frame(height: 28)
+                .background(Theme.selection.opacity(focused || hovering ? 1 : 0), in: .rect(cornerRadius: Radius.small))
+                .contentShape(.rect)
+                .onHover { hovering = $0 }
+                .onTapGesture { focused = true }
+                .id("add")
+                ForEach(Array(hits.enumerated()), id: \.element.id) { index, song in
+                    AddHit(song: song, top: index == 0) {
+                        add(song)
+                        focused = true
+                    }
+                }
+            }
+            .onChange(of: focused) { _, on in router.typing = on }
+            .onDisappear { router.typing = false }
+            .onChange(of: requests) {
+                withAnimation(Theme.quick) { proxy.scrollTo("add", anchor: .center) }
+                focused = true
+            }
+            .onAppear {
+                #if SHOT
+                if let typed = UserDefaults.standard.string(forKey: "shotAddQuery") { query = typed }
+                #endif
+            }
+        }
+    }
+}
+
+/// A song from the library under the add field: its [+] adds it, and so does Return on the top one.
+private struct AddHit: View {
+    let song: Song
+    let top: Bool
+    let add: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(song.title)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(song.who)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+                .layoutPriority(-1)
+            Spacer(minLength: 16)
+            Text(Format.time(song.duration))
+                .monospacedDigit()
+                .foregroundStyle(Theme.faint)
+            Button(action: add) {
+                Ph.plus.icon(.bold, size: 10)
+                    .foregroundStyle(hovering ? Theme.text : Theme.muted)
+                    .frame(width: 20, height: 20)
+                    .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
+                    .contentShape(.rect)
+            }
+            .buttonStyle(PressStyle())
+            .help(top ? "add it (Return)" : "add it")
+            .accessibilityLabel("Add \(song.title)")
+        }
+        .role(.body)
+        .padding(.leading, 24)
+        .padding(.trailing, 6)
+        .frame(height: 28)
+        .background(Theme.selection.opacity(hovering ? 1 : top ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
+        .contentShape(.rect)
+        .onHover { hovering = $0 }
+        .onTapGesture(count: 2, perform: add)
     }
 }
 
