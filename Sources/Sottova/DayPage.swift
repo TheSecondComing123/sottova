@@ -136,10 +136,11 @@ struct DayPage: View {
             let line = plan.line(for: row, nextPart: nextPart(row.alarm), rising: rising, waiting: sounding == row.id ? waiting : nil, cantWake: unwoken == row.id)
             return (row.id, line + stillWakes(row.alarm))
         }, uniquingKeysWith: { first, _ in first })
-        // room beside a painting at its usual size, and more than enough under one
         let blockWidth = layout.blockWidth(oneColumn: oneColumn(plan))
-        let room = blockWidth - 12 - 23 - 72 - 12 - 28
-        let rail = plan.rail(hourHeight: scale, lines: pieces.mapValues { WordFlow.lines($0, width: room) })
+        let room = Dictionary(plan.rows.map { ($0.id, DayRow.wordsRoom(name: $0.alarm.name, sounding: sounding == $0.id, blockWidth: blockWidth)) },
+                              uniquingKeysWith: { first, _ in first })
+        let lines = { (id: Alarm.ID) in WordFlow.lines(pieces[id] ?? [], width: room[id] ?? blockWidth) }
+        let rail = plan.rail(hourHeight: scale, lines: Dictionary(plan.rows.map { ($0.id, lines($0.id)) }, uniquingKeysWith: { first, _ in first }))
         var drop = dropHour.map { ($0, controller.alarmName(of: router.draggingCollection ?? "")) }
         #if SHOT
         if let shot = router.shotDrop { drop = (shot.hour, shot.name) }
@@ -154,7 +155,7 @@ struct DayPage: View {
             return Moving(id: row.id, end: parts.count > 2, minute: minute)
         } ?? self.moving
         #endif
-        let drawn = { (mark: DayPlan.Rail.Mark) in Drawn(mark: mark, plan: plan, scale: scale, moving: moving, lines: WordFlow.lines(pieces[mark.id] ?? [], width: room)) }
+        let drawn = { (mark: DayPlan.Rail.Mark) in Drawn(mark: mark, plan: plan, scale: scale, moving: moving, lines: lines(mark.id)) }
         return ZStack(alignment: .topLeading) {
             Rectangle().fill(Theme.hairline).frame(width: 1, height: rail.height).offset(x: 72)
             ForEach(rail.breaks, id: \.y) { gap in
@@ -198,8 +199,7 @@ struct DayPage: View {
                 let movable = canMove(mark.id, plan: plan)
                 let edge: RowDrag? = movable && mark.alarm.endsByMidnight ? drag(mark, end: true, plan: plan, scale: scale) : nil
                 DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
-                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines(pieces[mark.id] ?? [], width: blockWidth - 67)), sounding: sounding == mark.id,
-                       edge: edge)
+                       height: height, nameWidth: DayRow.nameWidth(mark.alarm.name, blockWidth: blockWidth), sounding: sounding == mark.id, edge: edge)
                     .frame(height: height)
                     .gesture(drag(mark, end: false, plan: plan, scale: scale), isEnabled: movable)
                     .zIndex(moving?.id == mark.id ? 1 : 0)
@@ -799,14 +799,16 @@ private struct DaysOffField: View {
     }
 }
 
-/// A row's block: its tick, painting, name and words, with the rest of what it does behind the dots.
+/// A row's block: its painting down the left at the block's full height, then its tick, name and words on one line, so
+/// every name starts at one x and a long row only gets a taller strip.
 private struct DayRow: View {
     let alarm: Alarm
     /// Turned off or off today.
     let off: Bool
     let pieces: [DayPlan.Piece]
     let artwork: String?
-    let painting: (width: Double, height: Double, under: Bool)
+    let height: Double
+    let nameWidth: Double
     let sounding: Bool
     /// Dragging its bottom edge changes its end; nil for one with no end of its own.
     let edge: RowDrag?
@@ -815,29 +817,46 @@ private struct DayRow: View {
     @Environment(\.navigate) private var navigate
     @State private var hovering = false
 
+    static let strip = 72.0
+    private static let nameFont = NSFont.systemFont(ofSize: Role.row.size, weight: .medium)
+    /// Strip, gap, tick, the gap after the name, the gap before the buttons, × and ••• with their gap, the inset.
+    private static let around = strip + 12 + 23 + 12 + 8 + 56 + 8
+
+    /// The name gets what it needs up to half the line, so a long one can't squeeze its words into a column.
+    static func nameWidth(_ name: String, blockWidth: Double) -> Double {
+        min(ceil((name as NSString).size(withAttributes: [.font: nameFont]).width), (blockWidth - around) / 2)
+    }
+
+    /// Where the words flow, beside the name.
+    static func wordsRoom(name: String, sounding: Bool, blockWidth: Double) -> Double {
+        max(blockWidth - around - nameWidth(name, blockWidth: blockWidth) - (sounding ? 19 : 0), 80)
+    }
+
     var body: some View {
-        Group {
-            if painting.under {
-                VStack(alignment: .leading, spacing: 8) {
-                    art
-                    HStack(alignment: .top, spacing: 0) { tick; words; Spacer(minLength: 8); buttons }
+        HStack(alignment: .top, spacing: 0) {
+            art
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                tick
+                name.frame(maxWidth: nameWidth + (sounding ? 19 : 0), alignment: .leading)
+                WordFlow {
+                    ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0, off: off) }
                 }
-            } else {
-                HStack(alignment: .top, spacing: 0) {
-                    tick
-                    HStack(alignment: .top, spacing: 12) { art; words }
-                    Spacer(minLength: 8)
-                    buttons
-                }
+                .foregroundStyle(off ? Theme.faint : Theme.muted)
+                .padding(.leading, 12)
+                .daysOffPopover(alarm)
+                Spacer(minLength: 8)
             }
+            .padding(.leading, 12)
+            .padding(.top, 8)
+            buttons.padding(.top, 7).padding(.trailing, 8)
         }
         .onHover { hovering = $0 }
-        .padding(6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
-            RoundedRectangle(cornerRadius: Radius.small)
-                .fill(sounding ? Theme.primary.opacity(0.1) : Theme.selection.opacity(off ? 0.4 : 1))
+            // its own fill, not a button's: a card sits on the page, a button is pressed
+            Rectangle().fill(sounding ? Theme.primary.opacity(0.1) : Theme.hover.opacity(off ? 0.5 : 1))
         }
+        .clipShape(.rect(cornerRadius: Radius.small))
         // on the whole block, so the painting counts; its words and tick keep their own clicks
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
@@ -855,31 +874,30 @@ private struct DayRow: View {
     }
 
     private var tick: some View {
-        RowTick(alarm: alarm).padding(.top, 4).frame(width: 23, alignment: .topLeading)
+        RowTick(alarm: alarm).frame(width: 23, alignment: .leading)
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4.5 }
     }
 
+    /// A square a little past the block's height, cropped to the strip: sized in steps so dragging an end doesn't decode
+    /// the painting again on every frame.
     private var art: some View {
-        Artwork(key: artwork, size: painting.height, width: painting.width, radius: 3, outlined: true)
+        let side = max((height / 120).rounded(.up) * 120, Self.strip)
+        return Artwork(key: artwork, size: side, radius: 0)
+            .frame(width: Self.strip, height: height)
+            .clipped()
             .opacity(off ? 0.4 : 1)
     }
 
-    private var words: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 6) {
-                Button { navigate(alarm.route(in: controller)) } label: {
-                    Text(alarm.name).role(.row).foregroundStyle(off ? Theme.faint : Theme.text).lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .help("open \(alarm.name)")
-                // so what's sounding doesn't rest on color alone
-                if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
+    private var name: some View {
+        HStack(spacing: 6) {
+            Button { navigate(alarm.route(in: controller)) } label: {
+                Text(alarm.name).role(.row).foregroundStyle(off ? Theme.faint : Theme.text).lineLimit(1)
             }
-            WordFlow {
-                ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0, off: off) }
-            }
-            .foregroundStyle(off ? Theme.faint : Theme.muted)
+            .buttonStyle(.plain)
+            .help("open \(alarm.name)")
+            // so what's sounding doesn't rest on color alone
+            if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
         }
-        .daysOffPopover(alarm)
     }
 
     /// Delete shows on hover, in its place all along so nothing moves; it's in the menus too.

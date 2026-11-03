@@ -123,16 +123,4 @@ public struct DayLayout: Equatable, Sendable {
 
     /// Lines of What played on the page; the rest are behind All.
     public var playedCap: Int { narrow ? 3 : 8 }
-
-    /// A row's painting. In a tall block it fills the width, cropped, over the name and words; a strip too thin to read
-    /// as a painting doesn't count as tall. Otherwise it's square beside them. `lines`: the words' lines under it.
-    public func painting(block: Double, blockWidth: Double, lines: Int) -> (width: Double, height: Double, under: Bool) {
-        let tall = block - 12, wide = blockWidth - 12
-        // the name and its gaps, then the words
-        let over = tall - 31 - 18 * Double(lines)
-        if over >= 160, wide <= over * 4 { return (wide, over, true) }
-        // padding, tick and dots across, and room for the words
-        let side = max(40, min(tall, blockWidth - 75 - 220))
-        return (side, side, false)
-    }
 }

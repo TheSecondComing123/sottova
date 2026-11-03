@@ -181,6 +181,12 @@ struct WordFlow: Layout {
         }
     }
 
+    /// The first line's, so the words sit on a name's baseline beside them.
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard guide == .firstTextBaseline, let first = subviews.first else { return nil }
+        return bounds.minY + first.dimensions(in: .unspecified)[VerticalAlignment.firstTextBaseline]
+    }
+
     private func place(_ subviews: Subviews, width: CGFloat) -> [(x: CGFloat, y: CGFloat, size: CGSize)] {
         var (x, y, tallest): (CGFloat, CGFloat, CGFloat) = (0, 0, 0)
         return subviews.map { subview in
