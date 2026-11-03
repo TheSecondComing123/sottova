@@ -8,6 +8,8 @@ struct DayPage: View {
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @State private var dropHour: Int?
+    /// The time under the pointer on an empty stretch of the rail, where a click adds a row.
+    @State private var adding: Int?
     @State private var played: [Controller.Played] = []
     @State private var allPlayed = false
     @Environment(\.pageLayout) private var page
@@ -128,6 +130,10 @@ struct DayPage: View {
         #if SHOT
         if let shot = router.shotDrop { drop = (shot.hour, shot.name) }
         #endif
+        let height = max(rail.height, 96)
+        #if SHOT
+        let adding = UserDefaults.standard.object(forKey: "shotAddAt") != nil ? UserDefaults.standard.integer(forKey: "shotAddAt") : self.adding
+        #endif
         return ZStack(alignment: .topLeading) {
             Rectangle().fill(Theme.hairline).frame(width: 1, height: rail.height).offset(x: 72)
             ForEach(rail.breaks, id: \.y) { gap in
@@ -174,15 +180,53 @@ struct DayPage: View {
             }
             if let (hour, name) = drop {
                 dropRow(plan: plan, hour: hour, name: name, scale: scale)
+            } else if let adding {
+                HStack(spacing: 4) {
+                    Ph.plus.icon(.bold, size: 11)
+                    Text(plan.timeText(minute: adding)).monospacedDigit()
+                }
+                .role(.body)
+                .foregroundStyle(Theme.faint)
+                .frame(height: 18)
+                .offset(x: DayLayout.blockLeft + 6, y: plan.y(minute: adding, hourHeight: scale) - 9)
+                .allowsHitTesting(false)
+                .transition(.opacity)
             }
         }
         // a day of one short row is still somewhere to drop
-        .frame(maxWidth: .infinity, minHeight: max(rail.height, 96), alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: height, alignment: .topLeading)
+        .background { addLayer(plan: plan, rail: rail, scale: scale, height: height) }
+        .animation(Theme.quick, value: adding == nil)
         .contentShape(.rect)
         .onDrop(of: [.plainText], delegate: HourDrop(now: nowDate, hour: $dropHour, router: router, controller: controller, scale: hourHeight))
     }
 
     private var nowDate: Date { now(.now) }
+
+    /// Under the blocks: on a stretch with nothing on it, the pointer shows the time a click there would add a row at.
+    private func addLayer(plan: DayPlan, rail: DayPlan.Rail, scale: Double, height: Double) -> some View {
+        let empty = { (point: CGPoint) -> Int? in
+            guard point.x >= DayLayout.blockLeft, dropHour == nil else { return nil }
+            let minute = plan.minute(at: point.y, hourHeight: scale, snap: 15)
+            let y = plan.y(minute: minute, hourHeight: scale)
+            // the hint's line, and the words of an empty day
+            let taken = rail.marks.map { $0.block.lowerBound - 2...$0.block.upperBound + 2 } + (rail.marks.isEmpty ? [rail.height / 2 - 12...rail.height / 2 + 12] : [])
+            return taken.contains { $0.overlaps(y - 9...y + 9) || $0.contains(point.y) } ? nil : min(minute, 23 * 60 + 45)
+        }
+        return Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .contentShape(.rect)
+            .onContinuousHover { phase in
+                if case .active(let point) = phase { adding = empty(point) } else { adding = nil }
+            }
+            .onTapGesture { point in
+                if let minute = empty(point) { router.alarm = .newAt(minute) }
+            }
+            .sottovaMenu {
+                adding.map { minute in [.item("New Row at \(plan.timeText(minute: minute))…") { router.alarm = .newAt(minute) }] } ?? []
+            }
+    }
 
     private func dropRow(plan: DayPlan, hour: Int, name: String, scale: Double) -> some View {
         let label = plan.dropLabel(hour: hour)

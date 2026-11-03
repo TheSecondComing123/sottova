@@ -602,4 +602,21 @@ struct DayPlanTests {
             #expect(rail.height >= rail.marks.last!.block.upperBound)
         }
     }
+
+    @Test func aPointOnTheRailIsATimeSnappedThroughBreaks() {
+        let day = ownersDay
+        let scale = 50.0
+        for minute in stride(from: day.firstHour * 60, through: day.lastHour * 60, by: 5) {
+            #expect(day.minute(at: day.y(minute: minute, hourHeight: scale), hourHeight: scale) == minute)
+        }
+        // 7:02 snaps to 7:00, 7:03 to 7:05; by fifteen, 7:08 to 7:15
+        #expect(day.minute(at: day.y(minute: 7 * 60 + 2, hourHeight: scale), hourHeight: scale) == 7 * 60)
+        #expect(day.minute(at: day.y(minute: 7 * 60 + 3, hourHeight: scale), hourHeight: scale) == 7 * 60 + 5)
+        #expect(day.minute(at: day.y(minute: 7 * 60 + 8, hourHeight: scale), hourHeight: scale, snap: 15) == 7 * 60 + 15)
+        #expect(day.minute(at: -5, hourHeight: scale) == day.firstHour * 60)
+        #expect(day.minute(at: 99999, hourHeight: scale) == day.lastHour * 60)
+        #expect(day.timeText(minute: 16 * 60) == "4 PM")
+        #expect(day.timeText(minute: 16 * 60 + 15) == "4:15 PM")
+        #expect(day.timeText(minute: 12 * 60) == "noon")
+    }
 }
