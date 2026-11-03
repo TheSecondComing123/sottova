@@ -219,6 +219,23 @@ struct SilenceChoices: View {
     }
 }
 
+/// "Add to collection ▸" for a page's •••, as the right-click has it.
+private struct AddToCollection: View {
+    let songs: [Song]
+    let name: String
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        Menu("Add to collection") {
+            ForEach(controller.playlists) { playlist in
+                Button(playlist.name) { controller.add(songs, to: playlist.id) }
+            }
+            if !controller.playlists.isEmpty { Divider() }
+            Button("New collection") { controller.newPlaylist(named: name, songs: songs) }
+        }
+    }
+}
+
 /// Only when it isn't yours: what this collection's silence is and how long it makes it.
 @MainActor
 private func ownSilence(_ gaps: SottovaCore.Settings?, songs: [Song], controller: Controller) -> [String] {
@@ -255,12 +272,15 @@ struct AlbumCollection: View {
                 HStack(spacing: 6) {
                     PlayButton(songs: album.songs)
                     ShuffleButton(songs: album.songs)
+                    ThemeButton(title: "Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
+                        .help("a copy you can add to, reorder and split")
                     CollectionMenu {
+                        Button("Play next") { controller.playNext(album.songs) }
+                        AddToCollection(songs: album.songs, name: album.title)
+                        Divider()
                         Button("Start at…") { router.alarm = .new(.album(id)) }
                         SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.albumSettings[id] = $0 }
                         Divider()
-                        Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
-                            .help("a copy you can reorder and add to. songs added to its folder later won't join it")
                         Button("Choose cover…") { router.coverFor = .album(id) }
                         if album.artist != "Various Artists" {
                             Divider()
@@ -296,17 +316,21 @@ struct YourCollection: View {
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
     @Environment(\.renaming) private var renaming
-    /// Renaming moves the file, so the id changes under the page.
-    @State private var renamedTo: String?
+    /// Renaming moves the file, so the id changes under the page, and undo moves it back.
+    @State private var renamedTo: [String] = []
     @State private var editing = false
     @State private var name = ""
     @State private var target: Int?
     @State private var dragFrom: Int?
+    /// A part heading on its way somewhere: the lines show only between parts.
+    @State private var draggingPart: Int?
     /// A part just started, whose name field opens.
     @State private var naming: Int?
+    /// Bumped by the header's Add songs: the field at the foot comes into view and takes the keys.
+    @State private var addRequests = 0
     @FocusState private var typing: Bool
 
-    private var pid: String { renamedTo ?? id }
+    private var pid: String { renamedTo.last { name in controller.playlists.contains { $0.id == name } } ?? id }
 
     var body: some View {
         if let playlist = controller.playlists.first(where: { $0.id == pid }) {
@@ -320,27 +344,38 @@ struct YourCollection: View {
                             credit: (Controller.coverURL(forPlaylist: pid), controller.playlistCovers[pid])) {
                 title(playlist)
             } actions: {
-                if !isEmpty {
-                    HStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    if !isEmpty {
                         PlayButton(songs: songs, source: pid)
                         ShuffleButton(songs: songs, source: pid)
-                        menu(playlist, songs: songs)
                     }
+                    ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
+                    menu(playlist, songs: songs)
                 }
             } songs: { narrow in
                 if isEmpty {
-                    Text("Drag songs or a folder here.")
-                        .role(.body)
-                        .foregroundStyle(Theme.muted)
-                        .frame(maxWidth: .infinity, minHeight: 400, alignment: .topLeading)
-                        .contentShape(.rect)
-                        .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
+                    VStack(alignment: .leading, spacing: 4) {
+                        addField
+                        Text("or drag songs or a folder here")
+                            .role(.body)
+                            .foregroundStyle(Theme.faint)
+                            .padding(.leading, 24)
+                    }
+                    .padding(.leading, -22)
+                    .frame(maxWidth: CollectionColumns(songs: [], narrow: narrow).width, minHeight: 400, alignment: .topLeading)
+                    .contentShape(.rect)
+                    .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
                 } else {
                     rows(playlist, songs: songs, narrow: narrow)
                 }
             }
             .onAppear {
                 if renaming.wrappedValue == pid { startRename(playlist) }
+                #if SHOT
+                if UserDefaults.standard.string(forKey: "shotAddQuery") != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { addRequests += 1 }
+                }
+                #endif
             }
             .onChange(of: renaming.wrappedValue) { _, new in
                 if new == pid { startRename(playlist) }
@@ -353,46 +388,58 @@ struct YourCollection: View {
     private func rows(_ playlist: Playlist, songs: [Song], narrow: Bool) -> some View {
         let columns = CollectionColumns(songs: songs, narrow: narrow)
         let next = Set(controller.alarms.filter { $0.source == pid && $0.rotates }.map { controller.partChoices(for: $0).next })
-        return LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
-                if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
-                    let part = playlist.breaks.count { $0 <= index }
-                    PartHeading(index: index, number: part + 1, name: playlist.partNames[index], length: partLength(playlist, from: index),
-                                next: next.contains(part), last: part == playlist.breaks.count, naming: $naming) {
-                        controller.namePart($0, at: index, in: pid)
-                    } move: { by in
-                        withAnimation(Theme.quick) { controller.movePart(part, to: part + by, in: pid) }
-                    } join: {
-                        withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
+        let keys = playlist.paths.indices.filter { controller.catalog.songsByID[playlist.paths[$0]] != nil }.map { Playlist.rowKey($0, playlist.paths[$0]) }
+        return VStack(alignment: .leading, spacing: 0) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
+                    if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
+                        let part = playlist.breaks.count { $0 <= index }
+                        PartHeading(index: index, number: part + 1, name: playlist.partNames[index], length: partLength(playlist, from: index),
+                                    next: next.contains(part), last: part == playlist.breaks.count, naming: $naming) {
+                            controller.namePart($0, at: index, in: pid)
+                        } move: { by in
+                            withAnimation(Theme.quick) { controller.movePart(part, to: part + by, in: pid) }
+                        } join: {
+                            withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
+                        } drag: {
+                            draggingPart = part
+                            return NSItemProvider(object: Self.partURL(part) as NSURL)
+                        }
+                        .padding(.leading, 22)
+                        .padding(.trailing, 12)
+                        // in the gap over the heading
+                        .overlay(alignment: .top) { insertionLine(at: index, part: true).padding(.top, index == 0 ? 0 : 14) }
+                        .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
+                            if on { target = index } else if target == index { target = nil }
+                        }
                     }
-                    .padding(.leading, 22)
-                    .padding(.trailing, 12)
+                    row(path, at: index, in: playlist, songs: songs, columns: columns)
+                        .modifier(SplitTarget(index: index, on: index > 0 && !playlist.breaks.contains(index)) {
+                            withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
+                            naming = index
+                        })
+                        .id(Playlist.rowKey(index, path))
+                        .overlay(alignment: .top) { insertionLine(at: index) }
+                        .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
+                            if on { target = index } else if target == index { target = nil }
+                        }
                 }
-                row(path, at: index, in: playlist, songs: songs, columns: columns)
-                    .modifier(SplitTarget(index: index, on: index > 0 && !playlist.breaks.contains(index)) {
-                        withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
-                        naming = index
-                    })
-                    .id(path)
-                    .overlay(alignment: .top) { insertionLine(at: index) }
-                    .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
-                        if on { target = index } else if target == index { target = nil }
-                    }
+                .environment(\.songOrder, keys)
             }
-            .environment(\.songOrder, playlist.paths)
-            // below the last row: drop to add at the end
-            Color.clear
-                .frame(height: 48)
+            // below the last row, out of the lazy stack so Add songs can always reach it: drop to add at the end
+            addField
+                .padding(.top, 8)
+                .padding(.bottom, 40)
                 .overlay(alignment: .top) { insertionLine(at: playlist.paths.count) }
                 .dropDestination(for: URL.self) { urls, _ in drop(urls, at: playlist.paths.count, in: playlist) } isTargeted: { on in
                     if on { target = playlist.paths.count } else if target == playlist.paths.count { target = nil }
                 }
         }
-        .modifier(SongListRun(order: songs.map(\.id), play: { id in
-            if let index = songs.firstIndex(where: { $0.id == id }) { controller.play(songs, from: index, source: pid) }
-        }, remove: { ids in
+        .modifier(SongListRun(order: keys, play: { key in
+            if let index = keys.firstIndex(of: key) { controller.play(songs, from: index, source: pid) }
+        }, remove: { keys in
             guard let current = controller.playlists.first(where: { $0.id == pid }) else { return }
-            withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: IndexSet(current.paths.indices.filter { ids.contains(current.paths[$0]) })) }
+            remove(current.rows(keys))
         }))
         .padding(.leading, -22)
         .padding(.trailing, -12)
@@ -408,15 +455,27 @@ struct YourCollection: View {
     private func row(_ path: String, at index: Int, in playlist: Playlist, songs: [Song], columns: CollectionColumns) -> some View {
         if let song = controller.catalog.songsByID[path] {
             let playable = playlist.paths[..<index].count { controller.catalog.songsByID[$0] != nil }
-            LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song), remove: { ids in
-                // one row is this row, even when the song is in here twice
-                let rows = ids == [path] ? IndexSet([index]) : IndexSet(playlist.paths.indices.filter { ids.contains(playlist.paths[$0]) })
-                withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: rows) }
-            }, dragStarted: { dragFrom = index }, part: index == 0 ? nil : (playlist.breaks.contains(index), {
+            let key = Playlist.rowKey(index, path)
+            LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song), remove: { _ in
+                // the menu offers the pick only when this row is in it
+                remove(router.selected.count > 1 && router.selected.contains(key) ? playlist.rows(router.selected) : [index])
+            }, dragStarted: {
+                dragFrom = index
+                draggingPart = nil
+            }, part: index == 0 ? nil : (playlist.breaks.contains(index), {
                 withAnimation(Theme.quick) { controller.setBreak(!playlist.breaks.contains(index), at: index, in: pid) }
-            })) {
+            }), key: key, more: {
+                guard router.selected.count > 1, router.selected.contains(key) else { return [] }
+                return [.item("New part from selection") {
+                    let rows = playlist.rows(router.selected)
+                    withAnimation(Theme.quick) { controller.newPart(from: rows, in: pid) }
+                    router.selected = []
+                    if let first = rows.first { naming = first }
+                }]
+            }) {
                 controller.play(songs, from: playable, source: pid)
             }
+            .modifier(RowEdits(index: index, sounding: controller.sounding?.id == path) { remove([index]) })
         } else {
             HStack(spacing: 0) {
                 Text(URL(filePath: path).deletingPathExtension().lastPathComponent).lineLimit(1)
@@ -430,39 +489,71 @@ struct YourCollection: View {
             .frame(height: 28)
             .help(path)
             .sottovaMenu {
-                [.item("Remove from this collection") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }]
+                [.item("Remove from this collection") { remove([index]) }]
             }
         }
     }
 
-    private func insertionLine(at index: Int) -> some View {
+    /// Over a row while songs are dragged; over a heading, or the foot, while a part is.
+    private func insertionLine(at index: Int, part: Bool = false) -> some View {
         Rectangle()
             .fill(Theme.primary)
             .frame(height: 2)
             .padding(.leading, 22)
             .offset(y: -1)
-            .opacity(target == index ? 1 : 0)
+            .opacity(target == index && (part == (draggingPart != nil) || index == controller.playlists.first { $0.id == pid }?.paths.count) ? 1 : 0)
     }
 
-    /// A song already here moves to `index`; anything else is added there, a folder as the songs of it you have.
+    private static func partURL(_ part: Int) -> URL { URL(string: "sottova-part:\(part)")! }
+
+    /// A song already here moves to `index`; anything else is added there, a folder as the songs of it you have. A
+    /// part lands only between parts.
     private func drop(_ urls: [URL], at index: Int, in playlist: Playlist) -> Bool {
         target = nil
+        if let url = urls.first, url.scheme == "sottova-part", let part = Int(url.absoluteString.dropFirst("sottova-part:".count)) {
+            draggingPart = nil
+            guard let place = (playlist.partStarts + [playlist.paths.count]).firstIndex(of: index) else { return false }
+            withAnimation(Theme.quick) { controller.movePart(part, to: place > part ? place - 1 : place, in: pid) }
+            return true
+        }
         let paths = urls.map { $0.standardizedFileURL.path }
         let folders = urls.filter(\.hasDirectoryPath).map { $0.standardizedFileURL.path(percentEncoded: false) }
         withAnimation(Theme.quick) {
             let dragged = dragFrom.flatMap { playlist.paths.indices.contains($0) && paths == [playlist.paths[$0]] ? $0 : nil }
             dragFrom = nil
+            let picked = playlist.rows(router.selected)
             if paths.count == 1, folders.isEmpty, let from = dragged ?? playlist.paths.firstIndex(of: paths[0]) {
-                controller.movePlaylistSongs(pid, fromOffsets: [from], toOffset: index)
-            } else if paths.count > 1, folders.isEmpty, paths.allSatisfy(playlist.paths.contains) {
+                move([from], to: index, in: playlist)
+            } else if paths.count > 1, folders.isEmpty, picked.map({ playlist.paths[$0] }) == paths {
                 // several picked rows dragged within the list: move them, don't copy
-                controller.movePlaylistSongs(pid, fromOffsets: IndexSet(playlist.paths.indices.filter { paths.contains(playlist.paths[$0]) }), toOffset: index)
+                move(picked, to: index, in: playlist)
             } else {
                 let inFolders = controller.catalog.songs.filter { song in folders.contains { song.id.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") } }
+                router.selected = []
                 controller.add(paths.compactMap { controller.catalog.songsByID[$0] } + inFolders, to: pid, at: index)
             }
         }
         return true
+    }
+
+    private var addField: some View {
+        AddSongs(requests: addRequests) { song in
+            withAnimation(Theme.quick) { controller.add([song], to: pid) }
+        }
+    }
+
+    private func remove(_ rows: IndexSet) {
+        router.selected = []
+        withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: rows) }
+    }
+
+    /// Picked rows stay picked where they land.
+    private func move(_ rows: IndexSet, to index: Int, in playlist: Playlist) {
+        let wasPicked = rows.allSatisfy { router.selected.contains(Playlist.rowKey($0, playlist.paths[$0])) }
+        controller.movePlaylistSongs(pid, fromOffsets: rows, toOffset: index)
+        guard wasPicked, let moved = controller.playlists.first(where: { $0.id == pid }) else { return }
+        let start = index - rows.count { $0 < index }
+        router.selected = Set((start..<start + rows.count).map { Playlist.rowKey($0, moved.paths[$0]) })
     }
 
     @ViewBuilder
@@ -490,18 +581,18 @@ struct YourCollection: View {
                 .foregroundStyle(Theme.text)
                 .lineLimit(4)
                 .accessibilityAddTraits(.isHeader)
-                .onTapGesture(count: 2) { startRename(playlist) }
-                .help("double-click to rename")
+                .onTapGesture { startRename(playlist) }
+                .pointerStyle(.horizontalText)
+                .help("click to rename")
+                .accessibilityAction(named: "Rename") { startRename(playlist) }
         }
     }
 
     private func menu(_ playlist: Playlist, songs: [Song]) -> some View {
         CollectionMenu {
-            Button("Start at…") { router.alarm = .new(.playlist(pid)) }
-            SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
-            Divider()
-            Button("Rename") { startRename(playlist) }
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
+            SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
+            Button("Start at…") { router.alarm = .new(.playlist(pid)) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {
@@ -528,7 +619,7 @@ struct YourCollection: View {
     private func commitRename() {
         guard editing else { return }
         if let renamed = controller.rename(pid, to: name), renamed != pid {
-            renamedTo = renamed
+            renamedTo.append(renamed)
         }
         endRename()
     }
@@ -539,51 +630,201 @@ struct YourCollection: View {
     }
 }
 
-/// Left of a row, on its top edge: a new part can start here.
+/// At the foot of a collection, and all of an empty one: type, and your library's songs come up under it to add.
+private struct AddSongs: View {
+    let requests: Int
+    let add: (Song) -> Void
+    @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
+    @State private var query = ""
+    @State private var hovering = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let needle = Song.folded(query)
+        let hits = needle.isEmpty ? [] : Array(controller.catalog.songs(by: .who, matching: needle).prefix(8))
+        ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 0) {
+                    // where a row's speaker sits
+                    Ph.plus.icon(.bold, size: 10)
+                        .foregroundStyle(focused ? Theme.muted : Theme.faint)
+                        .frame(width: 22, alignment: .leading)
+                        .padding(.leading, 2)
+                    TextField("Add songs", text: $query, prompt: Text(""))
+                        .textFieldStyle(.plain)
+                        .focusEffectDisabled()
+                        .role(.body)
+                        .foregroundStyle(Theme.text)
+                        // AppKit draws a prompt in its own gray, whatever color it's given
+                        .overlay(alignment: .leading) {
+                            if query.isEmpty { Text("Add songs").role(.body).foregroundStyle(focused ? Theme.muted : Theme.faint).allowsHitTesting(false) }
+                        }
+                        .focused($focused)
+                        .onSubmit {
+                            if let first = hits.first {
+                                add(first)
+                                query = ""
+                            }
+                            focused = true
+                        }
+                        .onExitCommand {
+                            query = ""
+                            focused = false
+                        }
+                }
+                .padding(.trailing, 12)
+                .frame(height: 28)
+                .background(Theme.selection.opacity(focused || hovering ? 1 : 0), in: .rect(cornerRadius: Radius.small))
+                .contentShape(.rect)
+                .onHover { hovering = $0 }
+                .onTapGesture { focused = true }
+                .id("add")
+                ForEach(Array(hits.enumerated()), id: \.element.id) { index, song in
+                    AddHit(song: song, top: index == 0) {
+                        add(song)
+                        focused = true
+                    }
+                }
+            }
+            .onChange(of: focused) { _, on in router.typing = on }
+            .onDisappear { router.typing = false }
+            .onChange(of: requests) {
+                withAnimation(Theme.quick) { proxy.scrollTo("add", anchor: .center) }
+                focused = true
+            }
+            .onAppear {
+                #if SHOT
+                if let typed = UserDefaults.standard.string(forKey: "shotAddQuery") { query = typed }
+                #endif
+            }
+        }
+    }
+}
+
+/// A song from the library under the add field: its [+] adds it, and so does Return on the top one.
+private struct AddHit: View {
+    let song: Song
+    let top: Bool
+    let add: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(song.title)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(song.who)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+                .layoutPriority(-1)
+            Spacer(minLength: 16)
+            Text(Format.time(song.duration))
+                .monospacedDigit()
+                .foregroundStyle(Theme.faint)
+            Button(action: add) {
+                Ph.plus.icon(.bold, size: 10)
+                    .foregroundStyle(hovering ? Theme.text : Theme.muted)
+                    .frame(width: 20, height: 20)
+                    .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
+                    .contentShape(.rect)
+            }
+            .buttonStyle(PressStyle())
+            .help(top ? "add it (Return)" : "add it")
+            .accessibilityLabel("Add \(song.title)")
+        }
+        .role(.body)
+        .padding(.leading, 24)
+        .padding(.trailing, 6)
+        .frame(height: 28)
+        .background(Theme.selection.opacity(hovering ? 1 : top ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
+        .contentShape(.rect)
+        .onHover { hovering = $0 }
+        .onTapGesture(count: 2, perform: add)
+    }
+}
+
+/// On hover, a grip where the speaker sits and an × past the time, both drawn over the row so nothing moves.
+/// The whole row drags; the grip says so. Remove is in the right-click too.
+private struct RowEdits: ViewModifier {
+    let index: Int
+    let sounding: Bool
+    let remove: () -> Void
+    @State private var row = false
+    @State private var cross = false
+
+    func body(content: Content) -> some View {
+        let shown = row || cross
+        content
+            .onHover { row = $0 }
+            .overlay(alignment: .leading) {
+                // the speaker already marks the row that's playing
+                if shown && !sounding {
+                    Ph.dotsSixVertical.icon(.bold, size: 12)
+                        .foregroundStyle(Theme.faint)
+                        .frame(width: 14, height: 28)
+                        .pointerStyle(.grabIdle)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                Button(action: remove) {
+                    Ph.x.icon(.bold, size: 9)
+                        .foregroundStyle(cross ? Theme.text : Theme.faint)
+                        .frame(width: 20, height: 20)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle())
+                .help("Remove from this collection")
+                .accessibilityLabel("Remove from this collection")
+                .onHover { cross = $0 }
+                .opacity(shown ? 1 : 0)
+                .allowsHitTesting(shown)
+                // just past the time, in the list's right margin
+                .offset(x: 14)
+            }
+            .onAppear {
+                #if SHOT
+                if UserDefaults.standard.object(forKey: "shotEditRow") != nil, UserDefaults.standard.integer(forKey: "shotEditRow") == index { row = true }
+                #endif
+            }
+    }
+}
+
+/// On the seam over a row: hovered, a hairline says "New part", and a click starts one there.
 private struct SplitTarget: ViewModifier {
     let index: Int
     let on: Bool
     let split: () -> Void
-    @State private var row = false
-    @State private var gutter = false
+    @State private var seam = false
 
     func body(content: Content) -> some View {
         if on {
             content
-                .overlay(alignment: .topLeading) {
-                    Color.clear
-                        .frame(width: 22)
-                        .contentShape(.rect)
-                        .onHover { gutter = $0 }
-                        .onTapGesture(perform: split)
-                        .help("Start a new part here")
-                        .accessibilityElement()
-                        .accessibilityLabel("Start a new part here")
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityAction(.default, split)
-                }
                 .overlay(alignment: .top) {
-                    if gutter {
-                        Rectangle().fill(Theme.muted).frame(height: 1).padding(.leading, 22).padding(.trailing, 12).offset(y: -0.5)
-                            .allowsHitTesting(false)
+                    HStack(spacing: 8) {
+                        Text("New part").role(.column).foregroundStyle(Theme.muted).fixedSize()
+                        Rectangle().fill(Theme.muted).frame(height: 1)
                     }
+                    .opacity(seam ? 1 : 0)
+                    // thin, so the rows keep nearly all of their height for picking
+                    .frame(height: 8)
+                    .contentShape(.rect)
+                    .padding(.leading, 22)
+                    .padding(.trailing, 12)
+                    .offset(y: -4)
+                    .onHover { seam = $0 }
+                    .onTapGesture(perform: split)
+                    .help("Start a new part here")
+                    .accessibilityElement()
+                    .accessibilityLabel("Start a new part here")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction(.default, split)
                 }
-                .overlay(alignment: .topLeading) {
-                    if row || gutter {
-                        // on the seam, centered where the speaker sits
-                        Ph.plus.icon(.bold, size: 10)
-                            .foregroundStyle(gutter ? Theme.text : Theme.faint)
-                            .frame(width: 14, height: 14)
-                            .offset(y: -7)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .onHover { row = $0 }
                 .onAppear {
                     #if SHOT
                     let defaults = UserDefaults.standard
-                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { (row, gutter) = (true, true) }
-                    if defaults.object(forKey: "shotSplitRow") != nil, defaults.integer(forKey: "shotSplitRow") == index { row = true }
+                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { seam = true }
                     #endif
                 }
         } else {
@@ -604,6 +845,7 @@ private struct PartHeading: View {
     let rename: (String) -> Void
     let move: (Int) -> Void
     let join: () -> Void
+    let drag: () -> NSItemProvider
     @Environment(Router.self) private var router
     @State private var editing = false
     @State private var hovering = false
@@ -624,6 +866,7 @@ private struct PartHeading: View {
                         .foregroundStyle(name == nil ? Theme.muted : Theme.text)
                         .lineLimit(1)
                         .onTapGesture(perform: start)
+                        .pointerStyle(.horizontalText)
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityAction(named: "Rename", start)
                 }
@@ -652,6 +895,7 @@ private struct PartHeading: View {
         .padding(.top, first ? 0 : 28)
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        .onDrag(drag)
         .sottovaMenu { entries }
         .onChange(of: naming, initial: true) { _, new in
             if new == index {

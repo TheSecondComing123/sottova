@@ -142,6 +142,21 @@ public struct Playlist: Identifiable, Equatable, Sendable {
         return parts.indices.map { order.firstIndex(of: $0)! }
     }
 
+    /// What a row is picked by: a song can be in here twice, so its place goes with it. No path holds a NUL.
+    public static func rowKey(_ index: Int, _ path: String) -> String {
+        "\(index)\u{0}\(path)"
+    }
+
+    /// The song a picked row plays; a song picked in Songs is its own key.
+    public static func path(ofRow key: String) -> String {
+        key.firstIndex(of: "\u{0}").map { String(key[key.index(after: $0)...]) } ?? key
+    }
+
+    /// The rows these keys pick, leaving out any whose song has moved since.
+    public func rows(_ keys: Set<String>) -> IndexSet {
+        IndexSet(paths.indices.filter { keys.contains(Self.rowKey($0, paths[$0])) })
+    }
+
     /// The songs part by part, in order; one part when there are no breaks.
     public var partPaths: [[String]] {
         var parts: [[String]] = [[]]

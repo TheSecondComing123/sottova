@@ -23,6 +23,10 @@ struct LibraryLine: View {
     var remove: ((Set<String>) -> Void)?
     var dragStarted: (() -> Void)?
     var part: (starts: Bool, flip: () -> Void)?
+    /// What it's picked by, when that isn't the song: a collection's row.
+    var key: String?
+    /// The page's own lines, after the song's in the right-click.
+    var more: (() -> [MenuEntry])?
     let play: () -> Void
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -33,14 +37,16 @@ struct LibraryLine: View {
     @State private var hovering = false
     @State private var naming = false
 
+    private var id: String { key ?? song.id }
+
     private var picked: [Song] {
-        guard router.selected.count > 1, router.selected.contains(song.id) else { return [song] }
+        guard router.selected.count > 1, router.selected.contains(id) else { return [song] }
         let ids = order.isEmpty ? Array(router.selected) : order.filter(router.selected.contains)
-        return ids.compactMap { controller.catalog.songsByID[$0] }
+        return ids.compactMap { controller.catalog.songsByID[Playlist.path(ofRow: $0)] }
     }
 
     var body: some View {
-        let isPicked = router.selected.contains(song.id)
+        let isPicked = router.selected.contains(id)
         HStack(spacing: 0) {
             if columns.art {
                 Artwork(key: song.artwork, size: 24, radius: 3, outlined: true)
@@ -81,13 +87,14 @@ struct LibraryLine: View {
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: play)
-        .simultaneousGesture(TapGesture().onEnded { router.select(song.id, in: order) })
+        .simultaneousGesture(TapGesture().onEnded { router.select(id, in: order) })
         .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityAction(named: "Play", play)
-        .modifier(RowDrag(several: isPicked && router.selected.count > 1, id: song.id, namespace: drag) { dragStarted?() })
+        .modifier(RowDrag(several: isPicked && router.selected.count > 1, id: id, path: song.id, namespace: drag) { dragStarted?() })
         .sottovaMenu {
             MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, naming: { naming = true },
                            controller: controller, router: router, navigate: navigate)
+                + (more?() ?? [])
         }
         .popover(isPresented: $naming, arrowEdge: .bottom) { NameCollection(songs: picked, open: $naming, name: MenuEntry.name(for: picked, controller: controller)) }
     }
@@ -108,6 +115,7 @@ struct LibraryLine: View {
 private struct RowDrag: ViewModifier {
     let several: Bool
     let id: String
+    let path: String
     let namespace: Namespace.ID?
     let started: () -> Void
 
@@ -117,7 +125,7 @@ private struct RowDrag: ViewModifier {
         } else {
             content.onDrag {
                 started()
-                return NSItemProvider(object: URL(filePath: id) as NSURL)
+                return NSItemProvider(object: URL(filePath: path) as NSURL)
             }
         }
     }
@@ -134,7 +142,7 @@ struct SongListRun: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.songDrag, drag)
-            .dragContainer(for: URL.self, itemID: \.path, in: drag) { (ids: [String]) in ids.map { URL(filePath: $0) } }
+            .dragContainer(for: URL.self, itemID: \.path, in: drag) { (ids: [String]) in ids.map { URL(filePath: Playlist.path(ofRow: $0)) } }
             .dragContainerSelection(order.filter(router.selected.contains), containerNamespace: drag)
             .onChange(of: order, initial: true) {
                 router.run = SongRun(route: router.route, order: order, play: play, remove: remove)

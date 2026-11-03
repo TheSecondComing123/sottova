@@ -22,6 +22,7 @@ struct ShotReady: ViewModifier {
             let height = defaults.object(forKey: "shotHeight") != nil ? defaults.double(forKey: "shotHeight") : 800
             window?.setContentSize(NSSize(width: width, height: height))
             let routes: [String: Route] = ["home": .home, "songs": .songs, "collections": .collections, "artists": .artists, "alarms": .alarms, "shelf": .shelf]
+            if let name = defaults.string(forKey: "shotNewCollection") { _ = controller.newPlaylist(named: name) }
             let asked = defaults.string(forKey: "shotRoute") ?? "home"
             if asked.hasPrefix("collection:") {
                 let name = asked.dropFirst("collection:".count)
@@ -37,7 +38,12 @@ struct ShotReady: ViewModifier {
             if let filter = defaults.string(forKey: "shotFilter") { router.songFilter = filter }
             if let picked = defaults.string(forKey: "shotPicked") {
                 let titles = picked.components(separatedBy: "|")
-                router.selected = Set(controller.catalog.songs.filter { titles.contains($0.title) }.map(\.id))
+                if case .playlist(let id) = router.route, let playlist = controller.playlists.first(where: { $0.id == id }) {
+                    router.selected = Set(playlist.paths.indices.filter { titles.contains(controller.catalog.songsByID[playlist.paths[$0]]?.title ?? "") }
+                        .map { Playlist.rowKey($0, playlist.paths[$0]) })
+                } else {
+                    router.selected = Set(controller.catalog.songs.filter { titles.contains($0.title) }.map(\.id))
+                }
             }
             if let name = defaults.string(forKey: "shotRow") {
                 router.alarm = controller.alarms.first { $0.name == name }.map { .edit($0) } ?? .new(nil)

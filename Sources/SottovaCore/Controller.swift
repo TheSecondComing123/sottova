@@ -1253,7 +1253,7 @@ public final class Controller {
 
     /// Adds at the end, or before `index`.
     public func add(_ songs: [Song], to id: String, at index: Int? = nil) {
-        update(id) { $0.insert(songs.map(\.id), at: index ?? $0.paths.count) }
+        editParts(id, "Add to collection") { update(id) { $0.insert(songs.map(\.id), at: index ?? $0.paths.count) } }
     }
 
     public func removeFromPlaylist(_ id: String, at offsets: IndexSet) {
@@ -1295,6 +1295,16 @@ public final class Controller {
             }
             if split != nil || joined != nil { alarmsChanged() }
         }
+    }
+
+    /// The rows gather where the first of them is and become a part of their own. Each step registers its own
+    /// undo, so one Undo walks them back in order.
+    public func newPart(from rows: IndexSet, in id: String) {
+        guard let first = rows.first else { return }
+        movePlaylistSongs(id, fromOffsets: rows, toOffset: first)
+        setBreak(true, at: first, in: id)
+        setBreak(true, at: first + rows.count, in: id)
+        undo?.setActionName("New part")
     }
 
     /// Calls the part starting at this song `name`; an empty name puts its number back.
@@ -1345,10 +1355,17 @@ public final class Controller {
     }
 
     public func movePlaylistSongs(_ id: String, fromOffsets offsets: IndexSet, toOffset destination: Int) {
-        update(id) { $0.move(offsets, to: destination) }
+        editParts(id, offsets.count == 1 ? "Move song" : "Move songs") { update(id) { $0.move(offsets, to: destination) } }
     }
 
     public func setGaps(_ gaps: Settings?, for id: String) {
+        guard let before = playlists.first(where: { $0.id == id }) else { return }
+        undo?.registerUndo(withTarget: self) { controller in
+            controller.setGaps(before.gaps, for: id)
+            // a line it couldn't read comes back as it was written
+            controller.update(id) { $0.unreadGaps = before.unreadGaps }
+        }
+        undo?.setActionName("Change silence")
         update(id) {
             $0.gaps = gaps
             $0.unreadGaps = nil
@@ -1376,6 +1393,7 @@ public final class Controller {
             problem = "couldn't rename \(playlists[index].name): \(error.localizedDescription)"
             return nil
         }
+        let old = playlists[index].name
         playlists[index].id = url.path
         playlists[index].name = name
         save(playlists[index])
@@ -1387,6 +1405,10 @@ public final class Controller {
         }
         playlists.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         loadPlaylistCovers()
+        if old != name {
+            undo?.registerUndo(withTarget: self) { $0.rename(url.path, to: old) }
+            undo?.setActionName("Rename \(old)")
+        }
         return url.path
     }
 
