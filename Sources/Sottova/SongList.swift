@@ -13,6 +13,8 @@ struct LineColumns {
     /// Left of Who: room for the speaker, inside the row's hover plate.
     var gutter: CGFloat = 32
     var markerX: CGFloat = 12
+    /// Right of the row, out in the margin: the plate reaches over a collection row's ×.
+    var reach: CGFloat = 0
 }
 
 /// The row behind Songs and a collection's parts: click picks, double-click plays, right-click and drag as anywhere.
@@ -83,7 +85,10 @@ struct LibraryLine: View {
         .padding(.trailing, 12)
         .frame(height: columns.height)
         .background(alignment: .leading) { LineMarker(song: song).offset(x: columns.markerX) }
-        .background(Theme.selection.opacity(hovering || (isPicked && active) ? 1 : isPicked ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
+        .background {
+            RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(hovering || (isPicked && active) ? 1 : isPicked ? 0.5 : 0))
+                .padding(.trailing, -columns.reach)
+        }
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: play)

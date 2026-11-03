@@ -26,6 +26,13 @@ struct CollectionColumns {
         min(CGFloat(ListLayout.listMax), (line.art ? 34 : 0) + (line.who ?? 0) + 512 + (line.performer ?? 0) + 40)
     }
 
+    /// One of yours: the plate reaches over the × past the time.
+    var edited: LineColumns {
+        var line = line
+        line.reach = 18
+        return line
+    }
+
     func performer(of song: Song) -> String? {
         whoShown ? song.performer : artistsDiffer ? song.artist : nil
     }
@@ -460,7 +467,7 @@ struct YourCollection: View {
         if let song = controller.catalog.songsByID[path] {
             let playable = playlist.paths[..<index].count { controller.catalog.songsByID[$0] != nil }
             let key = Playlist.rowKey(index, path)
-            LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song), remove: { _ in
+            LibraryLine(song: song, columns: columns.edited, performer: columns.performer(of: song), remove: { _ in
                 // the menu offers the pick only when this row is in it
                 remove(router.selected.count > 1 && router.selected.contains(key) ? playlist.rows(router.selected) : [index])
             }, dragStarted: {
@@ -775,6 +782,10 @@ private struct RowEdits: ViewModifier {
         let shown = row || cross
         content
             .onHover { row = $0 }
+            // on the ×, the pointer is past the row, whose own plate goes: this one, the same shape, stays
+            .background {
+                RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(cross ? 1 : 0)).padding(.trailing, -18)
+            }
             .overlay(alignment: .leading) {
                 // the speaker already marks the row that's playing
                 if shown && !sounding {
@@ -802,7 +813,7 @@ private struct RowEdits: ViewModifier {
             }
             .onAppear {
                 #if SHOT
-                if UserDefaults.standard.object(forKey: "shotEditRow") != nil, UserDefaults.standard.integer(forKey: "shotEditRow") == index { row = true }
+                if UserDefaults.standard.object(forKey: "shotEditRow") != nil, UserDefaults.standard.integer(forKey: "shotEditRow") == index { cross = true }
                 #endif
             }
     }
