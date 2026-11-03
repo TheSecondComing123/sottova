@@ -275,7 +275,7 @@ struct DayPlanTests {
         morning.shuffled = true
         morning.rotates = true
         let day = plan([morning, overworld, compline], date(2, 12))
-        #expect(text(day.sentence(morning, nextPart: "Strings")) == "Weekdays · shuffled · 25% · Strings next")
+        #expect(text(day.sentence(morning, nextPart: "Strings")) == "Weekdays · shuffled · 25% volume · Strings next")
         var here = overworld
         (here.shuffled, here.heedsCalendar) = (true, true)
         #expect(text(day.sentence(here, nextPart: nil)) == "At the Mac · shuffled · unless busy")
@@ -601,5 +601,30 @@ struct DayPlanTests {
             #expect(rail.marks[1].block.upperBound - rail.marks[1].block.lowerBound >= DayPlan.Rail.rowHeight - 4 + 2 * DayPlan.Rail.lineHeight)
             #expect(rail.height >= rail.marks.last!.block.upperBound)
         }
+    }
+
+    @Test func aPointOnTheRailIsATimeSnappedThroughBreaks() {
+        let day = ownersDay
+        let scale = 50.0
+        for minute in stride(from: day.firstHour * 60, through: day.lastHour * 60, by: 5) {
+            #expect(day.minute(at: day.y(minute: minute, hourHeight: scale), hourHeight: scale) == minute)
+        }
+        // 7:02 snaps to 7:00, 7:03 to 7:05; by fifteen, 7:08 to 7:15
+        #expect(day.minute(at: day.y(minute: 7 * 60 + 2, hourHeight: scale), hourHeight: scale) == 7 * 60)
+        #expect(day.minute(at: day.y(minute: 7 * 60 + 3, hourHeight: scale), hourHeight: scale) == 7 * 60 + 5)
+        #expect(day.minute(at: day.y(minute: 7 * 60 + 8, hourHeight: scale), hourHeight: scale, snap: 15) == 7 * 60 + 15)
+        // past the rail's ends, on to the day's
+        #expect(day.minute(at: -scale / 2, hourHeight: scale) == day.firstHour * 60 - 30)
+        #expect(day.minute(at: day.span * scale + scale, hourHeight: scale) == day.lastHour * 60 + 60)
+        #expect(day.minute(at: -99999, hourHeight: scale) == 0)
+        #expect(day.minute(at: 99999, hourHeight: scale) == 24 * 60)
+        #expect(day.timeText(minute: 16 * 60) == "4 PM")
+        #expect(day.timeText(minute: 16 * 60 + 15) == "4:15 PM")
+        #expect(day.timeText(minute: 12 * 60) == "noon")
+    }
+
+    @Test func theVolumeWordSaysWhatItIs() {
+        let pieces = plan([lauds], date(2, 12)).sentence(lauds, nextPart: nil)
+        #expect(pieces.contains(DayPlan.Piece("25% volume", .volume)))
     }
 }

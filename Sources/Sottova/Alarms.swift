@@ -5,11 +5,14 @@ import SottovaCore
 enum AlarmRequest: Identifiable {
     /// A new alarm, for this album or playlist, or for one picked in the sheet.
     case new(CoverTarget?)
+    /// A new one at this minute of the day, from a click on the rail, its collection picked in the sheet.
+    case newAt(Int)
     case edit(Alarm)
 
     var id: String {
         switch self {
         case .new(let target): "new \(String(describing: target))"
+        case .newAt(let minute): "new at \(minute)"
         case .edit(let alarm): alarm.id.uuidString
         }
     }
@@ -55,7 +58,8 @@ struct AlarmSheet: View {
     init(request: AlarmRequest) {
         self.request = request
         switch request {
-        case .new(let target):
+        case .new, .newAt:
+            let target: CoverTarget? = if case .new(let target) = request { target } else { nil }
             switch target {
             case .album(let id), .playlist(let id): _source = State(initialValue: id)
             case nil: _source = State(initialValue: nil)
@@ -71,6 +75,10 @@ struct AlarmSheet: View {
             _stops = State(initialValue: false)
             // quiet by default: whatever the speaker is turned up to, this is what wakes you
             _volume = State(initialValue: 0.15)
+            if case .newAt(let minute) = request {
+                let start = Calendar.current.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: .now)!
+                (_time, _until) = (State(initialValue: start), State(initialValue: start + 3600))
+            }
         case .edit(let alarm):
             _source = State(initialValue: alarm.source)
             _kind = State(initialValue: alarm.whileHere ? .whileHere : .byItself)
@@ -97,7 +105,15 @@ struct AlarmSheet: View {
     private var span: Int { RowTime.span(from: time, until: until) }
 
     private var picking: Bool {
-        if case .new(nil) = request { true } else { false }
+        switch request {
+        case .new(nil), .newAt: true
+        default: false
+        }
+    }
+
+    /// Its time came from where it was clicked on the rail, so the other kind's hours don't replace it.
+    private var placed: Bool {
+        if case .newAt = request { true } else { false }
     }
 
     private var editing: Bool {
@@ -178,6 +194,14 @@ struct AlarmSheet: View {
                     .foregroundStyle(Theme.muted)
             }
             HStack(spacing: 12) {
+                if case .edit(let old) = request {
+                    Button("Delete", role: .destructive) {
+                        controller.removeAlarm(old.id)
+                        dismiss()
+                    }
+                    .buttonStyle(SecondaryStyle())
+                    .help("⌘Z brings it back")
+                }
                 if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
                         .buttonStyle(SecondaryStyle())
@@ -204,8 +228,8 @@ struct AlarmSheet: View {
             guard !editing else { return }
             let (was, next) = (Self.defaults(old), Self.defaults(new))
             let at = { (hour: Int) in Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: .now)! }
-            if time == at(was.start) { time = at(next.start) }
-            if until == at(was.end) { until = at(next.end) }
+            if !placed, time == at(was.start) { time = at(next.start) }
+            if !placed, until == at(was.end) { until = at(next.end) }
             if repeats == was.repeats { repeats = next.repeats }
             if shuffled == was.shuffled { shuffled = next.shuffled }
             if volume == was.volume { volume = next.volume }

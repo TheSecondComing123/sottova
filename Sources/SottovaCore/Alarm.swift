@@ -104,6 +104,18 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         daysOff = other.daysOff
     }
 
+    /// Starts at `minute` of the day, no later than 11:55 PM. Its length stays, so its end moves with it.
+    public mutating func move(to minute: Int) {
+        let minute = min(max(minute, 0), 23 * 60 + 55)
+        (hour, self.minute) = (minute / 60, minute % 60)
+    }
+
+    /// How long it plays to end at `minute` of the day it starts; nil for an end that isn't after its start.
+    public func length(endingAt end: Int) -> Int? {
+        let start = hour * 60 + minute
+        return end > start ? end - start : nil
+    }
+
     /// "2026-11-03": the key `daysOff` keeps a day under.
     public static func day(_ date: Date, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
