@@ -27,6 +27,12 @@ struct Toast: View {
             }
         }
         .animation(Theme.curve(0.2), value: controller.notice?.id)
+        // the old toast's hover would hold the new one up for good
+        .onChange(of: controller.notice?.id) { hovering = false }
+        // so one doesn't wait to show when the window opens again
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
+            if (note.object as? NSWindow)?.frameAutosaveName == "main" { controller.notice = nil }
+        }
         .onAppear { top = undoManager?.undoActionName }
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidCloseUndoGroup)) { _ in top = undoManager?.undoActionName }
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in top = undoManager?.undoActionName }
