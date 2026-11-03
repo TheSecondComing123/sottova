@@ -13,6 +13,8 @@ struct DayPage: View {
     @State private var moving: Moving?
     /// Esc while dragging a row.
     @State private var escape: Any?
+    /// Goes false when a drag ends any way, letting go or cut off, which `onEnded` doesn't hear about.
+    @GestureState private var dragging = false
     @State private var railSize: CGSize = .zero
     @State private var played: [Controller.Played] = []
     @State private var allPlayed = false
@@ -63,6 +65,14 @@ struct DayPage: View {
             }
         }
         .onAppear { wake.refresh() }
+        .onChange(of: dragging) { if !dragging { endMove() } }
+        .onDisappear(perform: endMove)
+    }
+
+    private func endMove() {
+        escape.map(NSEvent.removeMonitor)
+        escape = nil
+        moving = nil
     }
 
     private func rest(_ plan: DayPlan) -> [Alarm] {
@@ -236,6 +246,7 @@ struct DayPage: View {
         let alarm = mark.alarm
         let start = alarm.hour * 60 + alarm.minute
         return DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.railSpace))
+            .updating($dragging) { _, dragging, _ in dragging = true }
             .onChanged { drag in
                 if moving == nil {
                     guard escape == nil else { return }
@@ -251,10 +262,8 @@ struct DayPage: View {
                 moving = Moving(id: alarm.id, end: end, minute: end ? max(minute, start + 5) : minute)
             }
             .onEnded { drag in
-                escape.map(NSEvent.removeMonitor)
-                escape = nil
                 guard let moved = moving, moved.id == alarm.id else { return }
-                moving = nil
+                endMove()
                 guard CGRect(origin: .zero, size: railSize).contains(drag.location) else { return }
                 if end {
                     guard let length = alarm.length(endingAt: moved.minute), length != alarm.minutes else { return }
@@ -391,7 +400,7 @@ struct DayPage: View {
     }
 }
 
-private typealias RowDrag = _EndedGesture<_ChangedGesture<DragGesture>>
+private typealias RowDrag = _EndedGesture<_ChangedGesture<GestureStateGesture<DragGesture, Bool>>>
 
 /// A row being dragged, by its block or its bottom edge.
 private struct Moving: Equatable {
