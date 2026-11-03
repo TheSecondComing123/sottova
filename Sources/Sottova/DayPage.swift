@@ -421,7 +421,7 @@ extension Controller {
 }
 
 extension View {
-    /// Days off… on this row: a popover off its trailing edge, like its time's.
+    /// Days off… on this row: a popover from its words, below them or above, whichever the window has room for.
     func daysOffPopover(_ alarm: Alarm) -> some View {
         modifier(DaysOffPopover(alarm: alarm))
     }
@@ -430,104 +430,193 @@ extension View {
 private struct DaysOffPopover: ViewModifier {
     let alarm: Alarm
     @Environment(Router.self) private var router
+    @Environment(\.colorScheme) private var scheme
+    @State private var bottom: CGFloat = 0
 
     func body(content: Content) -> some View {
-        content.popover(isPresented: Binding(get: { router.daysOff == alarm.id }, set: { if !$0, router.daysOff == alarm.id { router.daysOff = nil } }),
-                        arrowEdge: .trailing) {
-            DaysOffField(alarm: alarm, open: Binding(get: { router.daysOff == alarm.id }, set: { if !$0 { router.daysOff = nil } }))
-        }
+        let window = NSApp.windows.first { $0.isVisible && $0.isMainWindow }?.contentView?.bounds.height ?? .infinity
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { bottom = $0 }
+            .popover(isPresented: Binding(get: { router.daysOff == alarm.id }, set: { if !$0, router.daysOff == alarm.id { router.daysOff = nil } }),
+                     arrowEdge: window - bottom > DaysOffField.height + 24 ? .bottom : .top) {
+                // glass lets a painting under it wash out the faint days; dark's popover color is a row card's, so
+                // it takes the page's there
+                DaysOffField(id: alarm.id).presentationBackground(scheme == .dark ? Theme.background : Theme.popover)
+            }
     }
 }
 
-/// A run of days off, from one day to another, read back as it'll show on the row. Like the time popover, Return and a
-/// click away apply, Esc doesn't.
+/// A month to point at days off in. A click takes a day off or puts it back, ⇧-click does the run from the last day
+/// clicked, a drag paints a run. Each change applies on release and undoes as one.
 private struct DaysOffField: View {
-    let alarm: Alarm
-    @Binding var open: Bool
+    let id: Alarm.ID
     @Environment(Controller.self) private var controller
-    @State private var from: Date
-    @State private var to: Date
-    @State private var keys: Any?
-    @State private var cancelled = false
-    private let today: Date
+    @State private var shown: Date?
+    /// While the pointer is down: the days off it would leave.
+    @State private var draft: Set<String>?
+    @State private var stroke: (from: Date, off: Bool)?
+    /// The last day clicked and which way it went, for ⇧-click.
+    @State private var last: (date: Date, off: Bool)?
+    @State private var hovered: Date?
 
-    init(alarm: Alarm, open: Binding<Bool>) {
-        (self.alarm, _open) = (alarm, open)
-        let calendar = Calendar.current
-        let now: Date = {
-            #if SHOT
-            ShotEnv.now ?? .now
-            #else
-            .now
-            #endif
-        }()
-        today = calendar.startOfDay(for: now)
-        // the next day it would play
-        let start = calendar.startOfDay(for: alarm.window(containing: now)?.start ?? alarm.next(after: now) ?? now)
-        _from = State(initialValue: start)
-        _to = State(initialValue: start)
-    }
+    private static let cell = CGSize(width: 30, height: 26)
+    static let height: CGFloat = 12 + 22 + 8 + 16 + 4 + cell.height * 6 + 10 + 18 + 12
 
-    private var days: [String] {
-        let calendar = Calendar.current
-        var (day, days) = (calendar.startOfDay(for: from), [String]())
-        while day <= to, days.count < 366 {
-            days.append(Alarm.day(day))
-            day = calendar.date(byAdding: .day, value: 1, to: day) ?? to + 1
+    private var plan: DayPlan { DayPlan(alarms: [], now: controller.wallNow) }
+    private var alarm: Alarm? { controller.alarms.first { $0.id == id } }
+    private var drawn: Alarm? {
+        alarm.map { alarm in
+            var drawn = alarm
+            drawn.daysOff = draft ?? alarm.daysOff
+            return drawn
         }
-        return days
-    }
-
-    private var readBack: String {
-        var picked = alarm
-        picked.daysOff = Set(days)
-        return DayPlan(alarms: [], now: today).offRuns(picked).first?.text ?? ""
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 8) {
-                GridRow {
-                    Text("From").role(.body).foregroundStyle(Theme.text)
-                    day($from, label: "From", from: today)
+        if let drawn {
+            let month = plan.month(drawn, containing: shown ?? opening(drawn))
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 2) {
+                    Text(month.title).role(.body).fontWeight(.medium).foregroundStyle(Theme.text)
+                    Spacer(minLength: 8)
+                    turn(month, by: -1)
+                    turn(month, by: 1)
                 }
-                GridRow {
-                    Text("To").role(.body).foregroundStyle(Theme.text)
-                    day($to, label: "To", from: from)
+                .frame(height: 22)
+                .padding(.leading, 7)
+                HStack(spacing: 0) {
+                    ForEach(Array(plan.weekdayLetters.enumerated()), id: \.offset) { _, letter in
+                        Text(letter).role(.small).foregroundStyle(Theme.faint).frame(width: Self.cell.width)
+                    }
                 }
+                .frame(height: 16)
+                .padding(.top, 8)
+                .accessibilityHidden(true)
+                grid(month).padding(.top, 4)
+                ViewThatFits(in: .horizontal) {
+                    ForEach([Int.max, 2, 1], id: \.self) { runs in
+                        Text(plan.offLine(drawn, runs: runs)).lineLimit(1)
+                    }
+                }
+                    .role(.body)
+                    .foregroundStyle(Theme.muted)
+                    .help(plan.offLine(drawn))
+                    .padding(.leading, 7)
+                    .padding(.top, 10)
             }
-            Text(readBack).role(.body).foregroundStyle(Theme.muted)
-        }
-        .padding(12)
-        .onChange(of: from) { if to < from { to = from } }
-        .onAppear {
-            keys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                switch event.keyCode {
-                case 36, 76: open = false
-                case 53: (cancelled, open) = (true, false)
-                default: return event
-                }
-                return nil
-            }
-        }
-        .onDisappear {
-            keys.map(NSEvent.removeMonitor)
-            if !cancelled { apply() }
+            .padding(12)
+            .frame(width: Self.cell.width * 7 + 24, height: Self.height, alignment: .top)
         }
     }
 
-    private func day(_ date: Binding<Date>, label: String, from first: Date) -> some View {
-        DatePicker(label, selection: date, in: first..., displayedComponents: .date)
-            .datePickerStyle(.stepperField)
-            .labelsHidden()
-            .fixedSize()
+    /// The month of the next day it plays, which is the one "Off tomorrow" names.
+    private func opening(_ alarm: Alarm) -> Date {
+        let calendar = Calendar.current
+        let next = alarm.withoutDaysOff.next(after: controller.wallNow) ?? controller.wallNow
+        return calendar.isDate(next, equalTo: controller.wallNow, toGranularity: .month) ? controller.wallNow : next
     }
 
-    private func apply() {
-        NSDatePicker.commitTyping()
-        let days = days
-        guard !days.isEmpty, !Set(days).isSubset(of: alarm.daysOff) else { return }
-        controller.changeAlarm(alarm.id) { $0.daysOff.formUnion(days) }
+    private func turn(_ month: DayPlan.Month, by step: Int) -> some View {
+        let calendar = Calendar.current
+        let earliest = !calendar.isDate(month.first, equalTo: controller.wallNow, toGranularity: .month) || step > 0
+        return Button { shown = calendar.date(byAdding: .month, value: step, to: month.first) } label: {
+            (step < 0 ? Ph.caretLeft : Ph.caretRight).icon(.bold, size: 11)
+                .foregroundStyle(Theme.muted)
+                .frame(width: 22, height: 22)
+                .contentShape(.rect)
+                .hoverable(radius: 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(!earliest)
+        .opacity(earliest ? 1 : 0.35)
+        .help(step < 0 ? "previous month" : "next month")
+        .accessibilityLabel(step < 0 ? "previous month" : "next month")
+    }
+
+    private func grid(_ month: DayPlan.Month) -> some View {
+        let places: [DayPlan.Month.Day?] = Array(repeating: nil, count: month.lead) + month.days
+        return VStack(spacing: 0) {
+            ForEach(0..<6, id: \.self) { week in
+                HStack(spacing: 0) {
+                    ForEach(0..<7, id: \.self) { column in
+                        let index = week * 7 + column
+                        if index < places.count, let day = places[index] {
+                            cell(day)
+                        } else {
+                            Color.clear.frame(width: Self.cell.width, height: Self.cell.height)
+                        }
+                    }
+                }
+            }
+        }
+        .contentShape(.rect)
+        .onContinuousHover { phase in
+            if case .active(let point) = phase { hovered = day(at: point, in: places)?.date } else { hovered = nil }
+        }
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { drag in press(day(at: drag.location, in: places)) }
+            .onEnded { _ in release() })
+    }
+
+    private func cell(_ day: DayPlan.Month.Day) -> some View {
+        let off = day.off && !day.past
+        let plate = RoundedRectangle(cornerRadius: 4).inset(by: 1)
+        return Text("\(day.number)")
+            .role(.body)
+            .monospacedDigit()
+            .foregroundStyle(off ? Theme.primary : day.open ? Theme.text : Theme.faint)
+            // so a day gone doesn't pass for one to click
+            .opacity(day.past ? 0.6 : 1)
+            .frame(width: Self.cell.width, height: Self.cell.height)
+            .background {
+                if off {
+                    plate.fill(Theme.primary.opacity(day.open && hovered == day.date ? 0.28 : 0.16))
+                } else if day.open, hovered == day.date {
+                    plate.fill(Theme.selection)
+                }
+            }
+            .overlay { if day.today { plate.strokeBorder(off ? Theme.primary : Theme.muted, lineWidth: 1) } }
+            .accessibilityElement()
+            .accessibilityLabel(day.date.formatted(.dateTime.weekday(.wide).month(.wide).day()) + (day.past ? ", past" : day.plays ? "" : ", doesn't play"))
+            .accessibilityAddTraits(day.open ? .isButton : [])
+            .accessibilityAddTraits(off ? .isSelected : [])
+            .accessibilityAction {
+                guard day.open, let alarm else { return }
+                apply(plan.marking(alarm, from: day.date, to: day.date, off: !day.off))
+                last = (day.date, !day.off)
+            }
+    }
+
+    private func day(at point: CGPoint, in places: [DayPlan.Month.Day?]) -> DayPlan.Month.Day? {
+        guard point.x >= 0, point.y >= 0 else { return nil }
+        let (column, week) = (Int(point.x / Self.cell.width), Int(point.y / Self.cell.height))
+        guard column < 7, week < 6, week * 7 + column < places.count else { return nil }
+        return places[week * 7 + column]
+    }
+
+    private func press(_ day: DayPlan.Month.Day?) {
+        guard let alarm, let day else { return }
+        if stroke == nil {
+            guard day.open else { return }
+            if NSEvent.modifierFlags.contains(.shift), let last {
+                stroke = (last.date, last.off)
+            } else {
+                stroke = (day.date, !day.off)
+            }
+        }
+        guard let stroke else { return }
+        draft = plan.marking(alarm, from: stroke.from, to: day.date, off: stroke.off)
+        if day.open { last = (day.date, stroke.off) }
+    }
+
+    private func release() {
+        if let draft { apply(draft) }
+        (draft, stroke) = (nil, nil)
+    }
+
+    private func apply(_ daysOff: Set<String>) {
+        guard let alarm, daysOff != alarm.daysOff else { return }
+        controller.changeAlarm(id, action: "Days Off") { $0.daysOff = daysOff }
         SystemWake.shared.renew(for: controller.alarms)
     }
 }
@@ -571,7 +660,6 @@ private struct DayRow: View {
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
         .sottovaMenu { entries }
-        .daysOffPopover(alarm)
     }
 
     private var tick: some View {
@@ -599,6 +687,7 @@ private struct DayRow: View {
             }
             .foregroundStyle(off ? Theme.faint : Theme.muted)
         }
+        .daysOffPopover(alarm)
     }
 
     private var dots: some View {
@@ -651,6 +740,7 @@ private struct OtherLine: View {
                 Spacer(minLength: 0)
             }
             .frame(height: 24)
+            .daysOffPopover(alarm)
             // a warning stays whole, under the line
             if warning {
                 WordFlow { ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) } }
@@ -660,7 +750,6 @@ private struct OtherLine: View {
         }
         .contentShape(.rect)
         .sottovaMenu { RowActions(alarm: alarm, controller: controller, router: router).entries }
-        .daysOffPopover(alarm)
     }
 
     private func words(_ pieces: [DayPlan.Piece]) -> some View {

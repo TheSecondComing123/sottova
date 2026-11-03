@@ -328,6 +328,51 @@ struct DayPlanTests {
         #expect(plan([], date(2, 16)).offChoice(off(overworld, ["2026-11-02"]))?.title == "Off today")
     }
 
+    @Test func theCalendarLaysOutTheMonthAsTheRowHasIt() {
+        let monday = plan([], date(2, 12))
+        let november = monday.month(off(lauds, ["2026-11-04"]), containing: date(17, 9))
+        #expect(november.title == "November 2026")
+        // the 1st is a Sunday, under S
+        #expect(november.lead == 0)
+        #expect(monday.weekdayLetters == ["S", "M", "T", "W", "T", "F", "S"])
+        #expect(november.days.count == 30)
+        let day = { (number: Int) in november.days[number - 1] }
+        #expect(day(1).past && !day(1).open)
+        #expect(day(2).today && day(2).open)
+        #expect(day(4).off && day(4).open)
+        // a Saturday it doesn't play
+        #expect(!day(7).plays && !day(7).open)
+        #expect(monday.month(lauds, containing: date(2, 12) + 40 * 86400).lead == 2)
+        #expect(monday.month(lauds, containing: date(2, 12) + 40 * 86400).title == "December 2026")
+    }
+
+    @Test func aRunTakesOffTheDaysItPlaysAndReadsAsOne() {
+        let monday = plan([], date(2, 12))
+        let at = { (month: Int, day: Int) in self.calendar.date(from: DateComponents(year: month == 1 ? 2027 : 2026, month: month, day: day))! }
+        #expect(monday.offLine(lauds) == "No days off")
+        var row = lauds
+        // either way round
+        row.daysOff = monday.marking(row, from: at(1, 4), to: at(12, 21), off: true)
+        #expect(!row.daysOff.contains("2026-12-26"))
+        #expect(row.daysOff.count == 11)
+        #expect(monday.offLine(row) == "Off Dec 21 to Jan 4")
+        #expect(monday.offRuns(row).count == 1)
+        row.daysOff = monday.marking(row, from: at(12, 28), to: at(12, 31), off: false)
+        #expect(monday.offLine(row) == "Off Dec 21 to Dec 25, Jan 1 to Jan 4")
+        // one day, back and forth
+        row.daysOff = monday.marking(row, from: at(11, 3), to: at(11, 3), off: true)
+        #expect(monday.offLine(row) == "Off tomorrow, Dec 21 to Dec 25, Jan 1 to Jan 4")
+        #expect(monday.offLine(row, runs: 2) == "Off tomorrow, Dec 21 to Dec 25, and 1 more")
+        row.daysOff = monday.marking(row, from: at(11, 3), to: at(11, 3), off: false)
+        #expect(monday.offLine(row).hasPrefix("Off Dec 21"))
+        // days gone stay; putting back clears days it doesn't play too
+        row.daysOff = ["2026-11-01", "2026-11-07"]
+        row.daysOff = monday.marking(row, from: at(10, 30), to: at(11, 8), off: false)
+        #expect(row.daysOff == ["2026-11-01"])
+        row.daysOff = monday.marking(row, from: at(10, 30), to: at(11, 3), off: true)
+        #expect(row.daysOff == ["2026-11-01", "2026-11-02", "2026-11-03"])
+    }
+
     @Test func aRowOffTodayDrawsLikeOneTurnedOffAndNobodyWaitsForIt() {
         var chopin = Alarm(source: "c", name: "Perfect Chopin", hour: 17, minute: 0, weekdays: Set(1...7))
         (chopin.whileHere, chopin.minutes) = (true, 60)

@@ -431,7 +431,8 @@ public final class Controller {
 
     /// The one way to edit an alarm, on the row as it is now: a copy held since before it last went off would bring
     /// back a time already played. Undo brings back what you set, never when it last went off.
-    public func changeAlarm(_ id: Alarm.ID, _ change: (inout Alarm) -> Void) {
+    /// `action` names it in Edit › Undo; "Change Lauds" without one.
+    public func changeAlarm(_ id: Alarm.ID, action: String? = nil, _ change: (inout Alarm) -> Void) {
         guard let i = alarms.firstIndex(where: { $0.id == id }) else { return }
         let old = alarms[i]
         change(&alarms[i])
@@ -442,7 +443,7 @@ public final class Controller {
         if alarms[i].weekdays.isEmpty, !alarms[i].whileHere { alarms[i].lastFired = nil }
         alarmsChanged()
         undo?.registerUndo(withTarget: self) { $0.changeAlarm(id) { $0.setUserFields(from: old) } }
-        undo?.setActionName("Change \(old.name)")
+        undo?.setActionName(action ?? "Change \(old.name)")
     }
 
     public func removeAlarm(_ id: Alarm.ID) {

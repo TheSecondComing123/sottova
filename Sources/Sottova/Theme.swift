@@ -73,7 +73,7 @@ enum Theme {
 /// package ships an asset catalog, which `swift build` can't compile. Only the name-weight pairs in use are vendored.
 enum Ph: String {
     case clock, alarm, check, x, play, pause
-    case magnifyingGlass = "magnifying-glass", speakerHigh = "speaker-high", caretDown = "caret-down"
+    case magnifyingGlass = "magnifying-glass", speakerHigh = "speaker-high", caretDown = "caret-down", caretLeft = "caret-left", caretRight = "caret-right"
     case folder, plus, minus, palette, shuffle, dotsThree = "dots-three"
     case sunHorizon = "sun-horizon", musicNotes = "music-notes", trayArrowDown = "tray-arrow-down", caretUpDown = "caret-up-down"
     case barPause = "bar-pause", barPlay = "bar-play", barSkip = "bar-skip", barMoon = "bar-moon", barQueue = "bar-queue"

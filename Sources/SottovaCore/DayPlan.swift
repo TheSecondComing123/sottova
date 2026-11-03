@@ -203,10 +203,20 @@ public struct DayPlan: Sendable {
     }
 
     /// Each run of days off not yet over, with its days and what it says: "Off tomorrow", "Off Nov 27", "Off Dec 21 to
-    /// Jan 4", or "Off till Jan 5" for one under way.
+    /// Jan 4", or "Off till Jan 5" for one under way. Days it doesn't play don't break a run: a weekday row off for two
+    /// weeks is one run.
     public func offRuns(_ alarm: Alarm) -> [(days: [String], text: String)] {
         let today = calendar.startOfDay(for: now)
-        return alarm.offRuns(calendar: calendar).compactMap { run in
+        var runs: [[Date]] = []
+        for run in alarm.offRuns(calendar: calendar) {
+            if let last = runs.last?.last, let first = run.first, !alarm.weekdays.isEmpty,
+               !days(from: last, to: first).dropFirst().dropLast().contains(where: { plays(alarm, $0) }) {
+                runs[runs.count - 1] += run
+            } else {
+                runs.append(run)
+            }
+        }
+        return runs.compactMap { run in
             guard let first = run.first, let last = run.last, last >= today else { return nil }
             let text: String
             if first <= today {
@@ -219,6 +229,90 @@ public struct DayPlan: Sendable {
             }
             return (run.map { Alarm.day($0, calendar: calendar) }, text)
         }
+    }
+
+    /// The first `runs` runs on one line, for under the calendar: "Off Dec 21 to Jan 4", "Off tomorrow, Nov 20 to
+    /// Nov 21", "Off today, Nov 19 to Nov 22, and 2 more".
+    public func offLine(_ alarm: Alarm, runs count: Int = .max) -> String {
+        let runs = offRuns(alarm).map(\.text)
+        guard let first = runs.first else { return "No days off" }
+        let shown = [first] + runs.dropFirst().prefix(max(count - 1, 0)).map { String($0.dropFirst(4)) }
+        let more = runs.count - shown.count
+        return (shown + (more > 0 ? ["and \(more) more"] : [])).joined(separator: ", ")
+    }
+
+    /// A month to point at days off in.
+    public struct Month: Sendable {
+        /// "November 2026"
+        public let title: String
+        /// Its 1st.
+        public let first: Date
+        /// Blank places before the 1st, so each day falls under its weekday.
+        public let lead: Int
+        public let days: [Day]
+
+        public struct Day: Identifiable, Sendable {
+            public let date: Date
+            public let number: Int
+            /// One of its weekdays.
+            public let plays: Bool
+            public let past: Bool
+            public let today: Bool
+            public let off: Bool
+            /// A click takes it off or back.
+            public var open: Bool { plays && !past }
+            public var id: Date { date }
+        }
+    }
+
+    /// "S", "M", … from the calendar's first weekday, over the month's columns.
+    public var weekdayLetters: [String] {
+        let letters = calendar.veryShortStandaloneWeekdaySymbols
+        let first = calendar.firstWeekday - 1
+        return Array(letters[first...] + letters[..<first])
+    }
+
+    /// The month holding `date`, its days as `alarm` has them.
+    public func month(_ alarm: Alarm, containing date: Date) -> Month {
+        let first = calendar.dateInterval(of: .month, for: date)?.start ?? calendar.startOfDay(for: date)
+        let today = calendar.startOfDay(for: now)
+        let count = calendar.range(of: .day, in: .month, for: first)?.count ?? 30
+        let days = (0..<count).compactMap { calendar.date(byAdding: .day, value: $0, to: first) }.map { day in
+            Month.Day(date: day, number: calendar.component(.day, from: day), plays: plays(alarm, day), past: day < today,
+                      today: day == today, off: alarm.daysOff.contains(Alarm.day(day, calendar: calendar)))
+        }
+        let lead = (calendar.component(.weekday, from: first) - calendar.firstWeekday + 7) % 7
+        return Month(title: first.formatted(style.month(.wide).year()), first: first, lead: lead, days: days)
+    }
+
+    /// Its days off with every day from one day to another, either way round, taken off or put back. Taking off only
+    /// takes days it plays; days gone stay as they are.
+    public func marking(_ alarm: Alarm, from: Date, to: Date, off: Bool) -> Set<String> {
+        let today = calendar.startOfDay(for: now)
+        var daysOff = alarm.daysOff
+        for day in days(from: min(from, to), to: max(from, to)) where day >= today {
+            let key = Alarm.day(day, calendar: calendar)
+            if !off {
+                daysOff.remove(key)
+            } else if plays(alarm, day) {
+                daysOff.insert(key)
+            }
+        }
+        return daysOff
+    }
+
+    private func plays(_ alarm: Alarm, _ day: Date) -> Bool {
+        alarm.weekdays.contains(calendar.component(.weekday, from: day))
+    }
+
+    /// Each midnight from one day's to another's, both in.
+    private func days(from: Date, to: Date) -> [Date] {
+        var (day, days) = (calendar.startOfDay(for: from), [Date]())
+        while day <= to, days.count < 800 {
+            days.append(day)
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? .distantFuture
+        }
+        return days
     }
 
     /// "today", "tomorrow", "Friday" within the week, then "Nov 27".
