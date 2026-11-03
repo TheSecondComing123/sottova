@@ -21,13 +21,6 @@ struct CollectionColumns {
                            art: art, height: art ? 32 : 28, gutter: 22, markerX: 0)
     }
 
-    /// One of yours: the plate reaches over the × past the time.
-    var edited: LineColumns {
-        var line = line
-        line.reach = 18
-        return line
-    }
-
     func performer(of song: Song) -> String? {
         whoShown ? song.performer : artistsDiffer ? song.artist : nil
     }
@@ -453,7 +446,7 @@ struct YourCollection: View {
         if let song = controller.catalog.songsByID[path] {
             let playable = playlist.paths[..<index].count { controller.catalog.songsByID[$0] != nil }
             let key = Playlist.rowKey(index, path)
-            LibraryLine(song: song, columns: columns.edited, performer: columns.performer(of: song), remove: { _ in
+            LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song), remove: { _ in
                 // the menu offers the pick only when this row is in it
                 remove(router.selected.count > 1 && router.selected.contains(key) ? playlist.rows(router.selected) : [index])
             }, dragStarted: {
@@ -786,7 +779,7 @@ private struct RowEdits: ViewModifier {
             .onHover { row = $0 }
             // on the ×, the pointer is past the row, whose own plate goes: this one, the same shape, stays
             .background {
-                RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(cross ? 1 : 0)).padding(.trailing, -18)
+                RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(cross ? 1 : 0))
             }
             .overlay(alignment: .leading) {
                 // the speaker already marks the row that's playing
@@ -810,8 +803,8 @@ private struct RowEdits: ViewModifier {
                 .onHover { cross = $0 }
                 .opacity(shown ? 1 : 0)
                 .allowsHitTesting(shown)
-                // just past the time, in the list's right margin
-                .offset(x: 14)
+                // in the list's right margin, past the plate, which ends in the gap after the time
+                .offset(x: 20)
             }
             .onAppear {
                 #if SHOT

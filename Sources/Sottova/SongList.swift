@@ -13,8 +13,6 @@ struct LineColumns {
     /// Left of Who: room for the speaker, inside the row's hover plate.
     var gutter: CGFloat = 32
     var markerX: CGFloat = 12
-    /// Right of the row, out in the margin: the plate reaches over a collection row's ×.
-    var reach: CGFloat = 0
 }
 
 /// The row behind Songs and a collection's parts: click picks, double-click plays, right-click and drag as anywhere.
@@ -91,11 +89,10 @@ struct LibraryLine: View {
         .background {
             RoundedRectangle(cornerRadius: Radius.small)
                 .fill(isPicked ? Theme.picked.opacity(active ? 1 : 0.7) : Theme.hover.opacity(hovering ? 1 : 0))
-                .padding(.trailing, -columns.reach)
         }
         .overlay {
             if menuOpen {
-                RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1.5).padding(.trailing, -columns.reach)
+                RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1.5)
             }
         }
         .contentShape(.rect)
