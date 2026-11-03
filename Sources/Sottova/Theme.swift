@@ -76,6 +76,7 @@ enum Ph: String {
     case magnifyingGlass = "magnifying-glass", speakerHigh = "speaker-high", caretDown = "caret-down", caretLeft = "caret-left", caretRight = "caret-right"
     case folder, plus, minus, palette, shuffle, dotsThree = "dots-three", dotsSixVertical = "dots-six-vertical"
     case sunHorizon = "sun-horizon", musicNotes = "music-notes", trayArrowDown = "tray-arrow-down", caretUpDown = "caret-up-down"
+    case stack, microphoneStage = "microphone-stage"
     case barPause = "bar-pause", barPlay = "bar-play", barSkip = "bar-skip", barMoon = "bar-moon", barQueue = "bar-queue"
 
     enum IconWeight: String {

@@ -15,10 +15,17 @@ struct Sidebar: View {
                 nav(.alarms, "Your day", .sunHorizon)
                 nav(.songs, "Songs", .musicNotes)
                 nav(.shelf, "Free music", .trayArrowDown)
+                nav(.collections, "Collections", .stack) {
+                    Button(action: newCollection) {
+                        Ph.plus.icon(.line, size: 12).foregroundStyle(Theme.faint).frame(width: 20, height: 20).contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .help("new collection")
+                    .accessibilityLabel("new collection")
+                }
+                nav(.artists, "Artists", .microphoneStage)
             }
-            head
-                .padding(.top, 20)
-                .padding(.bottom, 4)
+            .padding(.bottom, 12)
             ScrollView {
                 // "till 7" turns into the next thing by itself
                 TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -51,7 +58,7 @@ struct Sidebar: View {
         return (controller.playlists.map(\.id) + controller.alarms.map(\.source).filter(albums.contains)).filter { seen.insert($0).inserted }
     }
 
-    private func nav(_ route: Route, _ label: String, _ icon: Ph) -> some View {
+    private func nav(_ route: Route, _ label: String, _ icon: Ph, @ViewBuilder trailing: () -> some View = { EmptyView() }) -> some View {
         let on = section == route
         return Button { router.go(to: route) } label: {
             HStack(spacing: 8) {
@@ -62,27 +69,8 @@ struct Sidebar: View {
             .sidebarRow(selected: on)
         }
         .buttonStyle(PressStyle(scale: 0.99))
+        .overlay(alignment: .trailing) { trailing().padding(.trailing, 4) }
         .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    private var head: some View {
-        SectionHead(title: "") {
-            Button(action: newCollection) {
-                Ph.plus.icon(.line, size: 12).foregroundStyle(Theme.faint).frame(height: 14).padding(.leading, 6).contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .help("new collection")
-            .accessibilityLabel("new collection")
-        }
-        .overlay(alignment: .leading) {
-            Button { router.go(to: .collections) } label: {
-                Text("Collections").role(.label).foregroundStyle(router.route == .collections ? Theme.text : Theme.faint)
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 8)
-            .help("all collections")
-            .accessibilityAddTraits(.isHeader)
-        }
     }
 
     private func newCollection() {
@@ -185,7 +173,10 @@ private struct CollectionRow: View {
             .padding(.vertical, 4)
             .background(Theme.popover, in: .rect(cornerRadius: Radius.small))
         })
-        .sottovaMenu { playlist.map { MenuEntry.yours($0, controller: controller, router: router, navigate: navigate, renaming: renaming) } ?? [] }
+        .sottovaMenu {
+            if let playlist { return MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming) }
+            return controller.catalog.albums.first { $0.id == source }.map { MenuEntry.album($0, controller: controller, router: router, navigate: navigate) } ?? []
+        }
     }
 }
 
