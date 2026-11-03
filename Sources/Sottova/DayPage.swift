@@ -891,6 +891,7 @@ private struct DayRow: View {
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
     @State private var hovering = false
+    @State private var menuOpen = false
 
     static let strip = 72.0
     private static let nameFont = NSFont.systemFont(ofSize: Role.row.size, weight: .medium)
@@ -932,19 +933,20 @@ private struct DayRow: View {
             // its own fill, not a button's: a card sits on the page, a button is pressed
             // quiet, as a long block is mostly fill: the hairline gives it its edge
             Rectangle().fill(sounding ? Theme.primary.opacity(0.1) : Theme.hover.opacity(off ? 0.25 : 0.45))
-            Rectangle().fill(picked ? Theme.selection : Theme.hairline.opacity(shown ? 0.4 : 0))
+            Rectangle().fill(picked ? Theme.picked : Theme.hairline.opacity(shown ? 0.4 : 0))
         }
         .clipShape(.rect(cornerRadius: Radius.small))
         .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.hairline, lineWidth: 1) }
         .overlay {
-            if picked { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1) }
+            // as on a song's row: only the right-click's target
+            if menuOpen { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1.5) }
         }
         // on the whole block, so the painting counts; its words and tick keep their own clicks
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
         .simultaneousGesture(TapGesture().onEnded { router.select(alarm.id.uuidString, in: order) })
         .accessibilityAddTraits(picked ? .isSelected : [])
-        .sottovaMenu { entries }
+        .sottovaMenu(open: { menuOpen = $0 }) { entries }
         .overlay(alignment: .bottom) {
             if let edge {
                 RoundedRectangle(cornerRadius: 1.5).fill(Theme.faint)
