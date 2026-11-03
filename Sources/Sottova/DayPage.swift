@@ -38,8 +38,9 @@ struct DayPage: View {
             let now = now(context.date)
             let plan = controller.dayPlan(now: now, wholeDay: droppingHere)
             PageScroll(insets: EdgeInsets(top: layout.insets.top, leading: layout.margin, bottom: layout.insets.bottom, trailing: layout.margin), maxWidth: .infinity) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
+                // as Collections sets its title and New
+                HStack(alignment: .center) {
+                    Text("Your day").role(.title).offset(y: -2).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 0)
                     newButton
                 }
