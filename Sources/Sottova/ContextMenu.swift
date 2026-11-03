@@ -30,6 +30,33 @@ struct MenuEntry {
 
 }
 
+/// The same entries as a SwiftUI menu's contents: a ••• button's, or the menu bar's.
+struct MenuEntries: View {
+    let entries: [MenuEntry]
+
+    var body: some View {
+        ForEach(entries.indices, id: \.self) { index in
+            let entry = entries[index]
+            switch entry.kind {
+            case .divider:
+                Divider()
+            case .action(let action):
+                Group {
+                    if entry.checked {
+                        Toggle(entry.title, isOn: Binding(get: { true }, set: { _ in action() }))
+                    } else {
+                        Button(entry.title, action: action)
+                    }
+                }
+                .disabled(!entry.enabled)
+            case .submenu(let entries):
+                Menu(entry.title) { MenuEntries(entries: entries) }
+                    .disabled(!entry.enabled)
+            }
+        }
+    }
+}
+
 extension View {
     /// A native right-click menu. The entries are built when the menu opens, so they show the state at that moment.
     func sottovaMenu(_ entries: @escaping () -> [MenuEntry]) -> some View {

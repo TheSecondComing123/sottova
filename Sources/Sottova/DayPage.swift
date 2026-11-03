@@ -907,7 +907,7 @@ private struct RowDots: View {
     let entries: [MenuEntry]
 
     var body: some View {
-        Menu { RowEntries(entries: entries) } label: {
+        Menu { MenuEntries(entries: entries) } label: {
             Ph.dotsThree.icon(size: 14)
                 .foregroundStyle(Theme.muted)
                 .frame(width: 24, height: 24)
@@ -1048,32 +1048,6 @@ private struct RowActions {
 }
 
 /// The same entries as a SwiftUI menu, which opens on the press.
-private struct RowEntries: View {
-    let entries: [MenuEntry]
-
-    var body: some View {
-        ForEach(entries.indices, id: \.self) { index in
-            let entry = entries[index]
-            switch entry.kind {
-            case .divider:
-                Divider()
-            case .action(let action):
-                Group {
-                    if entry.checked {
-                        Toggle(entry.title, isOn: Binding(get: { true }, set: { _ in action() }))
-                    } else {
-                        Button(entry.title, action: action)
-                    }
-                }
-                .disabled(!entry.enabled)
-            case .submenu(let entries):
-                Menu(entry.title) { RowEntries(entries: entries) }
-                    .disabled(!entry.enabled)
-            }
-        }
-    }
-}
-
 /// The sheet's box, drawn in both states: checked while it's on, empty when it's off.
 private struct Tick: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {

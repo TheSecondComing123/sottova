@@ -965,7 +965,7 @@ private struct PartHeading: View {
     }
 }
 
-/// Every collection, in day order, from the Collections heading in the sidebar.
+/// Every collection, in day order, from Collections in the sidebar: yours, then the folders.
 struct CollectionGrid: View {
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
@@ -977,6 +977,8 @@ struct CollectionGrid: View {
         let collections = controller.collections
         let order = plan.inDayOrder(collections.map(\.id))
         let ordered = order.compactMap { id in collections.first { $0.id == id } }
+        let yours = ordered.filter { if case .yours = $0 { true } else { false } }
+        let folders = ordered.filter { if case .album = $0 { true } else { false } }
         PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
             HStack(alignment: .center) {
                 Text("Collections")
@@ -992,8 +994,24 @@ struct CollectionGrid: View {
                 }
             }
             .padding(.bottom, 27)
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
-                ForEach(ordered) { CollectionCard(collection: $0, hours: plan.shortHours(of: $0.id)) }
+            VStack(alignment: .leading, spacing: 40) {
+                section("Yours", yours, plan: plan)
+                section("Folders", folders, plan: plan)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, _ collections: [MusicCollection], plan: DayPlan) -> some View {
+        if !collections.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(title)
+                    .role(.item)
+                    .foregroundStyle(Theme.text)
+                    .accessibilityAddTraits(.isHeader)
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
+                    ForEach(collections) { CollectionCard(collection: $0, hours: plan.shortHours(of: $0.id)) }
+                }
             }
         }
     }
@@ -1006,6 +1024,8 @@ private struct CollectionCard: View {
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
     @Environment(\.renaming) private var renaming
+    @State private var hovering = false
+    @State private var targeted = false
 
     private var cover: String? {
         switch collection {
@@ -1014,45 +1034,88 @@ private struct CollectionCard: View {
         }
     }
 
+    private var songs: [Song] {
+        switch collection {
+        case .album(let album): album.songs
+        case .yours(let playlist): controller.songs(of: playlist)
+        }
+    }
+
+    private var playlist: Playlist? {
+        if case .yours(let playlist) = collection { playlist } else { nil }
+    }
+
+    private var shown: Bool {
+        #if SHOT
+        if UserDefaults.standard.string(forKey: "shotHoverTile") == collection.title { return true }
+        #endif
+        return hovering
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let cover {
-                CoverImage(key: cover, size: 200)
-            } else {
+            ZStack(alignment: .bottomLeading) {
+                if let cover {
+                    CoverImage(key: cover, size: 200)
+                } else {
+                    RoundedRectangle(cornerRadius: Radius.small)
+                        .strokeBorder(Theme.frame, lineWidth: 1)
+                        .frame(width: 200, height: 200)
+                }
                 RoundedRectangle(cornerRadius: Radius.small)
-                    .strokeBorder(Theme.frame, lineWidth: 1)
-                    .frame(width: 200, height: 200)
-                    .overlay(alignment: .bottomLeading) {
-                        Text(collection.title)
-                            .role(.item)
-                            .foregroundStyle(Theme.muted)
-                            .lineLimit(3)
-                            .padding([.leading, .trailing, .top], 14)
-                            .padding(.bottom, 12)
-                    }
+                    .fill(Theme.primary.opacity(0.1))
+                    .strokeBorder(Theme.primary)
+                    .opacity(targeted ? 1 : 0)
+                    .allowsHitTesting(false)
+                if !songs.isEmpty {
+                    PlayButton(songs: songs, source: playlist?.id)
+                        .padding(10)
+                        .opacity(shown ? 1 : 0)
+                        .allowsHitTesting(shown)
+                }
             }
-            Text(cover == nil ? " " : collection.title)
-                .role(.body)
-                .fontWeight(.medium)
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-                .padding(.top, 10)
+            .frame(width: 200, height: 200)
+            HStack(spacing: 4) {
+                Text(collection.title)
+                    .role(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                TileDots(title: collection.title, entries: entries)
+                    .opacity(shown ? 1 : 0)
+                    .allowsHitTesting(shown)
+            }
+            .frame(height: 24)
+            .padding(.top, 7)
             Text(hours ?? " ")
                 .role(.body)
                 .foregroundStyle(Theme.faint)
                 .lineLimit(1)
+                .padding(.top, -3)
         }
+        .animation(Theme.quick, value: shown)
         .contentShape(.rect)
+        .onHover { hovering = $0 }
         .onTapGesture { open() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([collection.title, hours].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(.default, open)
-        .sottovaMenu {
-            switch collection {
-            case .album(let album): MenuEntry.album(album, controller: controller, router: router, navigate: navigate)
-            case .yours(let playlist): MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming)
-            }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let playlist else { return false }
+            let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
+            guard !songs.isEmpty else { return false }
+            withAnimation(Theme.quick) { controller.add(songs, to: playlist.id) }
+            return true
+        } isTargeted: { targeted = $0 && playlist != nil }
+        .sottovaMenu { entries }
+    }
+
+    private var entries: [MenuEntry] {
+        switch collection {
+        case .album(let album): MenuEntry.album(album, controller: controller, router: router, navigate: navigate)
+        case .yours(let playlist): MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming)
         }
     }
 
@@ -1061,5 +1124,27 @@ private struct CollectionCard: View {
         case .album(let album): navigate(.album(album.id))
         case .yours(let playlist): navigate(.playlist(playlist.id))
         }
+    }
+}
+
+/// A tile's right-click, behind three dots that show on hover.
+private struct TileDots: View {
+    let title: String
+    let entries: [MenuEntry]
+
+    var body: some View {
+        Menu { MenuEntries(entries: entries) } label: {
+            Ph.dotsThree.icon(size: 14)
+                .foregroundStyle(Theme.muted)
+                .frame(width: 24, height: 24)
+                .contentShape(.rect)
+                .hoverable(radius: 4)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("more")
+        .accessibilityLabel("more for \(title)")
     }
 }
