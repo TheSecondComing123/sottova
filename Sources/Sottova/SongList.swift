@@ -327,13 +327,12 @@ struct SongList: View {
     }
 }
 
-/// A plain list of names from the Go menu, in place of the artist tiles. A name opens Songs filtered to it.
+/// Everyone in the library from the Go menu, each with a cover from their songs. A tile opens Songs filtered to them.
 struct NameList: View {
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        let names = Set(controller.catalog.songs.map(\.who)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
             Text("Artists")
                 .role(.title)
@@ -341,15 +340,34 @@ struct NameList: View {
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 19)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 28, alignment: .leading)], alignment: .leading, spacing: 0) {
-                ForEach(names, id: \.self) { name in
-                    LinkText(text: name) { navigate(.artist(name)) }
-                        .foregroundStyle(Theme.text)
-                        .role(.body)
-                        .lineLimit(1)
-                        .frame(height: 28)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 148, maximum: 220), spacing: 20, alignment: .top)], alignment: .leading, spacing: 24) {
+                ForEach(Person.all(in: controller.catalog.songs)) { person in
+                    PersonTile(person: person) { navigate(.artist(person.name)) }
                 }
             }
         }
+    }
+}
+
+private struct PersonTile: View {
+    let person: Person
+    let open: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        let count = person.songs == 1 ? "1 song" : "\(person.songs) songs"
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 8) {
+                Artwork(key: person.artwork, radius: Radius.small, outlined: true, title: person.name, initials: true)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(person.name).role(.body).fontWeight(.medium).foregroundStyle(Theme.text).underline(hovering).lineLimit(1)
+                    Text(count).role(.body).foregroundStyle(Theme.muted)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(scale: 0.98))
+        .onHover { hovering = $0 }
+        .accessibilityLabel("\(person.name), \(count)")
     }
 }

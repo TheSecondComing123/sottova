@@ -28,6 +28,24 @@ struct CatalogTests {
         #expect(split.detail == nil)
     }
 
+    @Test func peopleAreGroupedByComposerWithCountsAndACover() {
+        func song(_ path: String, _ artist: String, composer: String?, artwork: String?) -> (String, Library.Entry) {
+            var meta = TrackMeta(title: path, artist: artist, album: "x", duration: 60)
+            meta.composer = composer
+            meta.artwork = artwork
+            return (path, Library.Entry(size: 0, modified: .now, meta: meta))
+        }
+        let catalog = Catalog(entries: Dictionary(uniqueKeysWithValues: [
+            song("/1", "Ishizaka", composer: "Bach", artwork: nil),
+            song("/2", "Ishizaka", composer: "Bach", artwork: "art"),
+            song("/3", "Komiku", composer: nil, artwork: nil),
+        ]))
+        let people = Person.all(in: catalog.songs)
+        #expect(people.map(\.name) == catalog.songs.map(\.who).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.sorted())
+        #expect(people.first { $0.songs == 2 }?.artwork == "art")
+        #expect(people.first { $0.songs == 1 }?.artwork == nil)
+    }
+
     @Test func worksGroupRecordingsAndFollowCatalogOrder() {
         func song(_ path: String, _ title: String, _ artist: String, composer: String? = "Frédéric Chopin") -> (String, Library.Entry) {
             var meta = TrackMeta(title: title, artist: artist, album: "x", duration: 60)

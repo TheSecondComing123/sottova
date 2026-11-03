@@ -79,6 +79,20 @@ public struct Artist: Identifiable, Hashable, Sendable {
     public var artwork: String? { albums.first { $0.artist == id && $0.artwork != nil }?.artwork }
 }
 
+/// Someone on the Artists page: a song's composer if it has one, else its artist.
+public struct Person: Identifiable, Equatable, Sendable {
+    public let name: String
+    public let songs: Int
+    public let artwork: String?
+    public var id: String { name }
+
+    public static func all(in songs: [Song]) -> [Person] {
+        Dictionary(grouping: songs, by: \.who)
+            .map { Person(name: $0.key, songs: $0.value.count, artwork: $0.value.lazy.compactMap(\.artwork).first) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+}
+
 /// Songs grouped into albums and artists, rebuilt from the library cache whenever it changes.
 public struct Catalog: Sendable {
     /// New with each build, for what's worked out from a whole library and kept until the next.

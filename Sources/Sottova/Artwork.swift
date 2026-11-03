@@ -18,9 +18,11 @@ struct Artwork: View {
     var outlined = false
     var title: String?
     var subtitle: String?
+    /// The name is the caption under this tile, so the tile shows initials.
+    var initials = false
     @State private var image: CGImage?
 
-    init(key: String?, size: CGFloat? = nil, width: CGFloat? = nil, radius: CGFloat = 4, circle: Bool = false, outlined: Bool = false, title: String? = nil, subtitle: String? = nil) {
+    init(key: String?, size: CGFloat? = nil, width: CGFloat? = nil, radius: CGFloat = 4, circle: Bool = false, outlined: Bool = false, title: String? = nil, subtitle: String? = nil, initials: Bool = false) {
         self.key = key
         self.size = size
         self.width = width
@@ -29,6 +31,7 @@ struct Artwork: View {
         self.outlined = outlined
         self.title = title
         self.subtitle = subtitle
+        self.initials = initials
         _image = State(initialValue: key.flatMap { Self.store?.cached(for: $0, maxPixel: Self.pixels(for: width ?? size)) })
     }
 
@@ -50,7 +53,7 @@ struct Artwork: View {
                         .id(ObjectIdentifier(image))
                         .transition(.opacity)
                 } else if let title, (size ?? .infinity) >= 56 {
-                    TypeCover(title: title, subtitle: subtitle, circle: circle)
+                    TypeCover(title: title, subtitle: subtitle, circle: circle, initials: initials)
                 }
             }
             .frame(width: width ?? size, height: size)
@@ -92,15 +95,28 @@ private struct TypeCover: View {
     let title: String
     let subtitle: String?
     let circle: Bool
+    let initials: Bool
+
+    private var letters: String {
+        let words = title.split(separator: " ")
+        return ([words.first] + (words.count > 1 ? [words.last] : [])).compactMap { $0?.first.map { String($0).uppercased() } }.joined()
+    }
 
     var body: some View {
         GeometryReader { geo in
             let side = geo.size.width
-            if circle {
+            if initials {
+                Text(letters)
+                    .font(.system(size: side * 0.38, weight: .medium))
+                    .tracking(-0.02 * side * 0.38)
+                    .foregroundStyle(Theme.accent(for: title, or: \.coverInk))
+                    .padding(side * 0.07)
+                    .frame(width: side, height: side, alignment: .bottomLeading)
+                    .background(Theme.accent(for: title, or: \.coverInk).opacity(0.2))
+            } else if circle {
                 // the name is already the caption under an artist's circle, so the circle carries initials
                 // first and last name, so "Adolf von Henselt" is AH, and always capitals
-                Text({ let words = title.split(separator: " "); return ([words.first] + (words.count > 1 ? [words.last] : []))
-                    .compactMap { $0?.first.map { String($0).uppercased() } }.joined() }())
+                Text(letters)
                     .font(.system(size: side * 0.17))
                     .foregroundStyle(Theme.accent(for: title, or: \.muted))
                     .frame(width: side, height: side)
@@ -111,13 +127,15 @@ private struct TypeCover: View {
     }
 
     private func cover(side: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: side * 0.025) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(title)
-                .font(.system(size: side * 0.105, weight: .semibold))
+                .font(.system(size: min(side * 0.12, 40), weight: .semibold))
                 .tracking(-0.2)
                 // the item's color is in the type, on a quiet ground, so a wall of type covers isn't a wall of color
                 .foregroundStyle(Theme.accent(for: title, or: \.coverInk))
-                .lineLimit(3)
+                .lineLimit(4)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
             if let subtitle {
                 Text(subtitle)
                     .font(.system(size: side * 0.06))
@@ -125,9 +143,10 @@ private struct TypeCover: View {
                     .lineLimit(1)
             }
         }
-        .padding(side * 0.08)
+        .padding(side * 0.07)
         // top left, where the hover play button in the opposite corner can't cover it
         .frame(width: side, height: side, alignment: .topLeading)
+        .background(Theme.accent(for: title, or: \.coverInk).opacity(0.2))
     }
 }
 
