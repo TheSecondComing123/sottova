@@ -122,6 +122,26 @@ public struct Playlist: Identifiable, Equatable, Sendable {
         if paths == before.paths { self = before }
     }
 
+    /// Part `from` becomes part `to`, its songs and name going with it. Returns where each part went, by its old place,
+    /// so a row's next part can follow.
+    @discardableResult
+    mutating func movePart(_ from: Int, to: Int) -> [Int] {
+        var parts = Array(zip(partStarts.map { partNames[$0] }, partPaths))
+        var order = Array(parts.indices)
+        guard order.indices.contains(from), order.indices.contains(to) else { return order }
+        order.insert(order.remove(at: from), at: to)
+        parts = order.map { parts[$0] }
+        paths = parts.flatMap(\.1)
+        (breaks, partNames) = ([], [:])
+        var start = 0
+        for (name, songs) in parts {
+            if start > 0 { breaks.insert(start) }
+            partNames[start] = name
+            start += songs.count
+        }
+        return parts.indices.map { order.firstIndex(of: $0)! }
+    }
+
     /// The songs part by part, in order; one part when there are no breaks.
     public var partPaths: [[String]] {
         var parts: [[String]] = [[]]

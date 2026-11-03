@@ -283,6 +283,8 @@ struct YourCollection: View {
     @State private var name = ""
     @State private var target: Int?
     @State private var dragFrom: Int?
+    /// A part just started, whose name field opens.
+    @State private var naming: Int?
     @FocusState private var typing: Bool
 
     private var pid: String { renamedTo ?? id }
@@ -337,8 +339,10 @@ struct YourCollection: View {
                 if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
                     let part = playlist.breaks.count { $0 <= index }
                     PartHeading(index: index, number: part + 1, name: playlist.partNames[index], length: partLength(playlist, from: index),
-                                next: next.contains(part)) {
+                                next: next.contains(part), last: part == playlist.breaks.count, naming: $naming) {
                         controller.namePart($0, at: index, in: pid)
+                    } move: { by in
+                        withAnimation(Theme.quick) { controller.movePart(part, to: part + by, in: pid) }
                     } join: {
                         withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
                     }
@@ -346,6 +350,10 @@ struct YourCollection: View {
                     .padding(.trailing, 12)
                 }
                 row(path, at: index, in: playlist, songs: songs, columns: columns)
+                    .modifier(SplitTarget(index: index, on: index > 0 && !playlist.breaks.contains(index)) {
+                        withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
+                        naming = index
+                    })
                     .id(path)
                     .overlay(alignment: .top) { insertionLine(at: index) }
                     .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
@@ -512,6 +520,59 @@ struct YourCollection: View {
     }
 }
 
+/// Left of a row, on its top edge: a new part can start here.
+private struct SplitTarget: ViewModifier {
+    let index: Int
+    let on: Bool
+    let split: () -> Void
+    @State private var row = false
+    @State private var gutter = false
+
+    func body(content: Content) -> some View {
+        if on {
+            content
+                .overlay(alignment: .topLeading) {
+                    Color.clear
+                        .frame(width: 22)
+                        .contentShape(.rect)
+                        .onHover { gutter = $0 }
+                        .onTapGesture(perform: split)
+                        .help("Start a new part here")
+                        .accessibilityElement()
+                        .accessibilityLabel("Start a new part here")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction(.default, split)
+                }
+                .overlay(alignment: .top) {
+                    if gutter {
+                        Rectangle().fill(Theme.muted).frame(height: 1).padding(.leading, 22).padding(.trailing, 12).offset(y: -0.5)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if row || gutter {
+                        // on the seam, centered where the speaker sits
+                        Ph.plus.icon(.bold, size: 10)
+                            .foregroundStyle(gutter ? Theme.text : Theme.faint)
+                            .frame(width: 14, height: 14)
+                            .offset(y: -7)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .onHover { row = $0 }
+                .onAppear {
+                    #if SHOT
+                    let defaults = UserDefaults.standard
+                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { (row, gutter) = (true, true) }
+                    if defaults.object(forKey: "shotSplitRow") != nil, defaults.integer(forKey: "shotSplitRow") == index { row = true }
+                    #endif
+                }
+        } else {
+            content
+        }
+    }
+}
+
 /// A part's name, length and whether a row plays it next, over the song that starts it. Click the name to rename it.
 private struct PartHeading: View {
     let index: Int
@@ -519,7 +580,10 @@ private struct PartHeading: View {
     let name: String?
     let length: Double
     let next: Bool
+    let last: Bool
+    @Binding var naming: Int?
     let rename: (String) -> Void
+    let move: (Int) -> Void
     let join: () -> Void
     @Environment(Router.self) private var router
     @State private var editing = false
@@ -570,6 +634,12 @@ private struct PartHeading: View {
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .sottovaMenu { entries }
+        .onChange(of: naming, initial: true) { _, new in
+            if new == index {
+                naming = nil
+                start()
+            }
+        }
         .onAppear {
             #if SHOT
             let defaults = UserDefaults.standard
@@ -581,6 +651,8 @@ private struct PartHeading: View {
 
     private var entries: [MenuEntry] {
         var entries: [MenuEntry] = [.item("Rename", action: start)]
+        if !first { entries.append(.item("Move up") { move(-1) }) }
+        if !last { entries.append(.item("Move down") { move(1) }) }
         if !first { entries += [.divider, .item("Join the part before", action: join)] }
         return entries
     }

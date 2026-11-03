@@ -52,6 +52,21 @@ struct RotationTests {
         #expect(p.partNames.isEmpty)
     }
 
+    @Test func aPartMovesWholeWithItsNameAndSaysWhereEachPartWent() {
+        var p = Playlist(id: "/m/lists/Compline.m3u8", name: "Compline", paths: ["/m/1", "/m/2", "/m/3", "/m/4", "/m/5"])
+        p.breaks = [2, 4]
+        p.partNames = [0: "Dusk", 4: "Night"]
+        // the unnamed middle part up to the top: it takes no name with it, and Dusk keeps its own
+        #expect(p.movePart(1, to: 0) == [1, 0, 2])
+        #expect(p.partPaths == [["/m/3", "/m/4"], ["/m/1", "/m/2"], ["/m/5"]])
+        #expect(p.breaks == [2, 4])
+        #expect(p.partNames == [2: "Dusk", 4: "Night"])
+        #expect(p.movePart(2, to: 1) == [0, 2, 1])
+        #expect(p.partPaths == [["/m/3", "/m/4"], ["/m/5"], ["/m/1", "/m/2"]])
+        #expect(p.breaks == [2, 3])
+        #expect(p.partNames == [2: "Night", 3: "Dusk"])
+    }
+
     @Test func movingASongLeavesTheOthersInTheirParts() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-parts-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
