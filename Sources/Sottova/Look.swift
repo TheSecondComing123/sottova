@@ -46,7 +46,7 @@ extension Theme {
     static let disabled = slot(\.disabledColor)
     static let popover = slot(\.popoverColor)
     static let hairline = text.opacity(0.13)
-    static let selection = text.opacity(0.10)
+    static let selection = text.opacity(0.16)
     static let stroke = text.opacity(0.12)
     static let frame = text.opacity(0.20)
     static let knob = Color(nsColor: NSColor(name: nil) { appearance in
