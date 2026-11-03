@@ -377,7 +377,8 @@ struct YourCollection: View {
 
     private func rows(_ playlist: Playlist, songs: [Song], narrow: Bool) -> some View {
         let columns = CollectionColumns(songs: songs, narrow: narrow)
-        let next = Set(controller.alarms.filter { $0.source == pid && $0.rotates }.map { controller.partChoices(for: $0).next })
+        // which rows play each part next, by name
+        let next = Dictionary(grouping: controller.alarms.filter { $0.source == pid && $0.rotates }) { controller.partChoices(for: $0).next }.mapValues { $0.map(\.name) }
         let keys = playlist.paths.indices.filter { controller.catalog.songsByID[playlist.paths[$0]] != nil }.map { Playlist.rowKey($0, playlist.paths[$0]) }
         return VStack(alignment: .leading, spacing: 0) {
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -385,7 +386,7 @@ struct YourCollection: View {
                     if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
                         let part = playlist.breaks.count { $0 <= index }
                         PartHeading(index: index, number: part + 1, name: playlist.partNames[index], length: partLength(playlist, from: index),
-                                    next: next.contains(part), last: part == playlist.breaks.count, naming: $naming) {
+                                    next: next[part] ?? [], last: part == playlist.breaks.count, naming: $naming) {
                             controller.namePart($0, at: index, in: pid)
                         } move: { by in
                             withAnimation(Theme.quick) { controller.movePart(part, to: part + by, in: pid) }
@@ -877,7 +878,8 @@ private struct PartHeading: View {
     let number: Int
     let name: String?
     let length: Double
-    let next: Bool
+    /// The rows that play this part next time.
+    let next: [String]
     let last: Bool
     @Binding var naming: Int?
     let rename: (String) -> Void
@@ -913,8 +915,8 @@ private struct PartHeading: View {
                     .monospacedDigit()
                     .foregroundStyle(Theme.faint)
                     .fixedSize()
-                if next {
-                    Text("next").role(.body).foregroundStyle(Theme.primary).fixedSize()
+                if !next.isEmpty {
+                    Text("\(next.formatted(.list(type: .and))) \(next.count == 1 ? "plays" : "play") this next").role(.body).foregroundStyle(Theme.primary).lineLimit(1)
                 }
                 Spacer(minLength: 24)
             }
