@@ -1003,7 +1003,6 @@ struct CollectionGrid: View {
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
     @Environment(\.renaming) private var renaming
-    private let columns = [GridItem(.adaptive(minimum: 200, maximum: 200), spacing: 28, alignment: .top)]
 
     var body: some View {
         let plan = DayPlan(alarms: controller.alarms)
@@ -1027,22 +1026,26 @@ struct CollectionGrid: View {
                 }
             }
             .padding(.bottom, 27)
+            // one kind alone needs no heading
+            let headed = !yours.isEmpty && !folders.isEmpty
             VStack(alignment: .leading, spacing: 40) {
-                section("Yours", yours, plan: plan)
-                section("Folders", folders, plan: plan)
+                section(headed ? "Yours" : nil, yours, plan: plan)
+                section(headed ? "Folders" : nil, folders, plan: plan)
             }
         }
     }
 
     @ViewBuilder
-    private func section(_ title: String, _ collections: [MusicCollection], plan: DayPlan) -> some View {
+    private func section(_ title: String?, _ collections: [MusicCollection], plan: DayPlan) -> some View {
         if !collections.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                Text(title)
-                    .role(.item)
-                    .foregroundStyle(Theme.text)
-                    .accessibilityAddTraits(.isHeader)
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
+                if let title {
+                    Text(title)
+                        .role(.item)
+                        .foregroundStyle(Theme.text)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                LazyVGrid(columns: TileGrid.columns, alignment: .leading, spacing: TileGrid.rowGap) {
                     ForEach(collections) { CollectionCard(collection: $0, hours: plan.shortHours(of: $0.id)) }
                 }
             }
@@ -1086,18 +1089,12 @@ private struct CollectionCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .bottomLeading) {
-                if let cover {
-                    CoverImage(key: cover, size: 200)
-                } else {
-                    RoundedRectangle(cornerRadius: Radius.small)
-                        .strokeBorder(Theme.frame, lineWidth: 1)
-                        .frame(width: 200, height: 200)
-                        .overlay {
-                            if songs.isEmpty { Text("no songs yet").role(.body).foregroundStyle(Theme.faint) }
-                        }
+                Button(action: open) {
+                    Artwork(key: cover, radius: Radius.small, outlined: true, title: collection.title)
                 }
+                .buttonStyle(PressStyle(scale: 0.98))
                 RoundedRectangle(cornerRadius: Radius.small)
                     .fill(Theme.primary.opacity(0.1))
                     .strokeBorder(Theme.primary)
@@ -1110,30 +1107,18 @@ private struct CollectionCard: View {
                         .allowsHitTesting(shown)
                 }
             }
-            .frame(width: 200, height: 200)
-            HStack(spacing: 4) {
-                Text(collection.title)
-                    .role(.body)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+            HStack(alignment: .top, spacing: 4) {
+                TileCaption(title: collection.title, detail: hours ?? (songs.isEmpty ? "no songs yet" : nil))
                 Spacer(minLength: 0)
                 TileDots(title: collection.title, entries: entries)
                     .opacity(shown ? 1 : 0)
                     .allowsHitTesting(shown)
             }
-            .frame(height: 24)
-            .padding(.top, 7)
-            Text(hours ?? " ")
-                .role(.body)
-                .foregroundStyle(Theme.faint)
-                .lineLimit(1)
-                .padding(.top, -3)
+            .contentShape(.rect)
+            .onTapGesture { open() }
         }
-        .animation(Theme.quick, value: shown)
-        .contentShape(.rect)
+        .animation(Theme.curve(shown ? 0.12 : 0.08), value: shown)
         .onHover { hovering = $0 }
-        .onTapGesture { open() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([collection.title, hours].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(.isButton)
@@ -1182,5 +1167,24 @@ private struct TileDots: View {
         .fixedSize()
         .help("more")
         .accessibilityLabel("more for \(title)")
+    }
+}
+
+/// Collections, Artists and Free music lay their tiles out alike.
+enum TileGrid {
+    static let columns = [GridItem(.adaptive(minimum: 148, maximum: 220), spacing: 20, alignment: .top)]
+    static let rowGap: CGFloat = 24
+}
+
+/// Under a grid tile: the name, then one muted line, kept even when there's nothing to say so rows stay level.
+struct TileCaption: View {
+    let title: String
+    let detail: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title).role(.body).fontWeight(.medium).foregroundStyle(Theme.text).lineLimit(1)
+            Text(detail ?? " ").role(.body).foregroundStyle(Theme.muted).lineLimit(1)
+        }
     }
 }

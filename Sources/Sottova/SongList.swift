@@ -447,7 +447,7 @@ struct NameList: View {
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 19)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 148, maximum: 220), spacing: 20, alignment: .top)], alignment: .leading, spacing: 24) {
+            LazyVGrid(columns: TileGrid.columns, alignment: .leading, spacing: TileGrid.rowGap) {
                 ForEach(Person.all(in: controller.catalog.songs)) { person in
                     PersonTile(person: person) { navigate(.artist(person.name)) }
                 }
@@ -459,22 +459,18 @@ struct NameList: View {
 private struct PersonTile: View {
     let person: Person
     let open: () -> Void
-    @State private var hovering = false
 
     var body: some View {
         let count = person.songs == 1 ? "1 song" : "\(person.songs) songs"
         Button(action: open) {
             VStack(alignment: .leading, spacing: 8) {
-                Artwork(key: person.artwork, radius: Radius.small, outlined: true, title: person.name, initials: true)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(person.name).role(.body).fontWeight(.medium).foregroundStyle(Theme.text).underline(hovering).lineLimit(1)
-                    Text(count).role(.body).foregroundStyle(Theme.muted)
-                }
+                // initials for everyone: a folder's painting belongs to the album, not the person
+                Artwork(key: nil, radius: Radius.small, outlined: true, title: person.name, initials: true)
+                TileCaption(title: person.name, detail: count)
             }
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle(scale: 0.98))
-        .onHover { hovering = $0 }
         .accessibilityLabel("\(person.name), \(count)")
     }
 }

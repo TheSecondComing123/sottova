@@ -27,7 +27,7 @@ struct FreeMusicPage: View {
                     .foregroundStyle(Theme.text)
                     .accessibilityAddTraits(.isHeader)
                     .padding(.bottom, 10)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 148, maximum: 220), spacing: 20, alignment: .top)], alignment: .leading, spacing: 24) {
+                LazyVGrid(columns: TileGrid.columns, alignment: .leading, spacing: TileGrid.rowGap) {
                     ForEach(Shelf.sets.filter { $0.kind == kind }) { tile($0) }
                 }
                 .padding(.bottom, 32)
@@ -39,7 +39,7 @@ struct FreeMusicPage: View {
     private func tile(_ set: ShelfSet) -> some View {
         let running = shelf.downloading.contains(set.id)
         let progress = shelf.progress[set.id] ?? 0
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 0) {
             Group {
                 if let url = Bundle.main.url(forResource: set.id, withExtension: "jpg", subdirectory: "Covers"), let image = NSImage(contentsOf: url) {
                     Image(nsImage: image).resizable().scaledToFill()
@@ -51,20 +51,23 @@ struct FreeMusicPage: View {
             .clipShape(.rect(cornerRadius: Radius.small))
             .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Color(white: 0.5, opacity: 0.28), lineWidth: 1))
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(set.title).role(.body).fontWeight(.medium).foregroundStyle(Theme.text).lineLimit(2)
-                Text(set.creator).role(.body).foregroundStyle(Theme.muted).lineLimit(1)
-            }
+            .padding(.bottom, 8)
+            TileCaption(title: set.title, detail: set.creator)
+                .help(set.title)
             HStack(spacing: 4) {
                 // a failure takes the line, whole
                 Group {
                     if let failure = shelf.failed[set.id], !running {
                         Text(failure).fixedSize(horizontal: false, vertical: true)
+                    } else if running {
+                        Text("\(Int(progress * Double(set.megabytes))) MB of \(Self.size(set.megabytes))").monospacedDigit().lineLimit(1)
                     } else {
-                        Text(running ? "\(Int(progress * Double(set.megabytes))) MB of \(Self.size(set.megabytes))" : "\(set.license), \(Self.size(set.megabytes))")
-                            .monospacedDigit()
-                            .lineLimit(2)
-                            .help(set.license.hasPrefix("CC BY") ? "CC BY sets credit the artist." : "")
+                        // one line, so every tile's download icon sits at the same height; the license gives way, the size doesn't
+                        HStack(spacing: 0) {
+                            Text(set.license).lineLimit(1)
+                            Text(", \(Self.size(set.megabytes))").monospacedDigit().fixedSize()
+                        }
+                        .help(set.license.hasPrefix("CC BY") ? "\(set.license). CC BY sets credit the artist." : set.license)
                     }
                 }
                 .role(.body)
@@ -88,6 +91,7 @@ struct FreeMusicPage: View {
             .frame(minHeight: 28)
             // always there, so the rows below don't move when a download starts or ends
             Rectangle().fill(Theme.hairline).frame(height: 2)
+                .padding(.top, 4)
                 .overlay(alignment: .leading) {
                     GeometryReader { geo in
                         Rectangle().fill(Theme.faint).frame(width: geo.size.width * progress, height: 2)
