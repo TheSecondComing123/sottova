@@ -138,7 +138,7 @@ private struct QueueRow: View {
                         Text(song.artist).foregroundStyle(Theme.muted)
                     }
                     .fixedSize()
-                    Text(song.title).foregroundStyle(Theme.text).truncationMode(.middle)
+                    Text(song.title).foregroundStyle(Theme.text).truncationMode(.tail)
                 }
                 .role(.body)
                 .lineLimit(1)

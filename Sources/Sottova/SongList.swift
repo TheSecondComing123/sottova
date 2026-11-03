@@ -187,7 +187,7 @@ private struct LineTitle: View {
             .fontWeight(sounding ? .medium : .regular)
             .foregroundStyle(Theme.text)
             .lineLimit(1)
-            .truncationMode(.middle)
+            .truncationMode(.tail)
             .accessibilityValue(sounding ? "playing" : "")
     }
 }
