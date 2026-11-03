@@ -30,7 +30,12 @@ struct DayPage: View {
             let plan = controller.dayPlan(now: now, wholeDay: droppingHere)
             PageScroll(insets: EdgeInsets(top: layout.insets.top, leading: layout.margin, bottom: layout.insets.bottom, trailing: layout.margin), maxWidth: .infinity) {
                 if oneColumn(plan) {
-                    newButton.frame(maxWidth: .infinity, alignment: .trailing).padding(.bottom, 14)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
+                        Spacer(minLength: 0)
+                        newButton
+                    }
+                    .padding(.bottom, 14)
                     day(plan)
                     others(plan, now: now)
                     playedList(plan)
@@ -237,9 +242,12 @@ struct DayPage: View {
             }
             .padding(.top, 24)
             .padding(.bottom, 6)
+            .padding(.leading, oneColumn(plan) ? DayLayout.blockLeft : 0)
             ForEach(played.reversed().prefix(cap), id: \.at) { line in
                 HStack(spacing: 8) {
-                    Text(plan.clockText(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: 38, alignment: .trailing)
+                    // one column: the time in the rail's gutter, the art at the blocks' edge
+                    Text(plan.clockText(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: oneColumn(plan) ? DayLayout.blockLeft - 30 : 38, alignment: .trailing)
+                        .padding(.trailing, oneColumn(plan) ? 22 : 0)
                     Artwork(key: line.artwork, size: 20, radius: 3)
                     Text(line.title).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(line.title)
                 }

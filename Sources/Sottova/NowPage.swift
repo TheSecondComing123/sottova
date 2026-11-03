@@ -52,13 +52,15 @@ struct NowPage: View {
             let bare = motion.bare
             let width = bare ? layout.bareTextWidth : layout.textWidth(shown)
             let under = layout.stacked && !bare
+            let titleSize = bare ? Role.title.size : layout.titleSize(motion.screen.title, shown: shown)
+            let detail = bare ? Role.body.size : layout.detailSize(title: titleSize)
             let bottom = layout.coverBottom(shown)
             ZStack(alignment: .topLeading) {
                 NowCover(motion: motion, layout: layout, shown: shown, album: controller.current?.album, dragging: router.droppingMusic)
                 VStack(alignment: bare ? .center : .leading, spacing: 12) {
-                    NowText(motion: motion, width: width, size: bare ? Role.title.size : layout.titleSize(motion.screen.title, shown: shown), centered: bare, dragging: router.droppingMusic, act: act,
+                    NowText(motion: motion, width: width, size: titleSize, detail: detail, lines: under ? 4 : 6, centered: bare, dragging: router.droppingMusic, act: act,
                             choose: controller.chooseFolders, freeMusic: { navigate(.shelf) })
-                    foot
+                    foot(detail)
                 }
                 .multilineTextAlignment(bare ? .center : .leading)
                 .frame(width: width, height: bare ? layout.height : under ? layout.height - bottom - 16 : shown,
@@ -70,14 +72,14 @@ struct NowPage: View {
     }
 
     @ViewBuilder
-    private var foot: some View {
+    private func foot(_ size: CGFloat) -> some View {
         if let next = motion.foot?.next {
-            ThemeLink(text: next, underlined: true) { navigate(.alarms) }.role(.body)
+            ThemeLink(text: next, underlined: true, color: Theme.muted) { navigate(.alarms) }.detail(size)
         }
         if let line = motion.foot?.note, line != router.dismissedFoot {
             HStack(spacing: 8) {
                 let missed = line.hasPrefix("Missed")
-                Text(line).role(.body).foregroundStyle(missed ? Theme.text : Theme.muted)
+                Text(line).detail(size).foregroundStyle(missed ? Theme.text : Theme.muted)
                 if missed {
                     Button { router.dismissedFoot = line } label: {
                         Ph.x.icon(.bold, size: 12).foregroundStyle(Theme.faint)
@@ -238,14 +240,9 @@ private struct NowCover: View {
         .offset(x: layout.left(shown), y: layout.coverBottom(shown) - layout.side)
     }
 
-    /// No art while a piece plays: its album's name, low in an outline. Nothing at all once it's gone.
+    /// No art while a piece plays: a cover set from its album's name. Nothing at all once it's gone.
     private var tile: some View {
-        RoundedRectangle(cornerRadius: Radius.small)
-            .strokeBorder(Theme.frame, lineWidth: 1)
-            .overlay(alignment: .bottomLeading) {
-                Text(album ?? "").role(.name).foregroundStyle(Theme.muted).padding(20)
-            }
-            .frame(width: layout.side, height: layout.side)
+        Artwork(key: nil, size: layout.side, radius: Radius.small, title: album ?? "")
     }
 
     private func art(_ image: CGImage, level: Double, scale: Double) -> some View {
@@ -267,10 +264,20 @@ private struct NowCover: View {
     }
 }
 
+private extension View {
+    /// The lines under Now's title: body type, larger beside a large title.
+    func detail(_ size: CGFloat) -> some View {
+        font(.system(size: size, weight: Role.body.weight))
+            .lineHeight(.exact(points: (size * Role.body.line / Role.body.size).rounded()))
+    }
+}
+
 private struct NowText: View {
     let motion: NowMotion
     let width: CGFloat
     let size: CGFloat
+    let detail: CGFloat
+    let lines: Int
     let centered: Bool
     let dragging: Bool
     let act: (NowScreen.Action) -> Void
@@ -287,8 +294,8 @@ private struct NowText: View {
                 .lineHeight(.exact(points: (size * Role.title.line / Role.title.size).rounded()))
                 .kerning(-0.011 * size)
                 .foregroundStyle(Theme.text)
-                .lineLimit(4)
-                .frame(width: min(width, Balance.width(title, in: width, size: size)), alignment: centered ? .center : .leading)
+                .lineLimit(lines)
+                .frame(width: min(width, Balance.width(title, in: width, size: size, lines: lines)), alignment: centered ? .center : .leading)
             if firstRun || !screen.sub.isEmpty {
                 ZStack(alignment: .topLeading) {
                     if firstRun {
@@ -304,7 +311,8 @@ private struct NowText: View {
                         Text(screen.sub).lineLimit(2)
                     }
                 }
-                .role(.body)
+                // its links must stay on one line in a narrow column
+                .detail(firstRun ? min(detail, 15) : detail)
                 .foregroundStyle(Theme.muted)
                 .frame(minHeight: 18, alignment: .topLeading)
                 // 8 in the mock; an exact line height sits 2 pt lower here than in a browser
@@ -318,7 +326,7 @@ private struct NowText: View {
                         Text(third).monospacedDigit().foregroundStyle(Theme.faint)
                     }
                 }
-                .role(.body)
+                .detail(detail)
                 .frame(minHeight: 18, alignment: .topLeading)
                 .padding(.top, screen.sub.isEmpty ? 10 : 2)
             }
@@ -333,12 +341,14 @@ private struct NowText: View {
 private enum Balance {
     private static var cache: [String: CGFloat] = [:]
 
-    static func width(_ text: String, in width: CGFloat, size: CGFloat) -> CGFloat {
-        let key = "\(width) \(size) \(text)"
+    static func width(_ text: String, in width: CGFloat, size: CGFloat, lines limit: Int) -> CGFloat {
+        let key = "\(width) \(size) \(limit) \(text)"
         if let hit = cache[key] { return hit }
         let attributed = NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: size, weight: .medium), .kern: -0.011 * size])
         let height = { (w: CGFloat) in attributed.boundingRect(with: CGSize(width: w, height: 10_000), options: .usesLineFragmentOrigin).height }
         let lines = height(width)
+        // past the limit it truncates anyway: narrowing would only truncate sooner
+        if lines > height(10_000) * CGFloat(limit) + 1 { return width }
         var (low, high) = (CGFloat(1), width)
         while high - low > 1 {
             let middle = (low + high) / 2

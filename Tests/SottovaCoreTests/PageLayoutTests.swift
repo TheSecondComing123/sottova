@@ -113,6 +113,20 @@ struct PageLayoutTests {
         #expect(layout.day.narrow == dayNarrow)
     }
 
+    @Test func aFewPlayedSongsDontHoldAColumnOpen() {
+        let day = DayLayout(width: 1100, height: 780)
+        #expect(day.oneColumn(others: 0, played: 3))
+        #expect(!day.oneColumn(others: 0, played: 4))
+        #expect(!day.oneColumn(others: 1, played: 0))
+    }
+
+    @Test func detailsKeepUpWithTheTitle() {
+        let now = NowLayout(width: 1000, height: 725)
+        #expect(now.detailSize(title: 32) == 13)
+        #expect(now.detailSize(title: 60) == 18)
+        #expect(now.detailSize(title: 84) == 20)
+    }
+
     @Test func aShortTitleGrowsWithTheCoverAndALongOneStillFits() {
         let now = NowLayout(width: 1000, height: 725)
         let side = now.side

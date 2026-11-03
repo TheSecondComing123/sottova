@@ -58,6 +58,9 @@ public struct NowLayout: Equatable, Sendable {
     public func textWidth(_ shown: Double) -> Double { stacked ? bareTextWidth : min(456, width - textLeft(shown) - margin) }
     public var bareTextWidth: Double { min(560, width - 2 * margin) }
 
+    /// The lines under a title keep up with it, so a large title doesn't sit on specks.
+    public func detailSize(title: Double) -> Double { max(13, min(20, (title * 0.3).rounded())) }
+
     /// The title beside a large cover grows with it, as far as its longest word and four lines allow.
     public func titleSize(_ title: String, shown: Double) -> Double {
         guard !stacked else { return 32 }
@@ -87,8 +90,8 @@ public struct DayLayout: Equatable, Sendable {
         narrow = width < 980
     }
 
-    /// One column when narrow, or when there's nothing to put beside the rail.
-    public func oneColumn(others: Int, played: Int) -> Bool { narrow || others + played == 0 }
+    /// One column when narrow, or when there's too little to fill a column beside the rail.
+    public func oneColumn(others: Int, played: Int) -> Bool { narrow || (others == 0 && played < 4) }
 
     public func blockWidth(oneColumn: Bool) -> Double {
         width - 2 * margin - (oneColumn ? 0 : right + Self.gap) - Self.blockLeft

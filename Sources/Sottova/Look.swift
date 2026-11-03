@@ -169,13 +169,14 @@ struct SectionHead<Trailing: View>: View {
 struct ThemeLink: View {
     let text: String
     var underlined = false
+    var color: Color?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(text)
                 .underline(underlined, color: Theme.faint)
-                .foregroundStyle(underlined ? Theme.text : Theme.primary)
+                .foregroundStyle(color ?? (underlined ? Theme.text : Theme.primary))
         }
         .buttonStyle(.plain)
     }
