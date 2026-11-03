@@ -355,7 +355,7 @@ struct YourCollection: View {
             } songs: { narrow in
                 if isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        addField
+                        addField(who: nil)
                         Text("or drag songs or a folder here")
                             .role(.body)
                             .foregroundStyle(Theme.faint)
@@ -431,7 +431,7 @@ struct YourCollection: View {
                 .environment(\.songOrder, keys)
             }
             // below the last row, out of the lazy stack so Add songs can always reach it: drop to add at the end
-            addField
+            addField(who: columns.line.who)
                 .padding(.top, 8)
                 .padding(.bottom, 40)
                 .overlay(alignment: .top) { insertionLine(at: playlist.paths.count) }
@@ -535,8 +535,8 @@ struct YourCollection: View {
         return true
     }
 
-    private var addField: some View {
-        AddSongs(requests: addRequests) { song in
+    private func addField(who: CGFloat?) -> some View {
+        AddSongs(requests: addRequests, have: Set(controller.playlists.first { $0.id == pid }?.paths ?? []), who: who) { song in
             withAnimation(Theme.quick) { controller.add([song], to: pid) }
         }
     }
@@ -639,6 +639,10 @@ struct YourCollection: View {
 /// At the foot of a collection, and all of an empty one: type, and your library's songs come up under it to add.
 private struct AddSongs: View {
     let requests: Int
+    /// What's in the collection already: those come after the rest, so Return adds something new.
+    let have: Set<String>
+    /// The rows' Who column, so a hit's names line up with theirs.
+    let who: CGFloat?
     let add: (Song) -> Void
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -648,7 +652,8 @@ private struct AddSongs: View {
 
     var body: some View {
         let needle = Song.folded(query)
-        let hits = needle.isEmpty ? [] : Array(controller.catalog.songs(by: .who, matching: needle).prefix(8))
+        let found = needle.isEmpty ? [] : controller.catalog.songs(by: .who, matching: needle)
+        let hits = Array((found.filter { !have.contains($0.id) } + found.filter { have.contains($0.id) }).prefix(8))
         ScrollViewReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 0) {
@@ -656,7 +661,6 @@ private struct AddSongs: View {
                     Ph.plus.icon(.bold, size: 10)
                         .foregroundStyle(focused ? Theme.muted : Theme.faint)
                         .frame(width: 22, alignment: .leading)
-                        .padding(.leading, 2)
                     TextField("Add songs", text: $query, prompt: Text(""))
                         .textFieldStyle(.plain)
                         .focusEffectDisabled()
@@ -668,7 +672,7 @@ private struct AddSongs: View {
                         }
                         .focused($focused)
                         .onSubmit {
-                            if let first = hits.first {
+                            if let first = hits.first, !have.contains(first.id) {
                                 add(first)
                                 query = ""
                             }
@@ -687,7 +691,7 @@ private struct AddSongs: View {
                 .onTapGesture { focused = true }
                 .id("add")
                 ForEach(Array(hits.enumerated()), id: \.element.id) { index, song in
-                    AddHit(song: song, top: index == 0) {
+                    AddHit(song: song, top: index == 0 && !have.contains(song.id), here: have.contains(song.id), who: who) {
                         add(song)
                         focused = true
                     }
@@ -712,23 +716,30 @@ private struct AddSongs: View {
 private struct AddHit: View {
     let song: Song
     let top: Bool
+    let here: Bool
+    let who: CGFloat?
     let add: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) {
+            Text(song.who)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+                .padding(.trailing, 12)
+                .frame(width: who, alignment: .leading)
             Text(song.title)
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Text(song.who)
-                .foregroundStyle(Theme.muted)
-                .lineLimit(1)
-                .layoutPriority(-1)
             Spacer(minLength: 16)
+            if here {
+                Text("already here").foregroundStyle(Theme.faint).padding(.trailing, 12)
+            }
             Text(Format.time(song.duration))
                 .monospacedDigit()
                 .foregroundStyle(Theme.faint)
+                .padding(.trailing, 12)
             Button(action: add) {
                 Ph.plus.icon(.bold, size: 10)
                     .foregroundStyle(hovering ? Theme.text : Theme.muted)
@@ -741,7 +752,7 @@ private struct AddHit: View {
             .accessibilityLabel("Add \(song.title)")
         }
         .role(.body)
-        .padding(.leading, 24)
+        .padding(.leading, 22)
         .padding(.trailing, 6)
         .frame(height: 28)
         .background(Theme.selection.opacity(hovering ? 1 : top ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
