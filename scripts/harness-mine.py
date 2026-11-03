@@ -38,7 +38,8 @@ os.makedirs(f"{music}/Sottova Playlists", exist_ok=True)
 for name in os.listdir(playlists):
     source, target = f"{playlists}/{name}", f"{music}/Sottova Playlists/{name}"
     if name.endswith(".m3u8"):
-        text = open(source, encoding="utf-8").read().replace(real_music, music)
+        # without /private, as the songs' ids are, or a made-yours album's tag never matches its album
+        text = open(source, encoding="utf-8").read().replace(real_music, music.removeprefix("/private"))
         open(target, "w", encoding="utf-8").write("\n".join(
             line if line.startswith("#") else re.sub(r"\.(flac|mp3|m4a|aac|aiff?|ogg|opus)$", ".wav", line)
             for line in text.split("\n")))
