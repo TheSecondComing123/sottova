@@ -325,8 +325,6 @@ struct SottovaCommands: Commands {
         var entries = MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate,
                                       renaming: Binding(get: { router.renaming }, set: { router.renaming = $0 }))
         if playlist.paths.isEmpty { entries[0].enabled = false; entries[1].enabled = false }
-        // Move to Trash, last: with songs picked, ⌘⌫ is the Song menu's Remove
-        if router.selected.isEmpty { entries[entries.count - 1].shortcut = KeyboardShortcut(.delete) }
         entries.insert(contentsOf: [
             .item("Add songs") { router.addSongsRequests += 1 },
             .item("New part from selection", enabled: router.selected.count > 1) { router.newPartRequests += 1 },
