@@ -47,6 +47,10 @@ extension Theme {
     static let popover = slot(\.popoverColor)
     static let hairline = text.opacity(0.13)
     static let selection = text.opacity(0.16)
+    /// A picked row: the accent, quiet, so it never reads as the gray of a hovered one.
+    static let picked = primary.opacity(0.24)
+    /// A quiet button under the pointer.
+    static let buttonHover = text.opacity(0.24)
     static let stroke = text.opacity(0.12)
     static let frame = text.opacity(0.20)
     static let knob = Color(nsColor: NSColor(name: nil) { appearance in
@@ -132,6 +136,7 @@ struct ThemeButton: View {
     var icon: Ph?
     var iconWeight = Ph.IconWeight.fill
     let action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
@@ -142,12 +147,15 @@ struct ThemeButton: View {
                 .foregroundStyle(primary ? Theme.onPrimary : on ? Theme.primary : Theme.text)
                 .padding(.horizontal, 11)
                 .frame(height: 24)
-                .background(primary ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
+                .background(primary ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(hovering ? Theme.buttonHover : Theme.selection), in: .rect(cornerRadius: Radius.small))
+                .brightness(primary && hovering ? 0.06 : 0)
                 .overlay {
                     if !primary { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(on ? Theme.primary : Theme.stroke, lineWidth: on ? 1 : 0.5) }
                 }
+                .animation(Theme.reveal(hovering), value: hovering)
         }
         .buttonStyle(PressStyle(scale: 0.98))
+        .onHover { hovering = $0 }
     }
 }
 
@@ -276,6 +284,7 @@ struct PrimaryStyle: ButtonStyle {
             .background(enabled ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
             .contentShape(.rect)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
     }
 }
 
@@ -291,6 +300,7 @@ struct SecondaryStyle: ButtonStyle {
             .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
             .contentShape(.rect)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
     }
 }
 

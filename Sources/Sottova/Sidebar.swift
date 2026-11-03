@@ -17,7 +17,7 @@ struct Sidebar: View {
                 nav(.shelf, "Free music", .trayArrowDown)
                 nav(.collections, "Collections", .stack) {
                     Button(action: newCollection) {
-                        Ph.plus.icon(.line, size: 12).foregroundStyle(Theme.faint).frame(width: 20, height: 20).contentShape(.rect)
+                        Ph.plus.icon(.line, size: 12).foregroundStyle(Theme.faint).frame(width: 24, height: 24).contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .help("new collection")

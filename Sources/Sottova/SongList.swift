@@ -86,11 +86,15 @@ struct LibraryLine: View {
         .frame(height: columns.height)
         .background(alignment: .leading) { LineMarker(song: song).offset(x: columns.markerX) }
         .background {
-            RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(hovering || (isPicked && active) ? 1 : isPicked ? 0.5 : 0))
+            RoundedRectangle(cornerRadius: Radius.small)
+                .fill(isPicked ? Theme.picked.opacity(active ? 1 : 0.7) : Theme.hover.opacity(hovering ? 1 : 0))
                 .padding(.trailing, -columns.reach)
         }
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        #if SHOT
+        .onAppear { if UserDefaults.standard.string(forKey: "shotHoverSong") == song.title { hovering = true } }
+        #endif
         .onTapGesture(count: 2, perform: play)
         .simultaneousGesture(TapGesture().onEnded { router.select(id, in: order) })
         .accessibilityAddTraits(isPicked ? .isSelected : [])
