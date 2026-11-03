@@ -296,8 +296,8 @@ struct YourCollection: View {
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
     @Environment(\.renaming) private var renaming
-    /// Renaming moves the file, so the id changes under the page.
-    @State private var renamedTo: String?
+    /// Renaming moves the file, so the id changes under the page, and undo moves it back.
+    @State private var renamedTo: [String] = []
     @State private var editing = false
     @State private var name = ""
     @State private var target: Int?
@@ -306,7 +306,7 @@ struct YourCollection: View {
     @State private var naming: Int?
     @FocusState private var typing: Bool
 
-    private var pid: String { renamedTo ?? id }
+    private var pid: String { renamedTo.last { name in controller.playlists.contains { $0.id == name } } ?? id }
 
     var body: some View {
         if let playlist = controller.playlists.first(where: { $0.id == pid }) {
@@ -545,7 +545,7 @@ struct YourCollection: View {
     private func commitRename() {
         guard editing else { return }
         if let renamed = controller.rename(pid, to: name), renamed != pid {
-            renamedTo = renamed
+            renamedTo.append(renamed)
         }
         endRename()
     }

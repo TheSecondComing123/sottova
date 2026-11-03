@@ -86,7 +86,9 @@ struct UndoTests {
         #expect(c.playlists.first?.partNames == [2: "Dusk"])
         // something added since isn't lost
         undo = undoing(c) { c.removeFromPlaylist(id, at: [0]) }
+        c.undo = nil
         c.add([song("/5")], to: id)
+        c.undo = undo
         undo.undo()
         #expect(c.playlists.first?.paths == ["/1", "/2", "/3", "/4", "/5"])
     }
@@ -177,6 +179,50 @@ struct UndoTests {
         c.setBreak(false, at: 4, in: id)
         #expect(next == 1)
         #expect(c.playlists[0].partPaths[next] == ["/3", "/4", "/5", "/6"])
+    }
+
+    @Test func addingMovingRenamingAndSilenceUndo() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let first = try #require(c.newPlaylist(named: "Vespers", songs: ["/1", "/2"].map(song)))
+        c.setBreak(true, at: 1, in: first)
+        var p: Playlist { c.playlists[0] }
+
+        var undo = undoing(c) { c.add([song("/3")], to: first, at: 1) }
+        #expect(undo.undoActionName == "Add to collection")
+        #expect(p.paths == ["/1", "/3", "/2"])
+        undo.undo()
+        #expect(p.paths == ["/1", "/2"])
+        #expect(p.breaks == [1])
+        undo.redo()
+        #expect(p.paths == ["/1", "/3", "/2"])
+
+        undo = undoing(c) { c.movePlaylistSongs(first, fromOffsets: [0], toOffset: 3) }
+        #expect(undo.undoActionName == "Move song")
+        #expect(p.paths == ["/3", "/2", "/1"])
+        undo.undo()
+        #expect(p.paths == ["/1", "/3", "/2"])
+        undo.redo()
+        #expect(p.paths == ["/3", "/2", "/1"])
+
+        let minecraft = Settings.presets.first { $0.name == "Minecraft" }!
+        undo = undoing(c) { c.setGaps(minecraft, for: first) }
+        #expect(undo.undoActionName == "Change silence")
+        undo.undo()
+        #expect(p.gaps == nil)
+        undo.redo()
+        #expect(p.gaps == minecraft)
+
+        undo = undoing(c) { c.rename(first, to: "Compline") }
+        #expect(undo.undoActionName == "Rename Vespers")
+        #expect(p.name == "Compline")
+        undo.undo()
+        #expect(p.name == "Vespers")
+        #expect(p.id == first)
+        #expect(FileManager.default.fileExists(atPath: first))
+        undo.redo()
+        #expect(p.name == "Compline")
     }
 
     @Test func aClearedQueueComesBack() {
