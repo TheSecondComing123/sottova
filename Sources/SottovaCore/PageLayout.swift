@@ -14,23 +14,32 @@ public struct PageLayout: Equatable, Sendable {
     }
 
     /// Songs, collections and free music.
-    public var list: ListLayout { ListLayout(width: width) }
+    public var list: ListLayout { ListLayout(width: width, height: height) }
     public var now: NowLayout { NowLayout(width: width, height: height) }
     public var day: DayLayout { DayLayout(width: width, height: height) }
 }
 
 public struct ListLayout: Equatable, Sendable {
+    /// A collection's songs, Who to Time: wider and the eye loses the row.
+    public static let listMax = 880.0
+    /// Between a pinned painting and the songs' Who.
+    public static let gap = 48.0
     public let narrow: Bool
     /// A window of 1400 or more: the cover and words stay put to the left while the songs scroll.
     public let pinned: Bool
-    private let width: Double
-    public init(width: Double) {
-        self.width = width
+    private let width, height: Double
+    /// `height`: the page's, so a pinned painting leaves room under it for the words and Play.
+    public init(width: Double, height: Double) {
+        (self.width, self.height) = (width, height)
         narrow = width < 860
         pinned = width >= 1184
     }
     public var margin: Double { narrow ? 32 : 40 }
-    public var cover: Double { pinned ? min((width * 0.25).rounded(), 360) : narrow ? 120 : 160 }
+    /// Pinned, the painting grows only once the list has its 880, and never past what fits over the words.
+    public var cover: Double {
+        guard pinned else { return narrow ? 120 : 200 }
+        return max(296, min(width - 2 * margin - Self.gap - Self.listMax, 560, height - 240))
+    }
 }
 
 /// Where things sit on Now: the cover takes what the words and margins leave, up to the page's height, and is centered

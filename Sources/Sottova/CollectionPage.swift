@@ -21,6 +21,11 @@ struct CollectionColumns {
                            art: art, height: art ? 32 : 28, gutter: 22, markerX: 0)
     }
 
+    /// Who to Time, at most 880 and with the title at most 512.
+    var width: CGFloat {
+        min(CGFloat(ListLayout.listMax), (line.art ? 34 : 0) + (line.who ?? 0) + 512 + (line.performer ?? 0) + 40)
+    }
+
     func performer(of song: Song) -> String? {
         whoShown ? song.performer : artistsDiffer ? song.artist : nil
     }
@@ -70,7 +75,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
                     .scrollBounceBehavior(.basedOnSize)
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.leading, layout.margin)
-                    .padding(.trailing, 26)
+                    .padding(.trailing, ListLayout.gap - 22)
                     // the speaker sits 22 left of the rows, and a scroll view clips
                     PageScroll(insets: EdgeInsets(top: 16, leading: 22, bottom: 24, trailing: layout.margin)) {
                         songs(false)
@@ -82,7 +87,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
                         art
                         words
                     }
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 28)
                     songs(layout.narrow)
                 }
             }
@@ -128,7 +133,9 @@ private struct RowLine: View {
         let plan = DayPlan(alarms: controller.alarms)
         WordFlow {
             ThemeLink(text: plan.when(row), underlined: true) { router.alarm = .edit(row) }.role(.body)
-            ForEach(plan.sentence(row, nextPart: row.rotates ? controller.nextPartName(for: row) : nil), id: \.text) { RowWord(alarm: row, piece: $0) }
+            // a collection's own parts say "next" on their heading
+            let ownParts = controller.playlists.contains { $0.id == row.source && !$0.breaks.isEmpty }
+            ForEach(plan.sentence(row, nextPart: row.rotates && !ownParts ? controller.nextPartName(for: row) : nil), id: \.text) { RowWord(alarm: row, piece: $0) }
         }
         .foregroundStyle(Theme.muted)
     }
@@ -255,6 +262,7 @@ struct AlbumCollection: View {
                 })
                 .padding(.leading, -22)
                 .padding(.trailing, -12)
+                .frame(maxWidth: columns.width, alignment: .leading)
             }
         } else {
             Missing(text: "this collection isn't in your library anymore")
@@ -275,6 +283,8 @@ struct YourCollection: View {
     @State private var name = ""
     @State private var target: Int?
     @State private var dragFrom: Int?
+    /// A part just started, whose name field opens.
+    @State private var naming: Int?
     @FocusState private var typing: Bool
 
     private var pid: String { renamedTo ?? id }
@@ -323,12 +333,16 @@ struct YourCollection: View {
 
     private func rows(_ playlist: Playlist, songs: [Song], narrow: Bool) -> some View {
         let columns = CollectionColumns(songs: songs, narrow: narrow)
+        let next = Set(controller.alarms.filter { $0.source == pid && $0.rotates }.map { controller.partChoices(for: $0).next })
         return LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
                 if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
-                    PartHeading(number: playlist.breaks.count { $0 <= index } + 1, name: playlist.partNames[index],
-                                length: partLength(playlist, from: index), first: index == 0) {
+                    let part = playlist.breaks.count { $0 <= index }
+                    PartHeading(index: index, number: part + 1, name: playlist.partNames[index], length: partLength(playlist, from: index),
+                                next: next.contains(part), last: part == playlist.breaks.count, naming: $naming) {
                         controller.namePart($0, at: index, in: pid)
+                    } move: { by in
+                        withAnimation(Theme.quick) { controller.movePart(part, to: part + by, in: pid) }
                     } join: {
                         withAnimation(Theme.quick) { controller.setBreak(false, at: index, in: pid) }
                     }
@@ -336,6 +350,10 @@ struct YourCollection: View {
                     .padding(.trailing, 12)
                 }
                 row(path, at: index, in: playlist, songs: songs, columns: columns)
+                    .modifier(SplitTarget(index: index, on: index > 0 && !playlist.breaks.contains(index)) {
+                        withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
+                        naming = index
+                    })
                     .id(path)
                     .overlay(alignment: .top) { insertionLine(at: index) }
                     .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
@@ -359,6 +377,7 @@ struct YourCollection: View {
         }))
         .padding(.leading, -22)
         .padding(.trailing, -12)
+        .frame(maxWidth: columns.width, alignment: .leading)
     }
 
     private func partLength(_ playlist: Playlist, from start: Int) -> Double {
@@ -501,67 +520,168 @@ struct YourCollection: View {
     }
 }
 
-/// A part's name and length over the song that starts it. Double-click to name it; right-click to join it to the one before.
+/// Left of a row, on its top edge: a new part can start here.
+private struct SplitTarget: ViewModifier {
+    let index: Int
+    let on: Bool
+    let split: () -> Void
+    @State private var row = false
+    @State private var gutter = false
+
+    func body(content: Content) -> some View {
+        if on {
+            content
+                .overlay(alignment: .topLeading) {
+                    Color.clear
+                        .frame(width: 22)
+                        .contentShape(.rect)
+                        .onHover { gutter = $0 }
+                        .onTapGesture(perform: split)
+                        .help("Start a new part here")
+                        .accessibilityElement()
+                        .accessibilityLabel("Start a new part here")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction(.default, split)
+                }
+                .overlay(alignment: .top) {
+                    if gutter {
+                        Rectangle().fill(Theme.muted).frame(height: 1).padding(.leading, 22).padding(.trailing, 12).offset(y: -0.5)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if row || gutter {
+                        // on the seam, centered where the speaker sits
+                        Ph.plus.icon(.bold, size: 10)
+                            .foregroundStyle(gutter ? Theme.text : Theme.faint)
+                            .frame(width: 14, height: 14)
+                            .offset(y: -7)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .onHover { row = $0 }
+                .onAppear {
+                    #if SHOT
+                    let defaults = UserDefaults.standard
+                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { (row, gutter) = (true, true) }
+                    if defaults.object(forKey: "shotSplitRow") != nil, defaults.integer(forKey: "shotSplitRow") == index { row = true }
+                    #endif
+                }
+        } else {
+            content
+        }
+    }
+}
+
+/// A part's name, length and whether a row plays it next, over the song that starts it. Click the name to rename it.
 private struct PartHeading: View {
+    let index: Int
     let number: Int
     let name: String?
     let length: Double
-    let first: Bool
+    let next: Bool
+    let last: Bool
+    @Binding var naming: Int?
     let rename: (String) -> Void
+    let move: (Int) -> Void
     let join: () -> Void
     @Environment(Router.self) private var router
     @State private var editing = false
+    @State private var hovering = false
     @State private var draft = ""
     @FocusState private var typing: Bool
 
+    private var first: Bool { number == 1 }
+    private var unnamed: String { "Part \(number)" }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            if editing {
-                TextField("Part \(number)", text: $draft)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if editing {
+                    field
+                } else {
+                    Text(name ?? unnamed)
+                        .role(.row)
+                        .foregroundStyle(name == nil ? Theme.muted : Theme.text)
+                        .lineLimit(1)
+                        .onTapGesture(perform: start)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityAction(named: "Rename", start)
+                }
+                Text(Format.length(length))
                     .role(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Theme.text)
-                    .focused($typing)
-                    .onSubmit(commit)
-                    .onExitCommand(perform: end)
-                    .onDisappear { router.typing = false }
-                    .onChange(of: typing) { _, focused in
-                        router.typing = focused
-                        if !focused { commit() }
-                    }
-                    .modifier(FieldLook(focused: true))
-                    .frame(width: 220)
-                    .padding(.leading, -8)
-            } else {
-                Text(name ?? "Part \(number)")
-                    .role(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Theme.text)
-                    .help("double-click to rename")
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.faint)
+                    .fixedSize()
+                if next {
+                    Text("next").role(.body).foregroundStyle(Theme.muted).fixedSize()
+                }
+                Spacer(minLength: 24)
             }
-            Spacer(minLength: 16)
-            Text(Format.length(length))
-                .role(.body)
-                .monospacedDigit()
-                .foregroundStyle(Theme.faint)
+            .frame(height: 22)
+            .overlay(alignment: .trailing) {
+                if hovering && !editing {
+                    CollectionMenu {
+                        ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                            if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
+                        }
+                    }
+                }
+            }
+            Rectangle().fill(Theme.hairline).frame(height: 1).padding(.top, 6).padding(.bottom, 4)
         }
-        .frame(height: editing ? 24 : 18)
-        .padding(.top, first ? 0 : editing ? 21 : 24)
-        .padding(.bottom, editing ? 1 : 4)
+        .padding(.top, first ? 0 : 28)
         .contentShape(.rect)
-        .onTapGesture(count: 2, perform: start)
-        .sottovaMenu {
-            [.item("Rename", action: start)] + (first ? [] : [.item("Join the part before", action: join)])
+        .onHover { hovering = $0 }
+        .sottovaMenu { entries }
+        .onChange(of: naming, initial: true) { _, new in
+            if new == index {
+                naming = nil
+                start()
+            }
         }
         .onAppear {
             #if SHOT
-            if let shot = UserDefaults.standard.string(forKey: "shotNaming"), shot == name { draft = shot; editing = true }
+            let defaults = UserDefaults.standard
+            if defaults.string(forKey: "shotNaming") == name ?? unnamed { draft = name ?? unnamed; editing = true }
+            if defaults.string(forKey: "shotPartHover") == name ?? unnamed { hovering = true }
             #endif
         }
     }
 
+    private var entries: [MenuEntry] {
+        var entries: [MenuEntry] = [.item("Rename", action: start)]
+        if !first { entries.append(.item("Move up") { move(-1) }) }
+        if !last { entries.append(.item("Move down") { move(1) }) }
+        if !first { entries += [.divider, .item("Join the part before", action: join)] }
+        return entries
+    }
+
+    /// In place on the same line, its ring drawn around it, so nothing under it moves.
+    private var field: some View {
+        let width = (draft as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: Role.row.size, weight: .medium)]).width
+        return TextField("", text: $draft)
+            .textFieldStyle(.plain)
+            .focusEffectDisabled()
+            .role(.row)
+            .foregroundStyle(Theme.text)
+            .focused($typing)
+            .accessibilityLabel("part name")
+            .onSubmit(commit)
+            .onExitCommand(perform: end)
+            .onDisappear { router.typing = false }
+            .onChange(of: typing) { _, focused in
+                router.typing = focused
+                if !focused { commit() }
+            }
+            .frame(width: max(160, width.rounded(.up) + 24) - 16)
+            .padding(.horizontal, 8)
+            .background { Color.clear.modifier(FieldLook(focused: true)) }
+            .padding(.leading, -8)
+    }
+
     private func start() {
-        draft = name ?? ""
+        draft = name ?? unnamed
         editing = true
         DispatchQueue.main.async {
             typing = true
@@ -571,7 +691,8 @@ private struct PartHeading: View {
 
     private func commit() {
         guard editing else { return }
-        rename(draft)
+        // "Part 3" left as it was stays a number, so it follows the part's place
+        if name != nil || draft.trimmingCharacters(in: .whitespaces) != unnamed { rename(draft) }
         end()
     }
 

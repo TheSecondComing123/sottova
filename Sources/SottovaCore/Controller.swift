@@ -1261,11 +1261,13 @@ public final class Controller {
 
     /// A part of the collection starts at this song, or stops starting there.
     public func setBreak(_ on: Bool, at index: Int, in id: String) {
-        update(id) { playlist in
-            guard index > 0, index < playlist.paths.count else { return }
-            if on { playlist.breaks.insert(index) } else {
-                playlist.breaks.remove(index)
-                playlist.partNames[index] = nil
+        editParts(id, on ? "New part" : "Join parts") {
+            update(id) { playlist in
+                guard index > 0, index < playlist.paths.count else { return }
+                if on { playlist.breaks.insert(index) } else {
+                    playlist.breaks.remove(index)
+                    playlist.partNames[index] = nil
+                }
             }
         }
     }
@@ -1273,7 +1275,48 @@ public final class Controller {
     /// Calls the part starting at this song `name`; an empty name puts its number back.
     public func namePart(_ name: String, at index: Int, in id: String) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        update(id) { $0.partNames[index] = name.isEmpty ? nil : name }
+        editParts(id, "Rename part") { update(id) { $0.partNames[index] = name.isEmpty ? nil : name } }
+    }
+
+    /// The part keeps being the one its rows play next.
+    public func movePart(_ part: Int, to destination: Int, in id: String) {
+        editParts(id, "Move part") {
+            var moved: [Int] = []
+            update(id) { moved = $0.movePart(part, to: destination) }
+            for i in alarms.indices where alarms[i].source == id && moved.indices.contains(alarms[i].nextPart) {
+                alarms[i].nextPart = moved[alarms[i].nextPart]
+            }
+            alarmsChanged()
+        }
+    }
+
+    private struct PartsState: Equatable {
+        let paths: [String], breaks: Set<Int>, names: [Int: String]
+        let next: [UUID: Int]
+    }
+
+    private func partsState(_ id: String) -> PartsState? {
+        playlists.first { $0.id == id }.map {
+            PartsState(paths: $0.paths, breaks: $0.breaks, names: $0.partNames,
+                       next: Dictionary(uniqueKeysWithValues: alarms.filter { $0.source == id }.map { ($0.id, $0.nextPart) }))
+        }
+    }
+
+    /// One Edit › Undo for a change to a collection's parts: its songs and parts, and the part its rows play next.
+    private func editParts(_ id: String, _ action: String, _ change: () -> Void) {
+        guard let before = partsState(id) else { return }
+        change()
+        guard partsState(id) != before else { return }
+        undo?.registerUndo(withTarget: self) { $0.restoreParts(id, to: before, action) }
+        undo?.setActionName(action)
+    }
+
+    private func restoreParts(_ id: String, to state: PartsState, _ action: String) {
+        editParts(id, action) {
+            update(id) { ($0.paths, $0.breaks, $0.partNames) = (state.paths, state.breaks, state.names) }
+            for i in alarms.indices { if let next = state.next[alarms[i].id] { alarms[i].nextPart = next } }
+            alarmsChanged()
+        }
     }
 
     public func movePlaylistSongs(_ id: String, fromOffsets offsets: IndexSet, toOffset destination: Int) {

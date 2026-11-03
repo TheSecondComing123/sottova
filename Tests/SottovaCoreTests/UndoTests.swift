@@ -91,6 +91,57 @@ struct UndoTests {
         #expect(c.playlists.first?.paths == ["/1", "/2", "/3", "/4", "/5"])
     }
 
+    @Test func partEditsUndoOneAtATimeAndNextStaysOnItsPart() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let id = try #require(c.newPlaylist(songs: ["/1", "/2", "/3", "/4"].map(song)))
+        var row = Alarm(source: id, name: "Compline", hour: 20, minute: 0, weekdays: [2])
+        (row.rotates, row.nextPart) = (true, 1)
+        c.addAlarm(row)
+        var p: Playlist { c.playlists[0] }
+        var next: Int { c.alarms[0].nextPart }
+
+        var undo = undoing(c) { c.setBreak(true, at: 2, in: id) }
+        #expect(undo.undoActionName == "New part")
+        #expect(p.partPaths == [["/1", "/2"], ["/3", "/4"]])
+        undo.undo()
+        #expect(p.breaks.isEmpty)
+        undo.redo()
+        #expect(p.breaks == [2])
+
+        undo = undoing(c) { c.namePart("Dusk", at: 2, in: id) }
+        #expect(undo.undoActionName == "Rename part")
+        undo.undo()
+        #expect(p.partNames.isEmpty)
+        undo.redo()
+        #expect(p.partNames == [2: "Dusk"])
+
+        // the row plays Dusk next, wherever Dusk goes
+        undo = undoing(c) { c.movePart(1, to: 0, in: id) }
+        #expect(undo.undoActionName == "Move part")
+        #expect(p.paths == ["/3", "/4", "/1", "/2"])
+        #expect(p.partNames == [0: "Dusk"])
+        #expect(next == 0)
+        undo.undo()
+        #expect(p.paths == ["/1", "/2", "/3", "/4"])
+        #expect(p.partNames == [2: "Dusk"])
+        #expect(next == 1)
+        undo.redo()
+        #expect(next == 0)
+
+        undo = undoing(c) { c.setBreak(false, at: 2, in: id) }
+        #expect(undo.undoActionName == "Join parts")
+        #expect(p.breaks.isEmpty)
+        undo.undo()
+        #expect(p.breaks == [2])
+        #expect(p.partNames == [0: "Dusk"])
+
+        // nothing changed, nothing to undo
+        undo = undoing(c) { c.namePart("Dusk", at: 0, in: id) }
+        #expect(undo.undoActionName == "")
+    }
+
     @Test func aClearedQueueComesBack() {
         let c = Controller(storage: nil)
         c.playNext(["/1", "/2"].map(song))
