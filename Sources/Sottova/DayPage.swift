@@ -217,9 +217,23 @@ struct DayPage: View {
                 let height = block.upperBound - block.lowerBound
                 let movable = canMove(mark.id, plan: plan)
                 let edge: RowDrag? = movable && mark.alarm.endsByMidnight ? drag(mark, end: true, plan: plan, scale: scale) : nil
+                let lifted = moving?.id == mark.id && moving?.end == false
+                if lifted {
+                    // where it came from, while it's carried
+                    RoundedRectangle(cornerRadius: Radius.small)
+                        .strokeBorder(Theme.faint.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: mark.block.upperBound - mark.block.lowerBound)
+                        .padding(.leading, DayLayout.blockLeft)
+                        .offset(y: mark.block.lowerBound)
+                        .allowsHitTesting(false)
+                }
                 DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
                        height: height, nameWidth: DayRow.nameWidth(mark.alarm.name, blockWidth: blockWidth), sounding: sounding == mark.id, edge: edge, order: order(plan))
                     .frame(height: height)
+                    // its fill is see-through: carried, it hides the slot's frame under it
+                    .background(Theme.background.opacity(lifted ? 1 : 0), in: .rect(cornerRadius: Radius.small))
+                    .scaleEffect(lifted ? 1.01 : 1)
                     .shadow(color: .black.opacity(moving?.id == mark.id ? 0.5 : 0), radius: moving?.id == mark.id ? 16 : 0, y: moving?.id == mark.id ? 8 : 0)
                     .gesture(drag(mark, end: false, plan: plan, scale: scale), isEnabled: movable)
                     .pointerStyle(movable ? moving?.id == mark.id && moving?.end == false ? .grabActive : .grabIdle : nil)
