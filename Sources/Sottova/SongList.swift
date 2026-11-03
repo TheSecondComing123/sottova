@@ -36,7 +36,10 @@ struct LibraryLine: View {
     @Environment(\.songOrder) private var order
     @Environment(\.appearsActive) private var active
     @Environment(\.songDrag) private var drag
+    @Environment(\.songsLifted) private var liftedPick
     @State private var hovering = false
+    @State private var lifted = false
+    @State private var menuOpen = false
     @State private var naming = false
 
     private var id: String { key ?? song.id }
@@ -55,7 +58,7 @@ struct LibraryLine: View {
                     .padding(.trailing, 10)
             }
             if let width = columns.who {
-                name(song.who) { navigate(.artist(song.who)) }
+                name(song.who)
                     // a name cut short still doesn't touch the title
                     .padding(.trailing, 12)
                     .frame(width: width, alignment: .leading)
@@ -67,12 +70,12 @@ struct LibraryLine: View {
                 // the clear keeps the column where a song has no performer, so no title runs under the heading
                 ZStack(alignment: .leading) {
                     Color.clear
-                    if let performer { name(performer) { navigate(.artist(performer)) } }
+                    if let performer { name(performer) }
                 }
                 .frame(width: width)
             }
             if let width = columns.collection {
-                name(controller.copy(ofAlbum: song.albumID)?.name ?? song.album) { navigate(.album(song.albumID)) }
+                name(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)
                     .frame(width: width, alignment: .leading)
             }
             Text(Format.time(song.duration))
@@ -86,17 +89,28 @@ struct LibraryLine: View {
         .frame(height: columns.height)
         .background(alignment: .leading) { LineMarker(song: song).offset(x: columns.markerX) }
         .background {
-            RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(hovering || (isPicked && active) ? 1 : isPicked ? 0.5 : 0))
+            RoundedRectangle(cornerRadius: Radius.small)
+                .fill(isPicked ? Theme.picked.opacity(active ? 1 : 0.7) : Theme.hover.opacity(hovering ? 1 : 0))
                 .padding(.trailing, -columns.reach)
+        }
+        .overlay {
+            if menuOpen {
+                RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1.5).padding(.trailing, -columns.reach)
+            }
         }
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        #if SHOT
+        .onAppear { if UserDefaults.standard.string(forKey: "shotHoverSong") == song.title { hovering = true } }
+        #endif
         .onTapGesture(count: 2, perform: play)
         .simultaneousGesture(TapGesture().onEnded { router.select(id, in: order) })
         .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityAction(named: "Play", play)
         .modifier(RowDrag(several: isPicked && router.selected.count > 1, id: id, path: song.id, namespace: drag) { dragStarted?() })
-        .sottovaMenu {
+        .opacity(lifted || liftedPick.contains(id) ? 0.4 : 1)
+        .onDragSessionUpdated { lifted = $0.phase.lifted }
+        .sottovaMenu(open: { menuOpen = $0 }) {
             MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, naming: { naming = true },
                            controller: controller, router: router, navigate: navigate)
                 + (more?() ?? [])
@@ -104,13 +118,10 @@ struct LibraryLine: View {
         .popover(isPresented: $naming, arrowEdge: .bottom) { NameCollection(songs: picked, open: $naming, name: MenuEntry.name(for: picked, controller: controller)) }
     }
 
-    private func name(_ text: String, go: @escaping () -> Void) -> some View {
-        LinkText(text: text) {
-            // the row's own tap has picked it; while picking, or on the click that brings the window forward, stay here
-            let keys = NSEvent.modifierFlags
-            guard !router.press.activating, router.press.picks < 2, !keys.contains(.command), !keys.contains(.shift) else { return }
-            go()
-        }
+    /// Plain words: a click on a row picks it, wherever it lands. Go to is in the right-click and the Song menu.
+    private func name(_ text: String) -> some View {
+        Text(text)
+            .lineLimit(1)
             .role(.body)
             .foregroundStyle(Theme.muted)
     }
@@ -143,16 +154,25 @@ struct SongListRun: ViewModifier {
     var remove: ((Set<String>) -> Void)?
     @Environment(Router.self) private var router
     @Namespace private var drag
+    @State private var lifted: Set<String> = []
 
     func body(content: Content) -> some View {
         content
             .environment(\.songDrag, drag)
+            .environment(\.songsLifted, lifted)
+            .onDragSessionUpdated { session in
+                lifted = session.phase.lifted ? Set(session.draggedItemIDs(for: String.self)) : []
+            }
             .dragContainer(for: URL.self, itemID: \.path, in: drag) { (ids: [String]) in ids.map { URL(filePath: Playlist.path(ofRow: $0)) } }
             .dragContainerSelection(order.filter(router.selected.contains), containerNamespace: drag)
             .onChange(of: order, initial: true) {
                 router.run = SongRun(route: router.route, order: order, play: play, remove: remove)
             }
     }
+}
+
+private extension DragSession.Phase {
+    var lifted: Bool { self == .initial || self == .active }
 }
 
 /// Their own views, so a change of track re-renders them and not the row.
@@ -219,13 +239,18 @@ struct SongList: View {
     @Environment(Router.self) private var router
     @AppStorage("songsSort") private var sort = SongSort.who
     @AppStorage("songsSortReversed") private var reversed = false
-    @FocusState private var filtering: Bool
+    /// Bumped to put the cursor in the filter.
+    @State private var focusAsks = 0
     @Environment(\.listLayout) private var layout
     @MainActor private static var answeredSearch = 0
     @State private var fit = ColumnFit()
 
     private var narrow: Bool { layout.narrow }
     private var margin: CGFloat { layout.margin }
+    @Environment(\.pageLayout) private var page
+    /// The open queue floats 60 pt in from the right and is 320 wide: the list ends 24 short of it rather than
+    /// running its headings under its edge. A narrow window hasn't the room, so there it still floats over.
+    private var trailing: CGFloat { router.showsQueue && !page.narrowWindow ? 60 + 320 + 24 : margin }
 
     var body: some View {
         @Bindable var router = router
@@ -238,7 +263,7 @@ struct SongList: View {
                 let sorted = controller.catalog.songs(by: sort, matching: needle)
                 let songs: [Song] = reversed ? sorted.reversed() : sorted
                 let columns = fit.columns(narrow: narrow)
-                PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: margin)) {
+                PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: trailing)) {
                     HStack(spacing: 16) {
                         HStack(alignment: .top, spacing: 18) {
                             Text("Songs")
@@ -261,17 +286,7 @@ struct SongList: View {
                             .animation(Theme.quick, value: router.selected.count > 1)
                         }
                         Spacer(minLength: 0)
-                        TextField("Filter", text: $router.songFilter, prompt: Text(""))
-                            .role(.body)
-                            .foregroundStyle(Theme.text)
-                            // AppKit draws a prompt in its own gray, whatever color it's given
-                            .overlay(alignment: .leading) {
-                                if router.songFilter.isEmpty { Text("Filter").role(.body).foregroundStyle(Theme.faint).allowsHitTesting(false) }
-                            }
-                            .focused($filtering)
-                            .onExitCommand { router.songFilter = ""; filtering = false }
-                            .onChange(of: filtering) { _, focused in router.typing = focused }
-                            .modifier(FieldLook(focused: filtering))
+                        SearchField(text: $router.songFilter, prompt: "Filter", focusAsks: focusAsks) { router.typing = $0 }
                             .frame(width: narrow ? 180 : 220)
                     }
                     .padding(.bottom, 19)
@@ -311,7 +326,7 @@ struct SongList: View {
     private func answerSearch() {
         guard router.searchRequests != Self.answeredSearch else { return }
         Self.answeredSearch = router.searchRequests
-        filtering = true
+        focusAsks += 1
     }
 
     private func count(of shown: Int, in all: Int, filtered: Bool) -> String {
@@ -349,6 +364,58 @@ struct SongList: View {
         }
         .buttonStyle(.plain)
         .accessibilityValue(sort == column ? (reversed ? "sorted, reversed" : "sorted") : "")
+    }
+}
+
+/// AppKit's own search field: its magnifier, its clear ×, and Esc to empty it.
+private struct SearchField: NSViewRepresentable {
+    @Binding var text: String
+    let prompt: String
+    let focusAsks: Int
+    let typing: (Bool) -> Void
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = prompt
+        field.font = .systemFont(ofSize: 13)
+        field.focusRingType = .exterior
+        field.delegate = context.coordinator
+        field.sendsSearchStringImmediately = true
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context: Context) {
+        context.coordinator.parent = self
+        if field.stringValue != text { field.stringValue = text }
+        guard context.coordinator.answered != focusAsks else { return }
+        context.coordinator.answered = focusAsks
+        // the field may not be in its window yet on the first pass
+        DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var parent: SearchField
+        var answered = 0
+
+        init(parent: SearchField) { self.parent = parent }
+
+        func controlTextDidChange(_ note: Notification) {
+            parent.text = (note.object as? NSSearchField)?.stringValue ?? ""
+        }
+
+        func controlTextDidBeginEditing(_ note: Notification) { parent.typing(true) }
+        func controlTextDidEndEditing(_ note: Notification) { parent.typing(false) }
+
+        /// Esc empties it and gives the keys back to the list.
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            guard selector == #selector(NSResponder.cancelOperation(_:)) else { return false }
+            parent.text = ""
+            control.stringValue = ""
+            control.window?.makeFirstResponder(nil)
+            return true
+        }
     }
 }
 

@@ -152,6 +152,17 @@ public struct Playlist: Identifiable, Equatable, Sendable {
         key.firstIndex(of: "\u{0}").map { String(key[key.index(after: $0)...]) } ?? key
     }
 
+    /// Each row with an identity that outlives edits: its song and which time over the song comes up. A row removed
+    /// or moved above it leaves it the same, so the list can animate it instead of handing it another row's view.
+    public var identifiedPaths: [(id: String, index: Int, path: String)] {
+        var seen: [String: Int] = [:]
+        return paths.enumerated().map { index, path in
+            let time = seen[path, default: 0]
+            seen[path] = time + 1
+            return ("\(time)\u{0}\(path)", index, path)
+        }
+    }
+
     /// The rows these keys pick, leaving out any whose song has moved since.
     public func rows(_ keys: Set<String>) -> IndexSet {
         IndexSet(paths.indices.filter { keys.contains(Self.rowKey($0, paths[$0])) })

@@ -51,6 +51,12 @@ enum Theme {
     static let settle = Animation.spring(duration: 0.35, bounce: 0.12)
     static let page = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
 
+    /// A press goes down fast and lets go slower, so a quick click still shows.
+    static func press(_ down: Bool) -> Animation { curve(down ? 0.08 : 0.2) }
+
+    /// Every control that shows only under the pointer: in over 120 ms, out over 80.
+    static func reveal(_ shown: Bool) -> Animation { curve(shown ? 0.12 : 0.08) }
+
     /// One deceleration curve for everything that isn't a spring: quick to start, long to settle.
     static func curve(_ duration: Double) -> Animation {
         .timingCurve(0.32, 0.72, 0, 1, duration: duration)
@@ -147,6 +153,8 @@ extension EnvironmentValues {
     /// The songs of the list a row sits in, in order, so ⇧-click can pick the run between two.
     @Entry var songOrder: [String] = []
     @Entry var songDrag: Namespace.ID?
+    /// The rows of a pick on its way somewhere, drawn dimmed until it lands.
+    @Entry var songsLifted: Set<String> = []
 }
 
 /// A row or tile that lights up under the pointer, instantly, as in Finder and Music.
@@ -165,6 +173,13 @@ extension View {
     func hoverable(radius: CGFloat = 8) -> some View {
         modifier(Hoverable(radius: radius))
     }
+
+    /// A hover-only control: fades with `Theme.reveal`, takes no clicks while hidden, and keeps its place.
+    func revealed(_ shown: Bool) -> some View {
+        opacity(shown ? 1 : 0)
+            .allowsHitTesting(shown)
+            .animation(Theme.reveal(shown), value: shown)
+    }
 }
 
 /// Presses down a little, like a real button. Wide targets get a smaller scale so they don't visibly shrink.
@@ -177,7 +192,7 @@ struct PressStyle: ButtonStyle {
             .opacity(enabled ? 1 : 0.4)
             .contentShape(.rect)
             .scaleEffect(configuration.isPressed ? scale : 1)
-            .animation(Theme.quick, value: configuration.isPressed)
+            .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
     }
 }
 

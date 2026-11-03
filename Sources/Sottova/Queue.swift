@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SottovaCore
 
@@ -6,6 +7,7 @@ import SottovaCore
 struct QueuePanel: View {
     let close: () -> Void
     @Environment(Controller.self) private var controller
+    @Environment(\.navigate) private var navigate
     @State private var picked = Set<QueueEntry.ID>()
 
     private static let rowHeight: CGFloat = 36
@@ -42,7 +44,7 @@ struct QueuePanel: View {
             } else {
                 List(selection: $picked) {
                     ForEach(controller.upNext) { entry in
-                        QueueRow(entry: entry).row()
+                        QueueRow(entry: entry, picked: picked.contains(entry.id))
                     }
                     .onMove { controller.moveQueued(fromOffsets: $0, toOffset: $1) }
                     .onInsert(of: [.fileURL]) { index, providers in
@@ -55,9 +57,12 @@ struct QueuePanel: View {
                         }
                     }
                 }
-                .onDeleteCommand {
-                    withAnimation(Theme.quick) { controller.removeQueued(picked) }
-                    picked = []
+                .onDeleteCommand { remove(picked) }
+                // the pick when the row is in it, else the row alone, as in Finder; double-click and Return play
+                .contextMenu(forSelectionType: QueueEntry.ID.self) { ids in
+                    MenuEntries(entries: menu(for: ids))
+                } primaryAction: { ids in
+                    if let first = controller.upNext.first(where: { ids.contains($0.id) }) { controller.playQueued(first.id) }
                 }
                 #if SHOT
                 .onAppear { picked = Set(controller.upNext.prefix(UserDefaults.standard.integer(forKey: "shotQueuePicked")).map(\.id)) }
@@ -74,6 +79,26 @@ struct QueuePanel: View {
         .background(Theme.popover, in: .rect(cornerRadius: Radius.large))
         .overlay(RoundedRectangle(cornerRadius: Radius.large).stroke(.black.opacity(0.5), lineWidth: 0.5).padding(-0.25))
         .shadow(color: .black.opacity(0.5), radius: 20, y: 14)
+    }
+
+    private func remove(_ ids: Set<QueueEntry.ID>) {
+        withAnimation(Theme.quick) { controller.removeQueued(ids) }
+        picked.subtract(ids)
+    }
+
+    private func menu(for ids: Set<QueueEntry.ID>) -> [MenuEntry] {
+        let entries = controller.upNext.filter { ids.contains($0.id) }
+        guard let first = entries.first else { return [] }
+        let remove = MenuEntry.item(entries.count == 1 ? "Remove from the queue" : "Remove \(entries.count) from the queue") { self.remove(ids) }
+        guard entries.count == 1, let song = controller.catalog.songsByID[first.path] else {
+            return [.item("Play now") { controller.playQueued(first.id) }, .divider, remove]
+        }
+        return [
+            .item("Play now") { controller.playQueued(first.id) },
+            .item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) },
+            .divider,
+            remove,
+        ]
     }
 
     private var queuedLength: Double {
@@ -97,8 +122,9 @@ struct QueuePanel: View {
 
 private struct QueueRow: View {
     let entry: QueueEntry
+    let picked: Bool
     @Environment(Controller.self) private var controller
-    @Environment(\.navigate) private var navigate
+    @Environment(\.appearsActive) private var active
     @State private var hovering = false
 
     var body: some View {
@@ -117,43 +143,47 @@ private struct QueueRow: View {
                 .role(.body)
                 .lineLimit(1)
                 .help("\(song.title), \(song.artist)")
-                Spacer(minLength: 0)
-                if !hovering {
-                    Text(Format.time(song.duration)).role(.body).monospacedDigit().foregroundStyle(Theme.faint)
-                }
             } else {
                 Text(URL(filePath: entry.path).deletingPathExtension().lastPathComponent)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.faint)
                     .lineLimit(1)
-                Spacer(minLength: 0)
             }
-            if hovering {
+            Spacer(minLength: 0)
+            ZStack(alignment: .trailing) {
+                if let song {
+                    Text(Format.time(song.duration)).role(.body).monospacedDigit().foregroundStyle(Theme.faint).revealed(!hovering)
+                }
                 IconButton(icon: .x, weight: .bold, help: "remove from the queue", size: 24) {
                     withAnimation(Theme.quick) { controller.removeQueued([entry.id]) }
                 }
+                .revealed(hovering)
             }
         }
         .frame(height: 36)
         .contentShape(.rect)
         .onHover { hovering = $0 }
-        .sottovaMenu {
-            [.item("Play now") { controller.playQueued(entry.id) }]
-                + (song.map { song in [.item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) }] } ?? [])
-                + [
-                    .divider,
-                    .item("Remove from the queue") { withAnimation(Theme.quick) { controller.removeQueued([entry.id]) } },
-                ]
-        }
+        .background(SystemHighlightOff())
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 4))
+        // the rows' own pick and hover, as in Songs, in place of the system's blue
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: Radius.small)
+                .fill(picked ? Theme.picked.opacity(active ? 1 : 0.7) : Theme.hover.opacity(hovering ? 1 : 0))
+                .padding(.horizontal, 6)
+        )
     }
 }
 
+/// The list keeps its selection, for the keys and the menu, but draws none: the rows draw the app's own.
+private struct SystemHighlightOff: NSViewRepresentable {
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ nsView: Probe, context: Context) {}
 
-private extension View {
-    /// A list row with nothing of the list's own look: no separator, background or inset beyond the panel's.
-    func row() -> some View {
-        listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 4))
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            (enclosingScrollView?.documentView as? NSTableView)?.selectionHighlightStyle = .none
+        }
     }
 }
