@@ -219,6 +219,23 @@ struct SilenceChoices: View {
     }
 }
 
+/// "Add to collection ▸" for a page's •••, as the right-click has it.
+private struct AddToCollection: View {
+    let songs: [Song]
+    let name: String
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        Menu("Add to collection") {
+            ForEach(controller.playlists) { playlist in
+                Button(playlist.name) { controller.add(songs, to: playlist.id) }
+            }
+            if !controller.playlists.isEmpty { Divider() }
+            Button("New collection") { controller.newPlaylist(named: name, songs: songs) }
+        }
+    }
+}
+
 /// Only when it isn't yours: what this collection's silence is and how long it makes it.
 @MainActor
 private func ownSilence(_ gaps: SottovaCore.Settings?, songs: [Song], controller: Controller) -> [String] {
@@ -255,12 +272,15 @@ struct AlbumCollection: View {
                 HStack(spacing: 6) {
                     PlayButton(songs: album.songs)
                     ShuffleButton(songs: album.songs)
+                    ThemeButton(title: "Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
+                        .help("a copy you can add to, reorder and split")
                     CollectionMenu {
+                        Button("Play next") { controller.playNext(album.songs) }
+                        AddToCollection(songs: album.songs, name: album.title)
+                        Divider()
                         Button("Start at…") { router.alarm = .new(.album(id)) }
                         SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.albumSettings[id] = $0 }
                         Divider()
-                        Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
-                            .help("a copy you can reorder and add to. songs added to its folder later won't join it")
                         Button("Choose cover…") { router.coverFor = .album(id) }
                         if album.artist != "Various Artists" {
                             Divider()
@@ -320,12 +340,12 @@ struct YourCollection: View {
                             credit: (Controller.coverURL(forPlaylist: pid), controller.playlistCovers[pid])) {
                 title(playlist)
             } actions: {
-                if !isEmpty {
-                    HStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    if !isEmpty {
                         PlayButton(songs: songs, source: pid)
                         ShuffleButton(songs: songs, source: pid)
-                        menu(playlist, songs: songs)
                     }
+                    menu(playlist, songs: songs)
                 }
             } songs: { narrow in
                 if isEmpty {
@@ -514,11 +534,9 @@ struct YourCollection: View {
 
     private func menu(_ playlist: Playlist, songs: [Song]) -> some View {
         CollectionMenu {
-            Button("Start at…") { router.alarm = .new(.playlist(pid)) }
-            SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
-            Divider()
-            Button("Rename") { startRename(playlist) }
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
+            SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
+            Button("Start at…") { router.alarm = .new(.playlist(pid)) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {
