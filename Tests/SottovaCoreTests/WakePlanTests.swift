@@ -80,10 +80,27 @@ struct WakePlanTests {
         #expect(script.contains("NOPASSWD: /usr/bin/pmset schedule wakeorpoweron \(WakePlan.datePattern), /usr/bin/pmset schedule cancel wakeorpoweron \(WakePlan.datePattern)'"))
         let check = try #require(script.range(of: "visudo -cf"))
         let move = try #require(script.range(of: "mv /etc/sudoers.d/.sottova /etc/sudoers.d/sottova-3"))
-        let remove = try #require(script.range(of: "rm -f /etc/sudoers.d/sottova-2 /etc/sudoers.d/sottova "))
+        let remove = try #require(script.range(of: "rm -f /etc/sudoers.d/sottova "))
         #expect(check.lowerBound < move.lowerBound && move.lowerBound < remove.lowerBound)
+        // an older build still adds its wakes through sottova-2
+        #expect(!script.contains(WakePlan.addOnlyRule))
         // a failure takes away only the file it was writing
         #expect(script.contains("|| { rm -f /etc/sudoers.d/.sottova; exit 1; }"))
+    }
+
+    @Test func savingAsksOnlyWhenTheMacCantWakeOtherwiseAndAClickAsksForTheCancel() {
+        let (newer, older, loose) = (WakePlan.rule, WakePlan.addOnlyRule, WakePlan.looseRule)
+        // no rule yet: a wake to add asks
+        #expect(WakePlan.asks(missing: true, forDaysOff: false, clicked: false, rules: []))
+        #expect(!WakePlan.asks(missing: false, forDaysOff: true, clicked: false, rules: []))
+        // the older rule adds wakes, so saving never asks for the one that cancels
+        #expect(!WakePlan.asks(missing: true, forDaysOff: true, clicked: false, rules: [older]))
+        #expect(WakePlan.asks(missing: false, forDaysOff: true, clicked: true, rules: [older]))
+        #expect(!WakePlan.asks(missing: false, forDaysOff: false, clicked: true, rules: [older]))
+        // the loose rule is swapped out at the next chance
+        #expect(WakePlan.asks(missing: false, forDaysOff: false, clicked: false, rules: [loose]))
+        // with the newer rule in, nothing asks
+        #expect(!WakePlan.asks(missing: true, forDaysOff: true, clicked: true, rules: [newer, older, loose]))
     }
 
     @Test func theSudoCallIsTheOneTheRuleAllows() {

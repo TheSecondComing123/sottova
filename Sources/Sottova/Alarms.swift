@@ -503,28 +503,31 @@ final class SystemWake {
     }
 
     /// Schedules every missing wake and cancels the ones a day off or a row turned off no longer needs, asking for the
-    /// password first if the rule for that isn't in yet. A wake left from a deleted alarm stays: it only wakes the
-    /// Mac, which goes back to sleep.
-    func schedule(for alarms: [Alarm], asking: Bool = true) {
-        inTurn { await self.fill(alarms, asking: asking) }
+    /// password first if no rule can add them yet. Only a click on Let it sleep or Wake it (`clicked`) asks for the
+    /// rule that cancels. A wake left from a deleted alarm stays: it only wakes the Mac, which goes back to sleep.
+    func schedule(for alarms: [Alarm], asking: Bool = true, clicked: Bool = false) {
+        inTurn { await self.fill(alarms, asking: asking, clicked: clicked) }
     }
 
-    private func fill(_ alarms: [Alarm], asking: Bool) async {
+    private func fill(_ alarms: [Alarm], asking: Bool, clicked: Bool) async {
         await read()
         adoptOnce(alarms)
         let dates = missing(for: alarms)
         let cancels = WakePlan.cancels(for: alarms, scheduled: scheduled, ours: ours, now: .now)
-        // the loose rule keeps wakes topped up, so nothing may be missing; saving an alarm still swaps it out. Someone
-        // who never takes a day off is never asked again for the rule that cancels
-        let loose = !trusted && FileManager.default.fileExists(atPath: WakePlan.looseRule)
         let forDaysOff = !WakePlan.cancels(for: alarms.filter(\.on), scheduled: scheduled, ours: ours, now: .now).isEmpty
-        let wanted = !trusted && (!dates.isEmpty && !addsOnly || forDaysOff || loose)
-        guard !dates.isEmpty || !cancels.isEmpty && trusted || (forDaysOff || loose) && asking else { return }
-        if wanted, asking {
+        let rules = Set([WakePlan.rule, WakePlan.addOnlyRule, WakePlan.looseRule].filter { FileManager.default.fileExists(atPath: $0) })
+        let asks = asking && WakePlan.asks(missing: !dates.isEmpty, forDaysOff: forDaysOff, clicked: clicked, rules: rules)
+        guard !dates.isEmpty || !cancels.isEmpty && trusted || asks else { return }
+        var said: String?
+        if asks {
             let install = await WakePlan.run("/usr/bin/osascript", ["-e", WakePlan.installScript(user: NSUserName())])
             if install?.status != 0 {
-                failure = WakePlan.installFailure(install?.error ?? "")
-                return
+                said = WakePlan.installFailure(install?.error ?? "")
+                // an older rule still adds the wakes a new or moved row needs
+                guard addsOnly else {
+                    failure = said
+                    return
+                }
             }
         }
         var added: [Date] = []
@@ -538,7 +541,7 @@ final class SystemWake {
         ours.formUnion(scheduled.intersection(added))
         // a cancel that's still listed didn't take, whatever sudo said
         let failed = dates.count - added.count + (trusted ? cancels.filter(scheduled.contains).count : 0)
-        failure = failed == 0 ? nil : "couldn't change \(failed) of the wakes: the system said no"
+        failure = failed == 0 ? said : "couldn't change \(failed) of the wakes: the system said no"
     }
 }
 

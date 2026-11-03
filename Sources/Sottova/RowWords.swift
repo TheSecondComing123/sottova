@@ -18,7 +18,7 @@ struct RowWord: View {
         case .playNow:
             ThemeLink(text: piece.text, underlined: true) { controller.playNow(alarm) }.role(.body)
         case .wake:
-            ThemeLink(text: piece.text, underlined: true) { SystemWake.shared.schedule(for: controller.alarms) }.role(.body)
+            ThemeLink(text: piece.text, underlined: true) { SystemWake.shared.schedule(for: controller.alarms, clicked: true) }.role(.body)
         case .days?:
             WordMenu(text: piece.text, on: alarm.on && !off) { DayWords(alarm: alarm, change: change) }
         case .daysOff?:

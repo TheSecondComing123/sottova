@@ -158,12 +158,12 @@ it lets sottova add or cancel a wake at a date and time, and nothing else, witho
 
 sottova only cancels wakes it added itself, for a day off or a row you turned off, and never one another row still needs. a wake you or another app scheduled stays.
 
-an older version added `/etc/sudoers.d/sottova-2`, which can only add wakes. it keeps working. the first day off you take asks for your password once to swap it for `sottova-3`; until then the row plays nothing that day but the Mac still wakes.
+an older version added `/etc/sudoers.d/sottova-2`, which can only add wakes. it keeps working and stays where it is. saving a row never asks again, so on a day off the row plays nothing but the Mac still wakes, and the row says so. click Let it sleep there to give your password once and add `sottova-3` beside it.
 
 to undo it:
 
 ```sh
-sudo rm /etc/sudoers.d/sottova-3
+sudo rm -f /etc/sudoers.d/sottova-3 /etc/sudoers.d/sottova-2
 pmset -g sched                  # see what's scheduled
 sudo pmset schedule cancelall   # removes every scheduled wake, not only sottova's
 ```

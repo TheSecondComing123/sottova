@@ -11,7 +11,8 @@ public enum WakePlan {
     /// password. It goes in with the one password prompt, so later wakes are added and taken away as the days go by
     /// without asking again.
     public static let rule = "/etc/sudoers.d/sottova-3"
-    /// The rule before days off could only add wakes. It still does, and the password prompt for a day off replaces it.
+    /// The rule before days off could only add wakes. It stays beside the newer one, as an older build still adds
+    /// wakes through it.
     public static let addOnlyRule = "/etc/sudoers.d/sottova-2"
     /// The first rule ended in `*`, which also matches spaces, so it let extra arguments through. It still schedules
     /// wakes, and the next password prompt replaces it. The app can't read any of these files, only see which exist.
@@ -64,6 +65,15 @@ public enum WakePlan {
             .sorted()
     }
 
+    /// Whether to ask for the password, given which rules exist (`rules`): for a wake to add with no rule, to swap
+    /// out the loose rule, or for a wake to take back when you click Let it sleep or Wake it. Saving a row never asks
+    /// for the cancel alone, so cancelling that prompt can't cost a new row its wake.
+    public static func asks(missing: Bool, forDaysOff: Bool, clicked: Bool, rules: Set<String>) -> Bool {
+        guard !rules.contains(rule) else { return false }
+        let adds = rules.contains(addOnlyRule) || rules.contains(looseRule)
+        return missing && !adds || rules.contains(looseRule) || clicked && forDaysOff
+    }
+
     public static func pmsetArguments(for date: Date) -> [String] {
         ["-n", "/usr/bin/pmset", "schedule", "wakeorpoweron", format.string(from: date)]
     }
@@ -72,11 +82,11 @@ public enum WakePlan {
         ["-n", "/usr/bin/pmset", "schedule", "cancel", "wakeorpoweron", format.string(from: date)]
     }
 
-    /// Written and checked under a name with a dot, which sudo skips, so a bad rule never takes effect; the older
-    /// rules go only once the new one is in, so a cancel or a failure leaves them adding wakes as before.
+    /// Written and checked under a name with a dot, which sudo skips, so a bad rule never takes effect; the loose rule
+    /// goes only once the new one is in, so a cancel or a failure leaves it adding wakes as before.
     public static func installScript(user: String) -> String {
         let line = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron \(datePattern), /usr/bin/pmset schedule cancel wakeorpoweron \(datePattern)"
-        let install = "echo '\(line)' > /etc/sudoers.d/.sottova && chmod 440 /etc/sudoers.d/.sottova && /usr/sbin/visudo -cf /etc/sudoers.d/.sottova && mv /etc/sudoers.d/.sottova \(rule) && rm -f \(addOnlyRule) \(looseRule) || { rm -f /etc/sudoers.d/.sottova; exit 1; }"
+        let install = "echo '\(line)' > /etc/sudoers.d/.sottova && chmod 440 /etc/sudoers.d/.sottova && /usr/sbin/visudo -cf /etc/sudoers.d/.sottova && mv /etc/sudoers.d/.sottova \(rule) && rm -f \(looseRule) || { rm -f /etc/sudoers.d/.sottova; exit 1; }"
         return "do shell script \"\(install)\" with administrator privileges"
     }
 
