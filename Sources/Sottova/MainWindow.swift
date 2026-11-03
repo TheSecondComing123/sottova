@@ -8,7 +8,6 @@ struct MainWindow: View {
     @State private var visible = true
     /// A theme change rebuilds this view, which would add them all again; they only need the router, which stays.
     @MainActor private static var watching = false
-    @State private var renaming: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
     @State private var layout = PageLayout(windowWidth: 1240, pageHeight: 748)
@@ -55,26 +54,8 @@ struct MainWindow: View {
         .environment(\.listLayout, layout.list)
         .background(WindowVisibility(visible: $visible))
         .environment(\.windowVisible, visible)
-        .environment(\.renaming, $renaming)
-        .environment(\.navigate, Navigate { route in
-            // a name opens Songs filtered to it
-            if case .artist(let name) = route {
-                router.go(to: .songs)
-                router.songFilter = name
-                return
-            }
-            if case .composer(let name) = route {
-                router.go(to: .songs)
-                router.songFilter = name
-                return
-            }
-            // an album made yours opens as its copy
-            if case .album(let id) = route, let copy = controller.copy(ofAlbum: id) {
-                router.go(to: .playlist(copy.id))
-            } else {
-                router.go(to: route)
-            }
-        })
+        .environment(\.renaming, Binding(get: { router.renaming }, set: { router.renaming = $0 }))
+        .environment(\.navigate, Navigate { router.open($0, in: controller) })
         // drop music folders anywhere on the window
         .dropDestination(for: URL.self, action: { urls, _ in
             let folders = urls.filter(\.hasDirectoryPath)

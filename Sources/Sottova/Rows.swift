@@ -30,7 +30,7 @@ extension MenuEntry {
         if songs.count > 1 {
             var entries: [MenuEntry] = [
                 // from the first picked, as Return does
-                .item("Play") { router.run?.play(songs[0].id) },
+                .item("Play", action: router.playPick),
                 .item("Play \(songs.count) next") { controller.playNext(songs) },
                 .item("Add \(songs.count) to queue") { controller.playNext(songs, at: controller.upNext.count) },
                 .addToCollection(songs, name: "", controller: controller, naming: naming),

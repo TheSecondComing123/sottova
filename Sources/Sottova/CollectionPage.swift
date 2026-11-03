@@ -380,6 +380,8 @@ struct YourCollection: View {
             .onChange(of: renaming.wrappedValue) { _, new in
                 if new == pid { startRename(playlist) }
             }
+            .onChange(of: router.addSongsRequests) { addRequests += 1 }
+            .onChange(of: router.newPartRequests) { if router.selected.count > 1 { newPartFromPick(playlist) } }
         } else {
             Missing(text: "this collection isn't in your library anymore")
         }
@@ -466,12 +468,7 @@ struct YourCollection: View {
                 withAnimation(Theme.quick) { controller.setBreak(!playlist.breaks.contains(index), at: index, in: pid) }
             }), key: key, more: {
                 guard router.selected.count > 1, router.selected.contains(key) else { return [] }
-                return [.item("New part from selection") {
-                    let rows = playlist.rows(router.selected)
-                    withAnimation(Theme.quick) { controller.newPart(from: rows, in: pid) }
-                    router.selected = []
-                    if let first = rows.first { naming = first }
-                }]
+                return [.item("New part from selection") { newPartFromPick(playlist) }]
             }) {
                 controller.play(songs, from: playable, source: pid)
             }
@@ -604,6 +601,13 @@ struct YourCollection: View {
                 }
             }
         }
+    }
+
+    private func newPartFromPick(_ playlist: Playlist) {
+        let rows = playlist.rows(router.selected)
+        withAnimation(Theme.quick) { controller.newPart(from: rows, in: pid) }
+        router.selected = []
+        if let first = rows.first { naming = first }
     }
 
     private func startRename(_ playlist: Playlist) {

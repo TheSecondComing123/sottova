@@ -47,8 +47,8 @@ final class Router {
     @ObservationIgnored private var anchor: String?
     /// Where the arrows are: a song in a collection twice has one id and two places.
     @ObservationIgnored private var stepped: Int?
-    /// The list on the page, for the keys and Select All.
-    @ObservationIgnored var run: SongRun?
+    /// The list on the page, for the keys, Select All and the Song menu, which has to see it arrive.
+    var run: SongRun?
     /// The song the arrows moved to, for the page to bring into view.
     private(set) var scrollTo: String?
     /// The click under way, read at the press because a tap ends after the window has come forward.
@@ -91,8 +91,8 @@ final class Router {
         case 125: step(1, in: run.order)
         case 126: step(-1, in: run.order)
         case 36, 76:
-            guard let first = run.order.first(where: selected.contains) else { return false }
-            run.play(first)
+            guard run.order.contains(where: selected.contains) else { return false }
+            playPick()
         case 51, 117:
             guard let remove = run.remove, !selected.isEmpty else { return false }
             remove(selected)
@@ -119,6 +119,43 @@ final class Router {
     var showsQueue = false
     /// A collection about to go to the Trash with alarms that would go with it, asked about first.
     var trashing: String?
+    /// The playlist whose name is being typed, right after it's made or picked Rename.
+    var renaming: String?
+    /// Bumped by the menu bar; the open collection does each itself, as its own buttons and right-click do.
+    var addSongsRequests = 0
+    var newPartRequests = 0
+
+    /// Where a click on a name goes.
+    func open(_ route: Route, in controller: Controller) {
+        // a name opens Songs filtered to it
+        if case .artist(let name) = route {
+            go(to: .songs)
+            songFilter = name
+            return
+        }
+        if case .composer(let name) = route {
+            go(to: .songs)
+            songFilter = name
+            return
+        }
+        // an album made yours opens as its copy
+        if case .album(let id) = route, let copy = controller.copy(ofAlbum: id) {
+            go(to: .playlist(copy.id))
+        } else {
+            go(to: route)
+        }
+    }
+
+    /// The picked songs on the page, in the list's order.
+    var pickedPaths: [String] {
+        currentRun.map { $0.order.filter(selected.contains).map(Playlist.path(ofRow:)) } ?? []
+    }
+
+    /// From the first picked, as Return does.
+    func playPick() {
+        guard let run = currentRun, let first = run.order.first(where: selected.contains) else { return }
+        run.play(first)
+    }
 
     func go(to destination: Route) {
         selected = []
@@ -220,6 +257,50 @@ struct SottovaCommands: Commands {
         CommandMenu("Go") {
             goItems.disabled(router.presetEdit != nil)
         }
+        // the right-click's own lists, so the two can't drift apart
+        CommandMenu("Collection") {
+            MenuEntries(entries: collectionEntries)
+        }
+        CommandMenu("Song") {
+            MenuEntries(entries: songEntries)
+        }
+        CommandMenu("Day") {
+            Button("New row…") {
+                openWindow(id: "main")
+                router.alarm = .new(nil)
+            }
+        }
+    }
+
+    private var navigate: Navigate { Navigate { router.open($0, in: controller) } }
+
+    /// One of yours, open: what its page and its right-click do. Anything else: the same items, off.
+    private var collectionEntries: [MenuEntry] {
+        guard router.presetEdit == nil, case .playlist(let id) = router.route, let playlist = controller.playlists.first(where: { $0.id == id }) else {
+            return ["Play", "Shuffle", "Add songs", "New part from selection", "Rename", "Choose cover…", "Start at…", "Show in Finder", "Move to Trash"]
+                .map { .item($0, enabled: false) {} }
+        }
+        var entries = MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate,
+                                      renaming: Binding(get: { router.renaming }, set: { router.renaming = $0 }))
+        if playlist.paths.isEmpty { entries[0].enabled = false; entries[1].enabled = false }
+        entries.insert(contentsOf: [
+            .item("Add songs") { router.addSongsRequests += 1 },
+            .item("New part from selection", enabled: router.selected.count > 1) { router.newPartRequests += 1 },
+        ], at: 2)
+        return entries
+    }
+
+    /// What the pick's right-click offers, less what only makes sense on the row itself.
+    private var songEntries: [MenuEntry] {
+        let songs = router.pickedPaths.compactMap { controller.catalog.songsByID[$0] }
+        guard router.presetEdit == nil, let first = songs.first else {
+            return ["Play", "Play next", "Add to queue", "Add to collection", "Trim…", "Show in Finder"].map { .item($0, enabled: false) {} }
+        }
+        return MenuEntry.song(first, picked: songs, play: router.playPick, remove: nil, part: nil, naming: {
+            guard let id = controller.newPlaylist(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
+            router.renaming = id
+            router.go(to: .playlist(id))
+        }, controller: controller, router: router, navigate: navigate)
     }
 
     private var playingCollection: String {

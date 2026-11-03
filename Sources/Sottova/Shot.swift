@@ -120,6 +120,11 @@ struct ShotReady: ViewModifier {
                 try? Data(String(popover?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
                 return
             }
+            if let title = defaults.string(forKey: "shotMainMenu"), let window, let menu = NSApp.mainMenu?.item(withTitle: title)?.submenu {
+                shotMenuReady()
+                menu.popUp(positioning: nil, at: NSPoint(x: window.frame.midX, y: window.frame.maxY - 80), in: nil)
+                return
+            }
             if defaults.bool(forKey: "shotStatusMenu"), let window {
                 shotMenuReady()
                 _ = AppDelegate.statusMenu?.item.menu?.popUp(positioning: nil, at: NSPoint(x: window.frame.midX, y: window.frame.midY), in: nil)
