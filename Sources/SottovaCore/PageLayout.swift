@@ -108,12 +108,12 @@ public struct DayLayout: Equatable, Sendable {
 
     private func othersHeight(_ others: Int) -> Double { others == 0 ? 0 : 42 + Double(others) * Self.line }
 
-    /// Height the rail has before it scrolls. 16: the first block sits a little above its time, the last can run past the foot.
+    /// Height the rail has before it scrolls, under the title. 16: the first block sits a little above its time, the last can run past the foot.
     public func railRoom(others: Int, played: Int) -> Double {
-        let page = height - Self.top - Self.bottom - 16
+        let page = height - Self.top - Self.bottom - 16 - 46
         guard oneColumn(others: others, played: played) else { return page }
         let shown = played == 0 ? 0 : 41 + Double(min(played, 3)) * Self.line
-        return page - 46 - othersHeight(others) - shown
+        return page - othersHeight(others) - shown
     }
 
     /// `span`: the rail's hours once long gaps are drawn short. A long day scrolls.

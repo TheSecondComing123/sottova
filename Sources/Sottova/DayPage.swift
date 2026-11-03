@@ -37,22 +37,20 @@ struct DayPage: View {
             let now = now(context.date)
             let plan = controller.dayPlan(now: now, wholeDay: droppingHere)
             PageScroll(insets: EdgeInsets(top: layout.insets.top, leading: layout.margin, bottom: layout.insets.bottom, trailing: layout.margin), maxWidth: .infinity) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    newButton
+                }
+                .padding(.bottom, 14)
                 if oneColumn(plan) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
-                        Spacer(minLength: 0)
-                        newButton
-                    }
-                    .padding(.bottom, 14)
                     day(plan)
                     others(plan, now: now)
                     playedList(plan)
                 } else {
                     HStack(alignment: .top, spacing: DayLayout.gap) {
-                        // the first block level with New
-                        VStack(alignment: .leading, spacing: 0) { day(plan) }.padding(.top, 8)
+                        VStack(alignment: .leading, spacing: 0) { day(plan) }
                         VStack(alignment: .leading, spacing: 0) {
-                            newButton.frame(maxWidth: .infinity, alignment: .trailing)
                             others(plan, now: now)
                             playedList(plan)
                         }
@@ -338,7 +336,7 @@ struct DayPage: View {
     private func others(_ plan: DayPlan, now: Date) -> some View {
         let rest = rest(plan)
         if !rest.isEmpty {
-            heading("Other days").padding(.top, 24).padding(.bottom, 6)
+            heading("Other days").padding(.top, oneColumn(plan) ? 24 : 0).padding(.bottom, 6)
             ForEach(rest) { alarm in
                 OtherLine(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id) + stillWakes(alarm))
             }
@@ -364,7 +362,7 @@ struct DayPage: View {
                         .popover(isPresented: $allPlayed, arrowEdge: .trailing) { allPlayedList(plan) }
                 }
             }
-            .padding(.top, 24)
+            .padding(.top, oneColumn(plan) || !rest(plan).isEmpty ? 24 : 0)
             .padding(.bottom, 6)
             .padding(.leading, oneColumn(plan) ? DayLayout.blockLeft : 0)
             ForEach(played.reversed().prefix(cap), id: \.at) { line in
@@ -507,7 +505,6 @@ private struct RailTime: View {
 
     private var text: some View {
         Text(label.text)
-            .underline(alarm != nil, color: Theme.faint)
             .font(.system(size: strong ? 13 : 11, weight: strong ? .medium : .regular))
             .lineHeight(.exact(points: 18))
             .monospacedDigit()
@@ -601,10 +598,11 @@ private struct DaysOffPopover: ViewModifier {
     @State private var frame: CGRect = .zero
     /// The row's "Off…" word, in this view's space.
     @State private var word: CGRect?
+    @State private var days: CGRect?
 
     func body(content: Content) -> some View {
         let window = NSApp.windows.first { $0.isVisible && $0.isMainWindow }?.contentView?.bounds.height ?? .infinity
-        let at = router.daysOffFromWord ? word : nil
+        let at = (router.daysOffFromWord ? word : nil) ?? days
         let bottom = frame.minY + (at?.maxY ?? frame.height)
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
@@ -612,6 +610,12 @@ private struct DaysOffPopover: ViewModifier {
                 GeometryReader { proxy in
                     let rect = anchor.map { proxy[$0] }
                     Color.clear.onChange(of: rect, initial: true) { word = rect }
+                }
+            }
+            .backgroundPreferenceValue(DaysWord.self) { anchor in
+                GeometryReader { proxy in
+                    let rect = anchor.map { proxy[$0] }
+                    Color.clear.onChange(of: rect, initial: true) { days = rect }
                 }
             }
             .popover(isPresented: Binding(get: { router.daysOff == alarm.id }, set: { if !$0, router.daysOff == alarm.id { router.daysOff = nil } }),

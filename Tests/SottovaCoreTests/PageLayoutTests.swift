@@ -74,6 +74,12 @@ struct PageLayoutTests {
         }
     }
 
+    @Test func theTitleTakesItsLineAtEveryWidth() {
+        for page in Self.windows where !page.day.narrow {
+            #expect(page.day.railRoom(others: 1, played: 0) == page.height - 16 - 24 - 16 - 46)
+        }
+    }
+
     @Test func whatPlayedIsCappedByTheColumns() {
         #expect(PageLayout(windowWidth: 855, pageHeight: 748).day.playedCap == 3)
         #expect(PageLayout(windowWidth: 1920, pageHeight: 997).day.playedCap == 8)

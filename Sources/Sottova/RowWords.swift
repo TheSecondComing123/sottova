@@ -14,13 +14,14 @@ struct RowWord: View {
     var body: some View {
         switch piece.word {
         case nil:
-            Text(piece.text).role(.body)
+            Text(piece.text).role(.body).padding(.trailing, WordMenu<EmptyView>.caret)
         case .playNow:
-            ThemeLink(text: piece.text, underlined: true) { controller.playNow(alarm) }.role(.body)
+            ThemeLink(text: piece.text) { controller.playNow(alarm) }.role(.body).padding(.trailing, WordMenu<EmptyView>.caret)
         case .wake:
-            ThemeLink(text: piece.text, underlined: true) { SystemWake.shared.schedule(for: controller.alarms, clicked: true) }.role(.body)
+            ThemeLink(text: piece.text) { SystemWake.shared.schedule(for: controller.alarms, clicked: true) }.role(.body).padding(.trailing, WordMenu<EmptyView>.caret)
         case .days?:
             WordMenu(text: piece.text, on: alarm.on && !off) { DayWords(alarm: alarm, change: change) }
+                .anchorPreference(key: DaysWord.self, value: .bounds) { $0 }
         case .daysOff?:
             WordMenu(text: piece.text, on: alarm.on && !off) {
                 ForEach(DayPlan(alarms: [], now: controller.wallNow).offRuns(alarm), id: \.text) { run in
@@ -76,28 +77,38 @@ struct OffWord: PreferenceKey {
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
 }
 
-/// One clickable word of a row's line, opening a native menu.
+/// Where its days word is, for the calendar opened from the menus.
+struct DaysWord: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? { nil }
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
+}
+
+/// One clickable word of a row's line, opening a native menu. No underline: under the pointer a plate and a caret say
+/// it's a menu.
 struct WordMenu<Content: View>: View {
     let text: String
     let on: Bool
     @ViewBuilder let content: Content
     @State private var hovering = false
 
+    /// The caret's room after every word, held at rest too, so the gaps stay even and showing it moves nothing.
+    static var caret: CGFloat { 10 }
+
     var body: some View {
         Menu {
             content
         } label: {
-            Text(text).underline(color: Theme.faint)
-                // drawn past the word, taking no room, so the gaps between words stay even and showing it moves nothing
-                .overlay(alignment: .trailing) {
-                    Ph.caretDown.icon(.bold, size: 8).opacity(hovering ? 1 : 0).animation(Theme.quick, value: hovering).offset(x: 10)
-                }
+            HStack(spacing: 2) {
+                Text(text)
+                Ph.caretDown.icon(.bold, size: 8).opacity(hovering ? 1 : 0).animation(Theme.quick, value: hovering)
+            }
                 .role(.body)
                 // a Menu's label doesn't inherit the row's foreground
                 .foregroundStyle(hovering ? Theme.text : on ? Theme.muted : Theme.faint)
                 .background {
+                    // the same inset both sides, the caret inside it; a block's fill is Theme.hover, so not that
                     RoundedRectangle(cornerRadius: 4).fill(hovering ? Theme.selection : .clear)
-                        .padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: hovering ? -12 : -4))
+                        .padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: -4))
                 }
         }
         .menuStyle(.button)
@@ -167,8 +178,8 @@ struct VolumeWords: View {
 
 /// Words left to right, spaced, wrapping between them; one too long for a line wraps inside itself.
 struct WordFlow: Layout {
-    // room for a hovered menu word's caret, drawn past it in the gap
-    private static let spacing: CGFloat = 14
+    // each word holds its caret's room as well
+    private static let spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let placed = place(subviews, width: proposal.width ?? .infinity)
@@ -205,7 +216,7 @@ struct WordFlow: Layout {
         let font = [NSAttributedString.Key.font: NSFont.systemFont(ofSize: Role.body.size)]
         var (x, lines) = (0.0, 1)
         for piece in pieces {
-            let size = Double(ceil((piece.text as NSString).size(withAttributes: font).width))
+            let size = Double(ceil((piece.text as NSString).size(withAttributes: font).width) + WordMenu<EmptyView>.caret)
             if x > 0, x + size > width { (x, lines) = (0, lines + 1) }
             lines += max(0, Int(size / width))
             x += size.truncatingRemainder(dividingBy: width) + Double(spacing)
