@@ -688,23 +688,25 @@ private struct DayRow: View {
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
+    @State private var hovering = false
 
     var body: some View {
         Group {
             if painting.under {
                 VStack(alignment: .leading, spacing: 8) {
                     art
-                    HStack(alignment: .top, spacing: 0) { tick; words; Spacer(minLength: 8); dots }
+                    HStack(alignment: .top, spacing: 0) { tick; words; Spacer(minLength: 8); buttons }
                 }
             } else {
                 HStack(alignment: .top, spacing: 0) {
                     tick
                     HStack(alignment: .top, spacing: 12) { art; words }
                     Spacer(minLength: 8)
-                    dots
+                    buttons
                 }
             }
         }
+        .onHover { hovering = $0 }
         .padding(6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
@@ -745,7 +747,41 @@ private struct DayRow: View {
         .daysOffPopover(alarm)
     }
 
-    private var dots: some View {
+    /// Delete shows on hover, in its place all along so nothing moves; it's in the menus too.
+    private var buttons: some View {
+        HStack(spacing: 2) {
+            Button { controller.removeAlarm(alarm.id) } label: {
+                Ph.x.icon(.bold, size: 11)
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 24, height: 24)
+                    .contentShape(.rect)
+                    .hoverable(radius: 4)
+            }
+            .buttonStyle(.plain)
+            .help("delete")
+            .accessibilityLabel("delete \(alarm.name)")
+            .opacity(shown ? 1 : 0)
+            .allowsHitTesting(shown)
+            .animation(Theme.quick, value: shown)
+            RowDots(alarm: alarm, entries: entries)
+        }
+    }
+
+    private var shown: Bool {
+        #if SHOT
+        if UserDefaults.standard.string(forKey: "shotHoverRow") == alarm.name { return true }
+        #endif
+        return hovering
+    }
+
+    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }
+}
+
+private struct RowDots: View {
+    let alarm: Alarm
+    let entries: [MenuEntry]
+
+    var body: some View {
         Menu { RowEntries(entries: entries) } label: {
             Ph.dotsThree.icon(size: 14)
                 .foregroundStyle(Theme.muted)
@@ -760,8 +796,6 @@ private struct DayRow: View {
         .help("more")
         .accessibilityLabel("more for \(alarm.name)")
     }
-
-    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }
 }
 
 /// A day that isn't today, on one line: the words it has room for, all of them behind the menu.
@@ -793,6 +827,7 @@ private struct OtherLine: View {
                     }
                 }
                 Spacer(minLength: 0)
+                RowDots(alarm: alarm, entries: entries)
             }
             .frame(height: 24)
             .daysOffPopover(alarm)
@@ -804,8 +839,11 @@ private struct OtherLine: View {
             }
         }
         .contentShape(.rect)
-        .sottovaMenu { RowActions(alarm: alarm, controller: controller, router: router).entries }
+        .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
+        .sottovaMenu { entries }
     }
+
+    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }
 
     private func words(_ pieces: [DayPlan.Piece]) -> some View {
         HStack(spacing: 10) { ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) } }

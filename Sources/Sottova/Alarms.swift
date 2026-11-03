@@ -194,6 +194,14 @@ struct AlarmSheet: View {
                     .foregroundStyle(Theme.muted)
             }
             HStack(spacing: 12) {
+                if case .edit(let old) = request {
+                    Button("Delete", role: .destructive) {
+                        controller.removeAlarm(old.id)
+                        dismiss()
+                    }
+                    .buttonStyle(SecondaryStyle())
+                    .help("⌘Z brings it back")
+                }
                 if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
                         .buttonStyle(SecondaryStyle())
