@@ -867,33 +867,14 @@ private struct RowEntries: View {
     }
 }
 
-/// A check with no box while it's on; turned off, an empty box.
+/// The sheet's box, drawn in both states: checked while it's on, empty when it's off.
 private struct Tick: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         Button { configuration.isOn.toggle() } label: {
-            ZStack {
-                if configuration.isOn {
-                    TickMark().stroke(Theme.muted, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)).frame(width: 12, height: 12)
-                } else {
-                    RoundedRectangle(cornerRadius: 3.5).strokeBorder(Theme.frame, lineWidth: 1)
-                }
-            }
-            .frame(width: 14, height: 14)
-            .contentShape(.rect)
+            CheckBox(on: configuration.isOn).contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
-    }
-}
-
-/// From the mock, whose 12 pt check is lighter than any icon's.
-private struct TickMark: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: 2.5, y: 6.4))
-            path.addLine(to: CGPoint(x: 5, y: 8.8))
-            path.addLine(to: CGPoint(x: 9.6, y: 3.2))
-        }
     }
 }
 
