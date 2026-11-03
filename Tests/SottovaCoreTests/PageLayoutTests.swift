@@ -148,29 +148,11 @@ struct PageLayoutTests {
         #expect(!PageLayout(windowWidth: 1196, pageHeight: 748).day.narrow)
     }
 
-    @Test func aWideWindowPinsTheCover() {
-        #expect(!PageLayout(windowWidth: 1399, pageHeight: 748).list.pinned)
-        #expect(PageLayout(windowWidth: 1400, pageHeight: 748).list.pinned)
-        #expect(PageLayout(windowWidth: 1399, pageHeight: 748).list.cover == 200)
-        #expect(PageLayout(windowWidth: 1075, pageHeight: 748).list.cover == 120)
-        #expect(PageLayout(windowWidth: 1400, pageHeight: 748).list.cover == 296)
-        #expect(PageLayout(windowWidth: 1470, pageHeight: 898).list.cover == 296)
-        #expect(PageLayout(windowWidth: 1700, pageHeight: 898).list.cover == 476)
-        #expect(PageLayout(windowWidth: 1920, pageHeight: 997).list.cover == 560)
-        // a short window keeps the painting to what fits over Play
-        #expect(PageLayout(windowWidth: 1920, pageHeight: 700).list.cover == 460)
-    }
-
-    /// Pinned, the list gets its 880 before the painting grows past its least, and the painting its 560 before the
-    /// margin on the right takes the rest.
-    @Test func thePinnedPaintingTakesWhatTheListLeaves() {
-        for page in Self.windows where page.list.pinned {
-            let list = page.list
-            let room = page.width - 2 * list.margin - list.cover - ListLayout.gap
-            #expect(list.cover >= 296 && list.cover <= 560)
-            #expect(list.cover <= max(296, page.height - 240))
-            if list.cover > 296 { #expect(room >= ListLayout.listMax) }
-            if list.cover < min(560, page.height - 240) { #expect(room <= ListLayout.listMax) }
-        }
+    /// The owner's choice: the painting, title and buttons over the songs at every width, never pinned beside them.
+    @Test func theCollectionHeaderSitsOverTheSongsAtEveryWidth() {
+        #expect(PageLayout(windowWidth: 900, pageHeight: 748).list.cover == 200)
+        #expect(PageLayout(windowWidth: 1075, pageHeight: 748).list.cover == 200)
+        #expect(PageLayout(windowWidth: 1440, pageHeight: 852).list.cover == 232)
+        #expect(PageLayout(windowWidth: 1900, pageHeight: 997).list.cover == 232)
     }
 }

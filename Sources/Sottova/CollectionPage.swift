@@ -21,11 +21,6 @@ struct CollectionColumns {
                            art: art, height: art ? 32 : 28, gutter: 22, markerX: 0)
     }
 
-    /// Who to Time, at most 880 and with the title at most 512.
-    var width: CGFloat {
-        min(CGFloat(ListLayout.listMax), (line.art ? 34 : 0) + (line.who ?? 0) + 512 + (line.performer ?? 0) + 40)
-    }
-
     /// One of yours: the plate reaches over the × past the time.
     var edited: LineColumns {
         var line = line
@@ -49,11 +44,11 @@ struct CoverImage: View {
     }
 }
 
-/// Cover and words over the songs, all scrolling together; on a wide window pinned left, with the songs scrolling beside them.
+/// Cover and words over the songs, all scrolling together, at every width.
 struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     let cover: String?
-    /// Nothing in it yet: the only place here an empty frame belongs.
-    let empty: Bool
+    /// Set as a type cover when there's no painting, as Now does.
+    let title: String
     var dropTargeted = false
     /// The row it plays for, as words you can click.
     var row: Alarm?
@@ -66,64 +61,43 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     @Environment(\.listLayout) private var layout
 
     var body: some View {
-        Group {
-            if layout.pinned {
-                HStack(alignment: .top, spacing: 0) {
-                    // scrolls only in a wide, short window, where Play would otherwise fall off the bottom
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            art
-                            words
-                        }
-                        .frame(width: layout.cover, alignment: .leading)
-                        .padding(.top, 16)
-                        .padding(.bottom, 24)
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.leading, layout.margin)
-                    .padding(.trailing, ListLayout.gap - 22)
-                    // the speaker sits 22 left of the rows, and a scroll view clips
-                    PageScroll(insets: EdgeInsets(top: 16, leading: 22, bottom: 24, trailing: layout.margin)) {
-                        songs(false)
-                    }
-                }
-            } else {
-                PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
-                    HStack(alignment: .bottom, spacing: 20) {
-                        art
-                        words
-                    }
-                    .padding(.bottom, 28)
-                    songs(layout.narrow)
-                }
+        PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
+            HStack(alignment: .bottom, spacing: 24) {
+                art
+                words
             }
+            .padding(.bottom, 32)
+            songs(layout.narrow)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    @ViewBuilder
     private var art: some View {
-        if let cover {
-            CoverImage(key: cover, size: layout.cover)
-        } else if empty {
+        Group {
+            if let cover {
+                CoverImage(key: cover, size: layout.cover)
+            } else {
+                Artwork(key: nil, size: layout.cover, radius: Radius.small, title: title)
+            }
+        }
+        .overlay {
             RoundedRectangle(cornerRadius: Radius.small)
-                .fill(dropTargeted ? Theme.primary.opacity(0.1) : .clear)
-                .strokeBorder(dropTargeted ? Theme.primary : Theme.frame, lineWidth: 1)
-                .frame(width: layout.cover, height: layout.cover)
+                .fill(Theme.primary.opacity(0.1))
+                .strokeBorder(Theme.primary, lineWidth: 1)
+                .opacity(dropTargeted ? 1 : 0)
         }
     }
 
     private var words: some View {
         VStack(alignment: .leading, spacing: 0) {
             name
-            if let row { RowLine(row: row).padding(.top, 8) }
-            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                Text(line)
+            if !lines.isEmpty {
+                Text(lines.joined(separator: ", "))
                     .role(.body)
                     .foregroundStyle(Theme.muted)
-                    .padding(.top, index == 0 && row == nil ? 8 : 0)
+                    .padding(.top, 6)
             }
+            if let row { RowLine(row: row).padding(.top, 2) }
             CoverCredit(url: credit.url, key: credit.key).padding(.top, 4)
             actions.padding(.top, 14)
         }
@@ -139,7 +113,7 @@ private struct RowLine: View {
     var body: some View {
         let plan = DayPlan(alarms: controller.alarms)
         WordFlow {
-            ThemeLink(text: plan.when(row), underlined: true) { router.alarm = .edit(row) }.role(.body)
+            ThemeLink(text: plan.when(row), underlined: true, color: Theme.muted) { router.alarm = .edit(row) }.role(.body)
             // a collection's own parts say "next" on their heading
             let ownParts = controller.playlists.contains { $0.id == row.source && !$0.breaks.isEmpty }
             ForEach(plan.sentence(row, nextPart: row.rotates && !ownParts ? controller.nextPartName(for: row) : nil), id: \.text) { RowWord(alarm: row, piece: $0) }
@@ -160,6 +134,7 @@ struct CollectionMenu<Content: View>: View {
                 .foregroundStyle(Theme.muted)
                 .frame(width: 24, height: 24)
                 .contentShape(.rect)
+                .hoverable(radius: 4)
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
@@ -265,7 +240,7 @@ struct AlbumCollection: View {
 
     var body: some View {
         if let album = controller.catalog.albumsByID[id] {
-            CollectionFrame(cover: album.artwork, empty: false, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
+            CollectionFrame(cover: album.artwork, title: album.title, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
                             lines: [songCount(album.songs)]
                                 + ownSilence(controller.albumSettings[id], songs: album.songs, controller: controller),
                             credit: (album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") }, album.artwork)) {
@@ -308,7 +283,6 @@ struct AlbumCollection: View {
                 })
                 .padding(.leading, -22)
                 .padding(.trailing, -12)
-                .frame(maxWidth: columns.width, alignment: .leading)
             }
         } else {
             Missing(text: "this collection isn't in your library anymore")
@@ -345,7 +319,7 @@ struct YourCollection: View {
             let cover = controller.playlistCovers[pid] ?? songs.first?.artwork
             let isEmpty = playlist.paths.isEmpty
             let missing = playlist.paths.count - songs.count
-            CollectionFrame(cover: cover, empty: isEmpty, dropTargeted: isEmpty && target == 0, row: isEmpty ? nil : DayPlan(alarms: controller.alarms).firstRow(of: pid),
+            CollectionFrame(cover: cover, title: playlist.name, dropTargeted: isEmpty && target == 0, row: isEmpty ? nil : DayPlan(alarms: controller.alarms).firstRow(of: pid),
                             lines: isEmpty ? [] : [songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")]
                                 + ownSilence(isEmpty ? nil : playlist.gaps, songs: songs, controller: controller),
                             credit: (Controller.coverURL(forPlaylist: pid), controller.playlistCovers[pid])) {
@@ -356,20 +330,23 @@ struct YourCollection: View {
                         PlayButton(songs: songs, source: pid)
                         ShuffleButton(songs: songs, source: pid)
                     }
-                    ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
+                    // empty, the field under the header is already there
+                    if !isEmpty {
+                        ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
+                    }
                     menu(playlist, songs: songs)
                 }
             } songs: { narrow in
                 if isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        addField(who: nil)
+                        addField(who: nil, alone: true)
                         Text("or drag songs or a folder here")
                             .role(.body)
                             .foregroundStyle(Theme.faint)
-                            .padding(.leading, 24)
+                            .padding(.leading, 22)
                     }
                     .padding(.leading, -22)
-                    .frame(maxWidth: CollectionColumns(songs: [], narrow: narrow).width, minHeight: 400, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: 400, alignment: .topLeading)
                     .contentShape(.rect)
                     .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
                 } else {
@@ -455,7 +432,6 @@ struct YourCollection: View {
         }))
         .padding(.leading, -22)
         .padding(.trailing, -12)
-        .frame(maxWidth: columns.width, alignment: .leading)
     }
 
     private func partLength(_ playlist: Playlist, from start: Int) -> Double {
@@ -543,9 +519,12 @@ struct YourCollection: View {
         return true
     }
 
-    private func addField(who: CGFloat?) -> some View {
-        AddSongs(requests: addRequests, have: Set(controller.playlists.first { $0.id == pid }?.paths ?? []), who: who) { song in
+    private func addField(who: CGFloat?, alone: Bool = false) -> some View {
+        AddSongs(requests: addRequests, have: Set(controller.playlists.first { $0.id == pid }?.paths ?? []), who: who, alone: alone) { song in
             withAnimation(Theme.quick) { controller.add([song], to: pid) }
+            if let paths = controller.playlists.first(where: { $0.id == pid })?.paths, let last = paths.indices.last {
+                router.selected = [Playlist.rowKey(last, paths[last])]
+            }
         }
     }
 
@@ -651,6 +630,8 @@ private struct AddSongs: View {
     let have: Set<String>
     /// The rows' Who column, so a hit's names line up with theirs.
     let who: CGFloat?
+    /// The only Add songs on an empty collection: it shows it's a field before it's hovered.
+    let alone: Bool
     let add: (Song) -> Void
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -665,10 +646,6 @@ private struct AddSongs: View {
         ScrollViewReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 0) {
-                    // where a row's speaker sits
-                    Ph.plus.icon(.bold, size: 10)
-                        .foregroundStyle(focused ? Theme.muted : Theme.faint)
-                        .frame(width: 22, alignment: .leading)
                     TextField("Add songs", text: $query, prompt: Text(""))
                         .textFieldStyle(.plain)
                         .focusEffectDisabled()
@@ -691,9 +668,11 @@ private struct AddSongs: View {
                             focused = false
                         }
                 }
+                // on the rows' text column
+                .padding(.leading, 22)
                 .padding(.trailing, 12)
                 .frame(height: 28)
-                .background(Theme.selection.opacity(focused || hovering ? 1 : 0), in: .rect(cornerRadius: Radius.small))
+                .background(Theme.selection.opacity(focused || hovering ? 1 : alone ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
                 .contentShape(.rect)
                 .onHover { hovering = $0 }
                 .onTapGesture { focused = true }
@@ -742,31 +721,38 @@ private struct AddHit: View {
                 .truncationMode(.middle)
             Spacer(minLength: 16)
             if here {
-                Text("already here").foregroundStyle(Theme.faint).padding(.trailing, 12)
+                Text("already here").foregroundStyle(Theme.faint).padding(.trailing, 16)
             }
             Text(Format.time(song.duration))
                 .monospacedDigit()
                 .foregroundStyle(Theme.faint)
-                .padding(.trailing, 12)
-            Button(action: add) {
-                Ph.plus.icon(.bold, size: 10)
-                    .foregroundStyle(hovering ? Theme.text : Theme.muted)
-                    .frame(width: 20, height: 20)
-                    .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
-                    .contentShape(.rect)
-            }
-            .buttonStyle(PressStyle())
-            .help(top ? "add it (Return)" : "add it")
-            .accessibilityLabel("Add \(song.title)")
+                .frame(width: 40, alignment: .trailing)
         }
         .role(.body)
         .padding(.leading, 22)
-        .padding(.trailing, 6)
+        .padding(.trailing, 12)
         .frame(height: 28)
-        .background(Theme.selection.opacity(hovering ? 1 : top ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
+        .background {
+            RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(hovering ? 1 : top ? 0.5 : 0)).padding(.trailing, here ? 0 : -18)
+        }
+        // past the time, where a row's × sits
+        .overlay(alignment: .trailing) {
+            if !here {
+                Button(action: add) {
+                    Ph.plus.icon(.bold, size: 10)
+                        .foregroundStyle(hovering ? Theme.text : Theme.muted)
+                        .frame(width: 20, height: 20)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle())
+                .help(top ? "add it (Return)" : "add it")
+                .accessibilityLabel("Add \(song.title)")
+                .offset(x: 14)
+            }
+        }
         .contentShape(.rect)
         .onHover { hovering = $0 }
-        .onTapGesture(count: 2, perform: add)
+        .onTapGesture(count: 2) { if !here { add() } }
     }
 }
 
@@ -820,11 +806,13 @@ private struct RowEdits: ViewModifier {
     }
 }
 
-/// On the seam over a row: hovered, a hairline says "New part", and a click starts one there.
+/// On the seam over a row: after a moment's hover on the row's top edge, a hairline says "New part", and a click
+/// starts one there. Until it shows it takes no clicks, so picking near a row's edge never splits.
 private struct SplitTarget: ViewModifier {
     let index: Int
     let on: Bool
     let split: () -> Void
+    @State private var near = false
     @State private var seam = false
 
     func body(content: Content) -> some View {
@@ -840,24 +828,33 @@ private struct SplitTarget: ViewModifier {
                             .padding(.trailing, 46)
                     }
                     .opacity(seam ? 1 : 0)
+                    .animation(Theme.curve(seam ? 0.12 : 0.08), value: seam)
                     // thin, so the rows keep nearly all of their height for picking
                     .frame(height: 8)
                     .contentShape(.rect)
                     .padding(.leading, 22)
                     .padding(.trailing, 12)
                     .offset(y: -4)
-                    .onHover { seam = $0 }
                     .onTapGesture(perform: split)
+                    .allowsHitTesting(seam)
                     .help("start a new part here")
                     .accessibilityElement()
                     .accessibilityLabel("Start a new part here")
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction(.default, split)
                 }
+                .onContinuousHover { phase in
+                    if case .active(let point) = phase { near = point.y < 6 } else { near = false }
+                }
+                .task(id: near) {
+                    guard near else { seam = false; return }
+                    try? await Task.sleep(for: .milliseconds(400))
+                    if !Task.isCancelled { seam = true }
+                }
                 .onAppear {
                     #if SHOT
                     let defaults = UserDefaults.standard
-                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { seam = true }
+                    if defaults.object(forKey: "shotSplit") != nil, defaults.integer(forKey: "shotSplit") == index { near = true }
                     #endif
                 }
         } else {
@@ -915,19 +912,23 @@ private struct PartHeading: View {
             }
             .frame(height: 22)
             .overlay(alignment: .trailing) {
-                if hovering && !editing {
-                    CollectionMenu {
-                        ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
-                            if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
-                        }
+                let shown = hovering && !editing
+                CollectionMenu {
+                    ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                        if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
                     }
                 }
+                .opacity(shown ? 1 : 0)
+                .allowsHitTesting(shown)
+                .animation(Theme.curve(shown ? 0.12 : 0.08), value: shown)
             }
             Rectangle().fill(Theme.hairline).frame(height: 1).padding(.top, 6).padding(.bottom, 4)
         }
         .padding(.top, first ? 0 : 28)
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        // the whole heading drags; the name inside keeps its text cursor for renaming
+        .pointerStyle(.grabIdle)
         .onDrag(drag)
         .sottovaMenu { entries }
         .onChange(of: naming, initial: true) { _, new in
@@ -1003,7 +1004,6 @@ struct CollectionGrid: View {
     @Environment(Controller.self) private var controller
     @Environment(\.navigate) private var navigate
     @Environment(\.renaming) private var renaming
-    private let columns = [GridItem(.adaptive(minimum: 200, maximum: 200), spacing: 28, alignment: .top)]
 
     var body: some View {
         let plan = DayPlan(alarms: controller.alarms)
@@ -1027,22 +1027,21 @@ struct CollectionGrid: View {
                 }
             }
             .padding(.bottom, 27)
+            // one kind alone needs no heading
+            let headed = !yours.isEmpty && !folders.isEmpty
             VStack(alignment: .leading, spacing: 40) {
-                section("Yours", yours, plan: plan)
-                section("Folders", folders, plan: plan)
+                section(headed ? "Yours" : nil, yours, plan: plan)
+                section(headed ? "Folders" : nil, folders, plan: plan)
             }
         }
     }
 
     @ViewBuilder
-    private func section(_ title: String, _ collections: [MusicCollection], plan: DayPlan) -> some View {
+    private func section(_ title: String?, _ collections: [MusicCollection], plan: DayPlan) -> some View {
         if !collections.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                Text(title)
-                    .role(.item)
-                    .foregroundStyle(Theme.text)
-                    .accessibilityAddTraits(.isHeader)
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
+                if let title { GroupHead(title: title) }
+                LazyVGrid(columns: TileGrid.columns, alignment: .leading, spacing: TileGrid.rowGap) {
                     ForEach(collections) { CollectionCard(collection: $0, hours: plan.shortHours(of: $0.id)) }
                 }
             }
@@ -1086,18 +1085,12 @@ private struct CollectionCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .bottomLeading) {
-                if let cover {
-                    CoverImage(key: cover, size: 200)
-                } else {
-                    RoundedRectangle(cornerRadius: Radius.small)
-                        .strokeBorder(Theme.frame, lineWidth: 1)
-                        .frame(width: 200, height: 200)
-                        .overlay {
-                            if songs.isEmpty { Text("no songs yet").role(.body).foregroundStyle(Theme.faint) }
-                        }
+                Button(action: open) {
+                    Artwork(key: cover, radius: Radius.small, outlined: true, title: collection.title)
                 }
+                .buttonStyle(PressStyle(scale: 0.98))
                 RoundedRectangle(cornerRadius: Radius.small)
                     .fill(Theme.primary.opacity(0.1))
                     .strokeBorder(Theme.primary)
@@ -1110,30 +1103,18 @@ private struct CollectionCard: View {
                         .allowsHitTesting(shown)
                 }
             }
-            .frame(width: 200, height: 200)
-            HStack(spacing: 4) {
-                Text(collection.title)
-                    .role(.body)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+            HStack(alignment: .top, spacing: 4) {
+                TileCaption(title: collection.title, detail: hours ?? (songs.isEmpty ? "no songs yet" : nil))
                 Spacer(minLength: 0)
                 TileDots(title: collection.title, entries: entries)
                     .opacity(shown ? 1 : 0)
                     .allowsHitTesting(shown)
             }
-            .frame(height: 24)
-            .padding(.top, 7)
-            Text(hours ?? " ")
-                .role(.body)
-                .foregroundStyle(Theme.faint)
-                .lineLimit(1)
-                .padding(.top, -3)
+            .contentShape(.rect)
+            .onTapGesture { open() }
         }
-        .animation(Theme.quick, value: shown)
-        .contentShape(.rect)
+        .animation(Theme.curve(shown ? 0.12 : 0.08), value: shown)
         .onHover { hovering = $0 }
-        .onTapGesture { open() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([collection.title, hours].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(.isButton)
@@ -1182,5 +1163,40 @@ private struct TileDots: View {
         .fixedSize()
         .help("more")
         .accessibilityLabel("more for \(title)")
+    }
+}
+
+/// Collections, Artists and Free music lay their tiles out alike.
+enum TileGrid {
+    static let columns = [GridItem(.adaptive(minimum: 148, maximum: 220), spacing: 20, alignment: .top)]
+    static let rowGap: CGFloat = 24
+}
+
+/// Under a grid tile: the name, then one muted line, kept even when there's nothing to say so rows stay level.
+struct TileCaption: View {
+    let title: String
+    let detail: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title).role(.body).fontWeight(.medium).foregroundStyle(Theme.text).lineLimit(1)
+            Text(detail ?? " ").role(.body).foregroundStyle(Theme.muted).lineLimit(1)
+        }
+    }
+}
+
+/// A section's head on a grid page, in a collection part's type and hairline, so the app has one.
+struct GroupHead: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .role(.row)
+                .foregroundStyle(Theme.text)
+                .frame(height: 22)
+                .accessibilityAddTraits(.isHeader)
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+        }
     }
 }
