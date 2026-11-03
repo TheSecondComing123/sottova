@@ -20,7 +20,7 @@ struct TitleBar: View {
                 BarButton(icon: .barSkip, strong: true, help: controller.status == .resting ? "end the silence" : "skip") { controller.skip() }
                     .disabled(idle)
                 Spacer(minLength: 0)
-                Moon().disabled(idle)
+                SleepControl().disabled(idle)
                 BarButton(icon: .barQueue, on: router.showsQueue, help: router.showsQueue ? "hide the queue" : "show the queue", action: toggleQueue)
                     .disabled(controller.tracks.isEmpty)
                 if !narrow {
@@ -189,7 +189,7 @@ private struct BarHit: NSViewRepresentable {
 }
 
 /// Set, it says how long is left beside it.
-private struct Moon: View {
+private struct SleepControl: View {
     @Environment(Controller.self) private var controller
 
     var body: some View {
@@ -204,7 +204,7 @@ private struct Moon: View {
                             .monospacedDigit()
                             .foregroundStyle(Theme.muted)
                     }
-                    BarIcon(icon: .barMoon, strong: timer != nil, hovering: hovering)
+                    BarIcon(icon: .timer, strong: timer != nil, hovering: hovering)
                 }
             }
         } access: {
