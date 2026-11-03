@@ -454,6 +454,7 @@ struct YourCollection: View {
             }), key: key) {
                 controller.play(songs, from: playable, source: pid)
             }
+            .modifier(RowEdits(index: index, sounding: controller.sounding?.id == path) { remove([index]) })
         } else {
             HStack(spacing: 0) {
                 Text(URL(filePath: path).deletingPathExtension().lastPathComponent).lineLimit(1)
@@ -708,6 +709,52 @@ private struct AddHit: View {
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: add)
+    }
+}
+
+/// On hover, a grip where the speaker sits and an × past the time, both drawn over the row so nothing moves.
+/// The whole row drags; the grip says so. Remove is in the right-click too.
+private struct RowEdits: ViewModifier {
+    let index: Int
+    let sounding: Bool
+    let remove: () -> Void
+    @State private var row = false
+    @State private var cross = false
+
+    func body(content: Content) -> some View {
+        let shown = row || cross
+        content
+            .onHover { row = $0 }
+            .overlay(alignment: .leading) {
+                // the speaker already marks the row that's playing
+                if shown && !sounding {
+                    Ph.dotsSixVertical.icon(.bold, size: 12)
+                        .foregroundStyle(Theme.faint)
+                        .frame(width: 14, height: 28)
+                        .pointerStyle(.grabIdle)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                Button(action: remove) {
+                    Ph.x.icon(.bold, size: 9)
+                        .foregroundStyle(cross ? Theme.text : Theme.faint)
+                        .frame(width: 20, height: 20)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle())
+                .help("Remove from this collection")
+                .accessibilityLabel("Remove from this collection")
+                .onHover { cross = $0 }
+                .opacity(shown ? 1 : 0)
+                .allowsHitTesting(shown)
+                // just past the time, in the list's right margin
+                .offset(x: 14)
+            }
+            .onAppear {
+                #if SHOT
+                if UserDefaults.standard.object(forKey: "shotEditRow") != nil, UserDefaults.standard.integer(forKey: "shotEditRow") == index { row = true }
+                #endif
+            }
     }
 }
 
