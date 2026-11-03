@@ -1308,12 +1308,25 @@ public final class Controller {
     public func removeFromPlaylist(_ id: String, at offsets: IndexSet) {
         guard let before = playlists.first(where: { $0.id == id }) else { return }
         let removed = offsets.filter(before.paths.indices.contains).map { ($0, before.paths[$0]) }
-        update(id) { $0.remove(at: offsets) }
+        let next = Dictionary(uniqueKeysWithValues: alarms.filter { $0.source == id }.map { ($0.id, $0.nextPart) })
+        var went: [Int] = []
+        guard update(id, { went = $0.remove(at: offsets) }) else { return }
+        // a part emptied: its rows' next part is the one after it, and the parts after it move up
+        var moved = false
+        for i in alarms.indices where alarms[i].source == id && went.indices.contains(alarms[i].nextPart) && went[alarms[i].nextPart] != alarms[i].nextPart {
+            alarms[i].nextPart = went[alarms[i].nextPart]
+            moved = true
+        }
+        if moved { alarmsChanged() }
         undo?.registerUndo(withTarget: self) { controller in
             controller.update(id) { playlist in
                 for (i, path) in removed { playlist.insert([path], at: i) }
                 // nothing else has changed since, so the parts can be just as they were
                 if playlist.paths == before.paths { (playlist.breaks, playlist.partNames) = (before.breaks, before.partNames) }
+            }
+            if moved, controller.playlists.first(where: { $0.id == id })?.paths == before.paths {
+                for i in controller.alarms.indices { if let part = next[controller.alarms[i].id] { controller.alarms[i].nextPart = part } }
+                controller.alarmsChanged()
             }
             controller.undo?.registerUndo(withTarget: controller) { $0.removeFromPlaylist(id, at: IndexSet(removed.map(\.0))) }
         }
@@ -1413,7 +1426,14 @@ public final class Controller {
         let name = playlist?.name ?? "", paths = playlist?.paths ?? []
         let what = called(offsets.filter(paths.indices.contains).map { paths[$0] })
         editParts(id, "Move \(Self.songsTitle(offsets.count))", "Moved \(what)", back: "Put \(name) back in its order") {
-            update(id) { $0.move(offsets, to: destination) }
+            var went: [Int] = []
+            guard update(id, { went = $0.move(offsets, to: destination) }) else { return }
+            var moved = false
+            for i in alarms.indices where alarms[i].source == id && went.indices.contains(alarms[i].nextPart) && went[alarms[i].nextPart] != alarms[i].nextPart {
+                alarms[i].nextPart = went[alarms[i].nextPart]
+                moved = true
+            }
+            if moved { alarmsChanged() }
         }
     }
 

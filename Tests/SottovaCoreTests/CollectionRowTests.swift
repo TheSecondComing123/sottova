@@ -46,6 +46,63 @@ struct CollectionRowTests {
         return row
     }
 
+    @Test func removingEarlierPartKeepsRowsNextPartOnItsSongs() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Parts", songs: songs))
+        c.setBreak(true, at: 2, in: id)
+        c.setBreak(true, at: 4, in: id)
+        c.namePart("First", at: 0, in: id)
+        c.namePart("Middle", at: 2, in: id)
+        c.namePart("Last", at: 4, in: id)
+        let row = rotatingRow(id, next: 1)
+        c.addAlarm(row)
+        #expect(c.nextPartName(for: row) == "Middle")
+        c.removeFromPlaylist(id, at: [0, 1])
+        let changed = try #require(c.alarms.first)
+        #expect(c.nextPartName(for: changed) == "Middle")
+        #expect(c.rowSongs(changed).map(\.id) == Array(songs[2..<4]).map(\.id))
+        c.fire(row.id, due: .now)
+        #expect(c.current?.id == songs[2].id)
+        c.pause()
+    }
+
+    @Test func undoingARemovalThatEmptiedAPartPutsTheRowsNextPartBack() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Parts", songs: songs))
+        c.setBreak(true, at: 2, in: id)
+        c.setBreak(true, at: 4, in: id)
+        c.namePart("Middle", at: 2, in: id)
+        c.addAlarm(rotatingRow(id, next: 1))
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        c.undo = undo
+        undo.beginUndoGrouping()
+        c.removeFromPlaylist(id, at: [0, 1])
+        undo.endUndoGrouping()
+        #expect(c.alarms[0].nextPart == 0)
+        undo.undo()
+        #expect(c.playlists[0].paths == songs.map(\.id))
+        #expect(c.alarms[0].nextPart == 1)
+        #expect(c.nextPartName(for: c.alarms[0]) == "Middle")
+    }
+
+    @Test func movingAPartsSongsAwayKeepsRowsNextPartOnItsSongs() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Parts", songs: songs))
+        c.setBreak(true, at: 2, in: id)
+        c.setBreak(true, at: 4, in: id)
+        c.namePart("Last", at: 4, in: id)
+        let row = rotatingRow(id, next: 2)
+        c.addAlarm(row)
+        c.movePlaylistSongs(id, fromOffsets: [2, 3], toOffset: 6)
+        let changed = try #require(c.alarms.first)
+        #expect(c.nextPartName(for: changed) == "Last")
+        #expect(c.rowSongs(changed).map(\.id).prefix(2) == songs[4..<6].map(\.id)[...])
+    }
+
     @Test func failedPartSaveDoesNotPersistDifferentAlarmRotation() async throws {
         let dir = try root(), c = try controller(dir)
         let songs = try await seed(c, in: dir)
@@ -62,6 +119,17 @@ struct CollectionRowTests {
         #expect(c.problem?.contains("couldn't save") == true)
         #expect(c.playlists[0].breaks == disk.breaks)
         #expect(saved[0].nextPart == row.nextPart)
+    }
+
+    @Test func deletingSongsWithoutDeletingPartKeepsRotation() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Control", songs: songs))
+        c.setBreak(true, at: 2, in: id)
+        c.namePart("Middle", at: 2, in: id)
+        c.addAlarm(rotatingRow(id, next: 1))
+        c.removeFromPlaylist(id, at: [0])
+        #expect(c.nextPartName(for: try #require(c.alarms.first)) == "Middle")
     }
 
     @Test func quietPageNamesLatestStartingOpenRow() throws {

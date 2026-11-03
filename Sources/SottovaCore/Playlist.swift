@@ -103,23 +103,40 @@ public struct Playlist: Identifiable, Equatable, Sendable {
     }
 
     /// A part keeps its place when songs leave it; one left empty goes.
-    mutating func remove(at offsets: IndexSet) {
+    /// Returns where each part went, by its old place, so a row's next part can follow. A part that emptied goes to
+    /// the part after it, or round to the first.
+    @discardableResult
+    mutating func remove(at offsets: IndexSet) -> [Int] {
+        let starts = partStarts
+        var went: [Int] = [], kept = 0
+        for (part, start) in starts.enumerated() {
+            went.append(kept)
+            let end = part + 1 < starts.count ? starts[part + 1] : paths.count
+            if (start..<end).contains(where: { !offsets.contains($0) }) { kept += 1 }
+        }
         paths = paths.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
         // a later part wins the place of one that emptied, name or no name
         var names: [Int: String] = [:]
         for start in [0] + breaks.sorted() { names[start - offsets.count { $0 < start }] = partNames[start] }
         partNames = names.filter { $0.key < paths.count }
         breaks = Set(breaks.map { b in b - offsets.count { $0 < b } }.filter { $0 > 0 && $0 < paths.count })
+        return went.map { $0 < kept ? $0 : 0 }
     }
 
     /// Out and back in: the other songs keep their parts, and the moved ones join the part they land in. Dropped
     /// where they already were, nothing changes.
-    mutating func move(_ offsets: IndexSet, to destination: Int) {
+    /// Returns where each part went, as `remove` does: moving every song out of a part empties it.
+    @discardableResult
+    mutating func move(_ offsets: IndexSet, to destination: Int) -> [Int] {
         let before = self
         let moving = offsets.map { paths[$0] }
-        remove(at: offsets)
+        let went = remove(at: offsets)
         insert(moving, at: destination - offsets.count { $0 < destination })
-        if paths == before.paths { self = before }
+        if paths == before.paths {
+            self = before
+            return Array(before.partStarts.indices)
+        }
+        return went
     }
 
     /// Part `from` becomes part `to`, its songs and name going with it. Returns where each part went, by its old place,
