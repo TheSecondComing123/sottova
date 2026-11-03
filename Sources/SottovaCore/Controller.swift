@@ -435,6 +435,7 @@ public final class Controller {
         guard let i = alarms.firstIndex(where: { $0.id == id }) else { return }
         let old = alarms[i]
         change(&alarms[i])
+        alarms[i].prune()
         // or a one-off whose day has gone drops at the next launch
         alarms[i].scheduleOnce()
         // firing deletes a one-off with this set, so one that was something else would go unplayed with the next alarm
@@ -513,6 +514,7 @@ public final class Controller {
         }
         // a one-off whose time passed while the app was closed is dropped, not played late, unless it's only just passed
         alarms = saved.filter { $0.next(after: .now - Self.alarmLateness) != nil || $0.whileHere && $0.window(containing: .now) != nil }
+        for i in alarms.indices { alarms[i].prune() }
         if let lastSaved {
             for i in alarms.indices {
                 alarms[i].missed = alarms[i].missedWhileGone(lastSaved: lastSaved, booted: Self.bootTime(), now: .now, lateness: Self.alarmLateness) ?? alarms[i].missed
@@ -616,8 +618,8 @@ public final class Controller {
             armAlarm()
             return
         }
-        // the clock was set back past it
-        if alarms[index].lastFired == due {
+        // the clock was set back past it, or the day was taken off after the timer was set: quiet, and not missed
+        if alarms[index].lastFired == due || alarms[index].isOff(due) {
             armAlarm()
             return
         }

@@ -77,6 +77,99 @@ struct AlarmTests {
         let times = alarm.times(after: date(2026, 10, 29, 8, 0), until: date(2026, 11, 5, 8, 0), calendar: calendar)
         #expect(times == [date(2026, 10, 30, 7, 2), date(2026, 11, 2, 7, 2), date(2026, 11, 3, 7, 2), date(2026, 11, 4, 7, 2), date(2026, 11, 5, 7, 2)])
     }
+
+    // MARK: Days off
+
+    private var weekdays: Alarm { Alarm(source: "lauds", name: "Lauds", hour: 7, minute: 2, weekdays: [2, 3, 4, 5, 6]) }
+
+    @Test func aWeekdayRowOffTomorrowGoesOffTheDayAfter() {
+        var row = weekdays
+        row.daysOff = ["2026-11-03"]
+        #expect(row.next(after: date(2026, 11, 2, 8, 0), calendar: calendar) == date(2026, 11, 4, 7, 2))
+        // and that day it's simply not set for
+        #expect(row.next(after: date(2026, 11, 3, 6, 0), calendar: calendar) == date(2026, 11, 4, 7, 2))
+    }
+
+    @Test func aTuesdayOffLeavesMondayAndWednesday() {
+        var row = weekdays
+        row.daysOff = ["2026-11-03"]
+        #expect(row.times(after: date(2026, 11, 2, 0, 0), until: date(2026, 11, 5, 0, 0), calendar: calendar)
+            == [date(2026, 11, 2, 7, 2), date(2026, 11, 4, 7, 2)])
+    }
+
+    @Test func aLongRunOfDaysOffStillHasANextTime() {
+        var row = Alarm(source: "lauds", name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        row.daysOff = Set((3...23).map { "2026-11-\(String(format: "%02d", $0))" })
+        #expect(row.next(after: date(2026, 11, 2, 8, 0), calendar: calendar) == date(2026, 11, 24, 7, 2))
+        #expect(row.offRuns(calendar: calendar).map(\.count) == [21])
+    }
+
+    @Test func pruningForgetsDaysBeforeYesterday() {
+        var row = weekdays
+        row.daysOff = ["2026-10-31", "2026-11-01", "2026-11-02", "2026-11-10"]
+        row.prune(now: date(2026, 11, 2, 12, 0), calendar: calendar)
+        #expect(row.daysOff == ["2026-11-01", "2026-11-02", "2026-11-10"])
+    }
+
+    @Test func daysOffAreSavedAndOldRowsHaveNone() throws {
+        let json = #"[{"id":"\#(UUID().uuidString)","source":"a","name":"A","hour":7,"minute":2,"weekdays":[2],"shuffled":false}]"#
+        #expect(try JSONDecoder().decode([Alarm].self, from: Data(json.utf8)).first?.daysOff == [])
+        var row = weekdays
+        row.daysOff = ["2026-11-03"]
+        #expect(try JSONDecoder().decode(Alarm.self, from: JSONEncoder().encode(row)).daysOff == ["2026-11-03"])
+    }
+
+    @Test func anEditOrAnUndoCarriesTheDaysOff() {
+        var row = weekdays
+        var edited = weekdays
+        edited.daysOff = ["2026-11-03"]
+        row.setUserFields(from: edited)
+        #expect(row.daysOff == ["2026-11-03"])
+        row.setUserFields(from: weekdays)
+        #expect(row.daysOff.isEmpty)
+    }
+
+    @Test func aWindowOffForTheDayItStartsDoesntOpen() {
+        var desk = Alarm(source: "o", name: "Overworld", hour: 15, minute: 0, weekdays: Set(1...7))
+        (desk.whileHere, desk.minutes, desk.daysOff) = (true, 240, ["2026-11-02"])
+        #expect(desk.window(containing: date(2026, 11, 2, 16, 0), calendar: calendar) == nil)
+        #expect(desk.window(containing: date(2026, 11, 3, 16, 0), calendar: calendar) != nil)
+        // last night's window belongs to last night
+        var late = desk
+        (late.hour, late.daysOff) = (23, ["2026-11-03"])
+        #expect(late.window(containing: date(2026, 11, 3, 1, 0), calendar: calendar) != nil)
+        late.daysOff = ["2026-11-02"]
+        #expect(late.window(containing: date(2026, 11, 3, 1, 0), calendar: calendar) == nil)
+    }
+
+    @Test func aDayOffIsntMissed() {
+        var row = weekdays
+        row.daysOff = ["2026-11-02"]
+        #expect(row.missedWhileGone(lastSaved: date(2026, 11, 1, 20, 0), booted: date(2026, 11, 1, 8, 0), now: date(2026, 11, 2, 8, 0),
+                                    lateness: 600, calendar: calendar) == nil)
+    }
+
+    @Test func aThreeWeekRunSurvivesARelaunch() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-alarms-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: dir)
+        var row = Alarm(source: "a", name: "A", hour: 7, minute: 2, weekdays: Set(1...7))
+        row.daysOff = Set((0..<21).map { Alarm.day(.now + Double($0) * 86_400) })
+        c.addAlarm(row)
+        let reopened = Controller(storage: dir)
+        reopened.run()
+        #expect(reopened.alarms.map(\.daysOff) == [row.daysOff])
+        #expect(reopened.nextAlarm().map { Alarm.day($0.at) } == Alarm.day(.now + 21 * 86_400))
+    }
+
+    @Test func aChangeForgetsDaysOffThatAreOver() {
+        let c = Controller(storage: nil)
+        var row = weekdays
+        row.daysOff = [Alarm.day(.now - 3 * 86_400), Alarm.day(.now - 86_400)]
+        c.addAlarm(row)
+        c.changeAlarm(row.id) { $0.shuffled = true }
+        #expect(c.alarms[0].daysOff == [Alarm.day(.now - 86_400)])
+    }
 }
 
 /// Clocks in New York go back on 2026-11-01 (1:59 EDT, then 1:00 EST) and forward on 2027-03-14 (1:59 EST, then 3:00 EDT).
@@ -174,6 +267,19 @@ struct DaylightSavingTests {
         let saturday = row(23, 0, minutes: 240, weekdays: [7])
         #expect(saturday.window(containing: utc("2026-11-01T05:30:00Z"), calendar: calendar) != nil)
         #expect(saturday.window(containing: utc("2026-11-02T05:30:00Z"), calendar: calendar) == nil)
+    }
+
+    @Test func aDayOffWhenTheClocksChangeDropsOnlyThatDay() {
+        var off = lauds
+        off.daysOff = ["2026-11-01"]
+        #expect(off.times(after: utc("2026-10-31T00:00:00Z"), until: utc("2026-11-03T00:00:00Z"), calendar: calendar)
+            == [utc("2026-10-31T11:02:00Z"), utc("2026-11-02T12:02:00Z")])
+        var twice = row(1, 30)
+        twice.daysOff = ["2026-11-01"]
+        #expect(twice.times(after: utc("2026-11-01T00:00:00Z"), until: utc("2026-11-02T12:00:00Z"), calendar: calendar) == [utc("2026-11-02T06:30:00Z")])
+        var never = row(2, 30)
+        never.daysOff = ["2027-03-14"]
+        #expect(never.times(after: utc("2027-03-14T00:00:00Z"), until: utc("2027-03-15T12:00:00Z"), calendar: calendar) == [utc("2027-03-15T06:30:00Z")])
     }
 }
 

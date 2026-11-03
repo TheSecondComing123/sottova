@@ -483,6 +483,30 @@ struct AlarmRunTests {
         #expect(c.status == .playing)
     }
 
+    @Test func aTimeOnADayOffDoesntPlayAndIsntMissed() async throws {
+        let (c, album, _) = try await controller()
+        var row = alarm(album)
+        row.daysOff = [Alarm.day(.now)]
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        #expect(c.status == .idle)
+        #expect(c.alarms.first?.missed == nil)
+        #expect(c.problem == nil)
+    }
+
+    @Test func aDayOffPassedWhileTheAppWasClosedIsntMissed() async throws {
+        let storage = try temp()
+        let (c, album, _) = try await controller(storage: storage)
+        var (row, due) = justPassed(album)
+        row.daysOff = [Alarm.day(due)]
+        try JSONEncoder().encode([row]).write(to: storage.appending(path: "alarms.json"))
+        try FileManager.default.setAttributes([.modificationDate: Date.now - 86_400], ofItemAtPath: storage.appending(path: "alarms.json").path)
+        c.loadAlarms()
+        #expect(c.status == .idle)
+        #expect(c.alarms.first?.missed == nil)
+        #expect(c.alarms.first?.daysOff == row.daysOff)
+    }
+
     @Test func aClockSetBackDoesntPlayItTwice() async throws {
         let (c, album, _) = try await controller()
         let row = alarm(album)

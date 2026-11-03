@@ -38,6 +38,9 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     public var partSpent: Date?
     /// The last time it didn't go off and why, shown on its row that day.
     public var missed: Missed?
+    /// Days it stays quiet, "2026-11-03" on the wall calendar, then comes back by itself. A time or window counts by
+    /// the day it starts.
+    public var daysOff: Set<String> = []
 
     public struct Missed: Codable, Equatable, Sendable {
         public enum Why: String, Codable, Sendable { case asleep, off, notRunning }
@@ -65,7 +68,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts, nextPart, lastFired, partSpent, missed
+        case id, source, name, hour, minute, weekdays, day, shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts, nextPart, lastFired, partSpent, missed, daysOff
     }
 
     // alarms.json from before alarms could be turned off has no `on`
@@ -91,12 +94,57 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         lastFired = try c.decodeIfPresent(Date.self, forKey: .lastFired)
         partSpent = try c.decodeIfPresent(Date.self, forKey: .partSpent)
         missed = try c.decodeIfPresent(Missed.self, forKey: .missed)
+        daysOff = try c.decodeIfPresent(Set<String>.self, forKey: .daysOff) ?? []
     }
 
     /// What you can set yourself, from `other`. Its id and what the app keeps about when it last went off stay.
     public mutating func setUserFields(from other: Alarm) {
         (source, name, hour, minute, weekdays, day) = (other.source, other.name, other.hour, other.minute, other.weekdays, other.day)
         (shuffled, on, volume, minutes, whileHere, heedsCalendar, rotates, parts) = (other.shuffled, other.on, other.volume, other.minutes, other.whileHere, other.heedsCalendar, other.rotates, other.parts)
+        daysOff = other.daysOff
+    }
+
+    /// "2026-11-03": the key `daysOff` keeps a day under.
+    public static func day(_ date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    /// Whether the time or window starting at `start` falls on a day off.
+    public func isOff(_ start: Date, calendar: Calendar = .current) -> Bool {
+        !daysOff.isEmpty && daysOff.contains(Self.day(start, calendar: calendar))
+    }
+
+    /// Forgets days off that are over. Yesterday stays: a window from last night or a late alarm still belongs to it.
+    public mutating func prune(now: Date = .now, calendar: Calendar = .current) {
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: now) else { return }
+        let first = Self.day(yesterday, calendar: calendar)
+        daysOff = daysOff.filter { $0 >= first }
+    }
+
+    /// The days off as runs of days in a row, soonest first, each day as its midnight.
+    public func offRuns(calendar: Calendar = .current) -> [[Date]] {
+        let days = daysOff.sorted().compactMap { key -> Date? in
+            let parts = key.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 3 else { return nil }
+            return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+        }
+        var runs: [[Date]] = []
+        for day in days {
+            if let last = runs.last?.last, let next = calendar.date(byAdding: .day, value: 1, to: last), calendar.isDate(next, inSameDayAs: day) {
+                runs[runs.count - 1].append(day)
+            } else {
+                runs.append([day])
+            }
+        }
+        return runs
+    }
+
+    /// As if it had no days off: what a day off is named after, and the wakes it would need.
+    public var withoutDaysOff: Alarm {
+        var row = self
+        row.daysOff = []
+        return row
     }
 
     /// A one-off goes off at its time today if that's still ahead, otherwise tomorrow.
@@ -139,7 +187,7 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
                   let start = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: base) else { continue }
             let setFor = weekdays.isEmpty ? day.map { calendar.isDate($0, inSameDayAs: start) } ?? false
                                           : weekdays.contains(calendar.component(.weekday, from: start))
-            if setFor, start <= now, now < start + Double(minutes) * 60 {
+            if setFor, start <= now, now < start + Double(minutes) * 60, !isOff(start, calendar: calendar) {
                 return DateInterval(start: start, duration: Double(minutes) * 60)
             }
         }
@@ -149,14 +197,15 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
     /// The next time it goes off after `now`, or nil for a one-off that's past.
     public func next(after now: Date, calendar: Calendar = .current) -> Date? {
         if weekdays.isEmpty {
-            guard let day, let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day), date > now else { return nil }
+            guard let day, let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day), date > now,
+                  !isOff(date, calendar: calendar) else { return nil }
             return date
         }
-        // the next 8 days always hold one of the chosen weekdays
-        for offset in 0..<8 {
+        // the next 8 days always hold one of the chosen weekdays, and each day off can push it a week further
+        for offset in 0..<(8 + 7 * daysOff.count) {
             guard let base = calendar.date(byAdding: .day, value: offset, to: now),
                   let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: base) else { continue }
-            if date > now, weekdays.contains(calendar.component(.weekday, from: date)) { return date }
+            if date > now, weekdays.contains(calendar.component(.weekday, from: date)), !isOff(date, calendar: calendar) { return date }
         }
         return nil
     }

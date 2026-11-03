@@ -254,6 +254,26 @@ struct HourTests {
         #expect(c.alarms.isEmpty)
     }
 
+    @Test func anHourOffTodayDoesntOpen() async throws {
+        let (c, album) = try await controller()
+        let row = open(c, album)
+        c.changeAlarm(row.id) { $0.daysOff = [Alarm.day(.now - 60)] }
+        c.checkHours()
+        #expect(c.status == .idle)
+    }
+
+    @Test func offTodayMidHourStartsNothingMore() async throws {
+        let (c, album) = try await controller()
+        let row = open(c, album)
+        c.checkHours()
+        #expect(c.status == .resting)
+        c.changeAlarm(row.id) { $0.daysOff = [Alarm.day(.now - 60)] }
+        c.checkHours()
+        #expect(c.status == .idle)
+        c.checkHours()
+        #expect(c.status == .idle)
+    }
+
     @Test func theScreensCanSeeTheHourThatHasTheMusic() async throws {
         let (c, album) = try await controller()
         let row = open(c, album)
