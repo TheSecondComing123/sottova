@@ -132,16 +132,19 @@ struct ThemeButton: View {
     var icon: Ph?
     var iconWeight = Ph.IconWeight.fill
     let action: () -> Void
+    /// `.large` beside a large title, as on Now.
+    @Environment(\.controlSize) private var size
 
     var body: some View {
+        let large = size == .large
         Button(action: action) {
-            HStack(spacing: 6) {
-                if let icon { icon.icon(iconWeight, size: 11) }
-                Text(title).role(.body)
+            HStack(spacing: large ? 7 : 6) {
+                if let icon { icon.icon(iconWeight, size: large ? 13 : 11) }
+                Text(title).role(large ? .item : .body)
             }
                 .foregroundStyle(primary ? Theme.onPrimary : on ? Theme.primary : Theme.text)
-                .padding(.horizontal, 11)
-                .frame(height: 24)
+                .padding(.horizontal, large ? 14 : 11)
+                .frame(height: large ? 30 : 24)
                 .background(primary ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
                 .overlay {
                     if !primary { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(on ? Theme.primary : Theme.stroke, lineWidth: on ? 1 : 0.5) }
