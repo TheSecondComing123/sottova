@@ -195,7 +195,7 @@ private struct SleepControl: View {
     var body: some View {
         let timer = controller.sleepTimer
         let resting = controller.status == .resting
-        BarControl(actsOnPress: true, help: "sleep timer", action: open) { hovering in
+        BarControl(actsOnPress: true, help: "stop the music after a while", action: open) { hovering in
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 HStack(spacing: 2) {
                     if let timer {

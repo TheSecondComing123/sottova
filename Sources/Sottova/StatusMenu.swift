@@ -114,12 +114,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     static func sleepChoices(_ controller: Controller) -> [MenuEntry] {
         let timer = controller.sleepTimer
         let resting = controller.status == .resting
-        var entries: [MenuEntry] = timer.map { [.item("stops \(Format.sleep($0, resting: resting, at: .now, sentence: true))", enabled: false) {}, .divider] } ?? []
+        // what the times are for, said before them
+        var entries: [MenuEntry] = [.item(timer.map { "Stops \(Format.sleep($0, resting: resting, at: .now, sentence: true))" } ?? "Stop the music", enabled: false) {}, .divider]
         entries.append(.item(resting ? "After the next song" : "After this song", checked: timer == .afterCurrent) {
             timer == .afterCurrent ? controller.cancelSleep() : controller.sleepAfterCurrent()
         })
         entries.append(.divider)
-        entries += [15.0, 30, 45, 60, 90].map { minutes in .item(Format.minutes(minutes * 60)) { controller.sleep(minutes: minutes) } }
+        entries += [15.0, 30, 45, 60, 90].map { minutes in .item("In \(Format.minutes(minutes * 60))") { controller.sleep(minutes: minutes) } }
         if timer != nil { entries += [.divider, .item("Turn off", action: controller.cancelSleep)] }
         return entries
     }
