@@ -39,6 +39,8 @@ final class Router {
     var alarm: AlarmRequest?
     /// The row whose days off are being picked, in a popover on it.
     var daysOff: Alarm.ID?
+    /// It came from the row's "Off…" word, so the popover points there.
+    var daysOffFromWord = false
     /// Songs picked in a list: a click picks one, ⌘-click adds or takes one away, ⇧-click picks the run from the
     /// last one picked. Gone when the page changes.
     var selected: Set<String> = []

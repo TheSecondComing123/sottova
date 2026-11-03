@@ -27,8 +27,12 @@ struct RowWord: View {
                     Toggle(run.text, isOn: Binding(get: { true }, set: { _ in change { $0.daysOff.subtract(run.days) } }))
                 }
                 Divider()
-                Button("Days off…") { router.daysOff = alarm.id }
+                Button("Days off…") {
+                    router.daysOffFromWord = true
+                    router.daysOff = alarm.id
+                }
             }
+            .anchorPreference(key: OffWord.self, value: .bounds) { $0 }
         case .kind?:
             WordMenu(text: piece.text, on: alarm.on && !off) { KindWords(alarm: alarm, change: change) }
         case .order?:
@@ -64,6 +68,12 @@ struct RowWord: View {
         controller.changeAlarm(alarm.id, edit)
         SystemWake.shared.renew(for: controller.alarms)
     }
+}
+
+/// Where a row's "Off…" word is, for the calendar it opens to point at.
+struct OffWord: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? { nil }
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
 }
 
 /// One clickable word of a row's line, opening a native menu.

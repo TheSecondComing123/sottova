@@ -431,13 +431,24 @@ private struct DaysOffPopover: ViewModifier {
     let alarm: Alarm
     @Environment(Router.self) private var router
     @Environment(\.colorScheme) private var scheme
-    @State private var bottom: CGFloat = 0
+    @State private var frame: CGRect = .zero
+    /// The row's "Off…" word, in this view's space.
+    @State private var word: CGRect?
 
     func body(content: Content) -> some View {
         let window = NSApp.windows.first { $0.isVisible && $0.isMainWindow }?.contentView?.bounds.height ?? .infinity
+        let at = router.daysOffFromWord ? word : nil
+        let bottom = frame.minY + (at?.maxY ?? frame.height)
         content
-            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { bottom = $0 }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            .backgroundPreferenceValue(OffWord.self) { anchor in
+                GeometryReader { proxy in
+                    let rect = anchor.map { proxy[$0] }
+                    Color.clear.onChange(of: rect, initial: true) { word = rect }
+                }
+            }
             .popover(isPresented: Binding(get: { router.daysOff == alarm.id }, set: { if !$0, router.daysOff == alarm.id { router.daysOff = nil } }),
+                     attachmentAnchor: at.map { .rect(.rect($0)) } ?? .rect(.bounds),
                      arrowEdge: window - bottom > DaysOffField.height + 24 ? .bottom : .top) {
                 // glass lets a painting under it wash out the faint days; dark's popover color is a row card's, so
                 // it takes the page's there
@@ -816,7 +827,10 @@ private struct RowActions {
         let off = alarm.daysOff.contains(next.day)
         return [
             .item(next.title, checked: off, enabled: alarm.on) { change { if off { $0.daysOff.remove(next.day) } else { $0.daysOff.insert(next.day) } } },
-            .item("Days off…", enabled: alarm.on) { router.daysOff = alarm.id },
+            .item("Days off…", enabled: alarm.on) {
+                router.daysOffFromWord = false
+                router.daysOff = alarm.id
+            },
         ]
     }
 

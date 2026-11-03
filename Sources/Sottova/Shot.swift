@@ -102,6 +102,7 @@ struct ShotReady: ViewModifier {
                 return shotMenu(at: NSPoint(x: at[0], y: height - at[1]), in: window)
             }
             if let name = defaults.string(forKey: "shotDaysOffPopover"), let row = controller.alarms.first(where: { $0.name == name }) {
+                router.daysOffFromWord = true
                 router.daysOff = row.id
                 try? await Task.sleep(for: .seconds(1))
                 let popover = NSApp.windows.first { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }
