@@ -20,7 +20,7 @@ struct PickTests {
         undo.beginUndoGrouping()
         let id = try #require(c.newCollection(named: "Vespers", songs: ["/1", "/2"].map(song)))
         undo.endUndoGrouping()
-        #expect(undo.undoActionName == "New collection")
+        #expect(undo.undoActionName == "New Collection")
         undo.undo()
         #expect(c.playlists.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: id))
@@ -46,7 +46,7 @@ struct PickTests {
         #expect(c.playlists.map(\.id) == [id])
         #expect(FileManager.default.fileExists(atPath: id))
         #expect(c.alarms.map(\.source) == [id])
-        #expect(c.problem != nil)
+        #expect(c.notice?.text == "Vespers is on your day, so it stays")
     }
 
     @Test func addToQueueGoesAfterWhatsQueued() {
