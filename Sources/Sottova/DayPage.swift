@@ -10,6 +10,10 @@ struct DayPage: View {
     @State private var dropHour: Int?
     /// The time under the pointer on an empty stretch of the rail, where a click adds a row.
     @State private var adding: Int?
+    @State private var moving: Moving?
+    /// Esc while dragging a row.
+    @State private var escape: Any?
+    @State private var railSize: CGSize = .zero
     @State private var played: [Controller.Played] = []
     @State private var allPlayed = false
     @Environment(\.pageLayout) private var page
@@ -133,24 +137,32 @@ struct DayPage: View {
         let height = max(rail.height, 96)
         #if SHOT
         let adding = UserDefaults.standard.object(forKey: "shotAddAt") != nil ? UserDefaults.standard.integer(forKey: "shotAddAt") : self.adding
+        // "Compline|1290" moves its start, "Compline|1290|end" its end
+        let moving = UserDefaults.standard.string(forKey: "shotMove").flatMap { shot -> Moving? in
+            let parts = shot.components(separatedBy: "|")
+            guard parts.count >= 2, let row = controller.alarms.first(where: { $0.name == parts[0] }), let minute = Int(parts[1]) else { return nil }
+            return Moving(id: row.id, end: parts.count > 2, minute: minute)
+        } ?? self.moving
         #endif
+        let drawn = { (mark: DayPlan.Rail.Mark) in Drawn(mark: mark, plan: plan, scale: scale, moving: moving, lines: WordFlow.lines(pieces[mark.id] ?? [], width: room)) }
         return ZStack(alignment: .topLeading) {
             Rectangle().fill(Theme.hairline).frame(width: 1, height: rail.height).offset(x: 72)
             ForEach(rail.breaks, id: \.y) { gap in
                 BreakMark(text: gap.text).offset(y: gap.y - 10)
             }
             ForEach(rail.marks) { mark in
+                let bar = drawn(mark).bar
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Theme.faint)
-                    .frame(width: 3, height: mark.bar.upperBound - mark.bar.lowerBound)
+                    .frame(width: 3, height: bar.upperBound - bar.lowerBound)
                     .opacity(mark.off ? 0.35 : 1)
-                    .offset(x: mark.aside ? 76 : 71, y: mark.bar.lowerBound)
+                    .offset(x: mark.aside ? 76 : 71, y: bar.lowerBound)
             }
             if let y = rail.now {
                 Circle().fill(Theme.primary).frame(width: 6, height: 6).offset(x: 69.5, y: y - 3)
             }
             // by what it's for, not its place: a popover open on a time must stay with that row as the now label comes and goes
-            ForEach(rail.labels, id: \.key) { label in
+            ForEach(rail.labels.map { label in rail.marks.lazy.compactMap { drawn($0).label(label) }.first ?? label }, id: \.key) { label in
                 RailTime(label: label, alarm: controller.alarms.first { $0.id == label.row })
                     // an 18 pt line sits its small type higher than the mock's
                     .offset(y: label.y - 9 + (label.kind == .row || label.kind == .now ? 1 : 2))
@@ -171,12 +183,18 @@ struct DayPage: View {
                 .offset(x: DayLayout.blockLeft, y: rail.height / 2 - 9)
             }
             ForEach(rail.marks) { mark in
-                let height = mark.block.upperBound - mark.block.lowerBound
+                let block = drawn(mark).block
+                let height = block.upperBound - block.lowerBound
+                let movable = canMove(mark.id, plan: plan)
+                let edge: RowDrag? = movable && mark.alarm.minutes != nil ? drag(mark, end: true, plan: plan, scale: scale) : nil
                 DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
-                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines(pieces[mark.id] ?? [], width: blockWidth - 67)), sounding: sounding == mark.id)
+                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines(pieces[mark.id] ?? [], width: blockWidth - 67)), sounding: sounding == mark.id,
+                       edge: edge)
                     .frame(height: height)
+                    .gesture(drag(mark, end: false, plan: plan, scale: scale), isEnabled: movable)
+                    .zIndex(moving?.id == mark.id ? 1 : 0)
                     .padding(.leading, DayLayout.blockLeft)
-                    .offset(y: mark.block.lowerBound)
+                    .offset(y: block.lowerBound)
             }
             if let (hour, name) = drop {
                 dropRow(plan: plan, hour: hour, name: name, scale: scale)
@@ -195,6 +213,8 @@ struct DayPage: View {
         }
         // a day of one short row is still somewhere to drop
         .frame(maxWidth: .infinity, minHeight: height, alignment: .topLeading)
+        .coordinateSpace(.named(Self.railSpace))
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { railSize = $0 }
         .background { addLayer(plan: plan, rail: rail, scale: scale, height: height) }
         .animation(Theme.quick, value: adding == nil)
         .contentShape(.rect)
@@ -203,10 +223,54 @@ struct DayPage: View {
 
     private var nowDate: Date { now(.now) }
 
+    private static let railSpace = "rail"
+
+    /// A row from last night has no start on today's rail to drag.
+    private func canMove(_ id: Alarm.ID, plan: DayPlan) -> Bool {
+        plan.rows.first { $0.id == id }.map { Calendar.current.isDate($0.start, inSameDayAs: nowDate) } ?? false
+    }
+
+    /// Dragging a block moves its start, its bottom edge its end, by five minutes. Only letting go on the rail changes
+    /// the row, as one change to undo; Esc or letting go off the rail leaves it as it was.
+    private func drag(_ mark: DayPlan.Rail.Mark, end: Bool, plan: DayPlan, scale: Double) -> RowDrag {
+        let alarm = mark.alarm
+        let start = alarm.hour * 60 + alarm.minute
+        return DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.railSpace))
+            .onChanged { drag in
+                if moving == nil {
+                    guard escape == nil else { return }
+                    escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                        guard event.keyCode == 53 else { return event }
+                        moving = nil
+                        return nil
+                    }
+                } else if moving?.id != alarm.id {
+                    return
+                }
+                let minute = plan.minute(at: (end ? mark.bar.upperBound : mark.bar.lowerBound) + drag.translation.height, hourHeight: scale)
+                moving = Moving(id: alarm.id, end: end, minute: end ? max(minute, start + 5) : minute)
+            }
+            .onEnded { drag in
+                escape.map(NSEvent.removeMonitor)
+                escape = nil
+                guard let moved = moving, moved.id == alarm.id else { return }
+                moving = nil
+                guard CGRect(origin: .zero, size: railSize).contains(drag.location) else { return }
+                if end {
+                    guard let length = alarm.length(endingAt: moved.minute), length != alarm.minutes else { return }
+                    controller.changeAlarm(alarm.id, action: "Change End of \(alarm.name)") { $0.minutes = length }
+                } else {
+                    guard moved.minute != start else { return }
+                    controller.changeAlarm(alarm.id, action: "Move \(alarm.name)") { $0.move(to: moved.minute) }
+                }
+                SystemWake.shared.renew(for: controller.alarms)
+            }
+    }
+
     /// Under the blocks: on a stretch with nothing on it, the pointer shows the time a click there would add a row at.
     private func addLayer(plan: DayPlan, rail: DayPlan.Rail, scale: Double, height: Double) -> some View {
         let empty = { (point: CGPoint) -> Int? in
-            guard point.x >= DayLayout.blockLeft, dropHour == nil else { return nil }
+            guard point.x >= DayLayout.blockLeft, dropHour == nil, moving == nil else { return nil }
             let minute = plan.minute(at: point.y, hourHeight: scale, snap: 15)
             let y = plan.y(minute: minute, hourHeight: scale)
             // the hint's line, and the words of an empty day
@@ -324,6 +388,55 @@ struct DayPage: View {
         }
         .frame(width: 380)
         .frame(maxHeight: 420)
+    }
+}
+
+private typealias RowDrag = _EndedGesture<_ChangedGesture<DragGesture>>
+
+/// A row being dragged, by its block or its bottom edge.
+private struct Moving: Equatable {
+    let id: Alarm.ID
+    let end: Bool
+    /// Where its start or end would go, in minutes from midnight.
+    var minute: Int
+}
+
+/// Where a row draws: where it is, or where a drag would put it, on the rail's scale as it was when the drag began.
+private struct Drawn {
+    let mark: DayPlan.Rail.Mark
+    let bar: ClosedRange<Double>
+    let block: ClosedRange<Double>
+    private let times: (start: String, end: String)?
+
+    init(mark: DayPlan.Rail.Mark, plan: DayPlan, scale: Double, moving: Moving?, lines: Int) {
+        self.mark = mark
+        guard let moving, moving.id == mark.id, let row = plan.rows.first(where: { $0.id == mark.id }) else {
+            (bar, block, times) = (mark.bar, mark.block, nil)
+            return
+        }
+        let start = moving.end ? row.alarm.hour * 60 + row.alarm.minute : moving.minute
+        let end = moving.end ? moving.minute : start + Int(row.end.timeIntervalSince(row.start) / 60)
+        let y = { (minute: Int) in plan.y(minute: min(minute, 24 * 60), hourHeight: scale) }
+        let top = y(start)
+        bar = top...max(y(end), top + 3)
+        let lower = mark.block.lowerBound + top - mark.bar.lowerBound
+        // a move carries the block as it is; an end takes it down to the bar, or up as far as its words allow
+        let words = DayPlan.Rail.rowHeight - 4 + Double(lines - 1) * DayPlan.Rail.lineHeight
+        block = moving.end ? lower...max(bar.upperBound, lower + words) : lower...(mark.block.upperBound + top - mark.bar.lowerBound)
+        times = (plan.timeText(minute: start % 1440), plan.timeText(minute: end % 1440, full: end % 60 == 0))
+    }
+
+    /// One of the rail's times, moved and reworded if it's this row's.
+    func label(_ label: DayPlan.Rail.Label) -> DayPlan.Rail.Label? {
+        guard let times else { return nil }
+        let dy = bar.lowerBound - mark.bar.lowerBound
+        if label.row == mark.id, label.kind == .row || label.kind == .off {
+            return DayPlan.Rail.Label(text: times.start, y: label.y + dy, kind: label.kind, row: label.row)
+        }
+        if label.kind == .end, label.row == mark.id || label.row == nil && abs(label.y - mark.bar.upperBound) < 0.5 {
+            return DayPlan.Rail.Label(text: times.end, y: bar.upperBound, kind: .end, row: label.row)
+        }
+        return nil
     }
 }
 
@@ -685,6 +798,8 @@ private struct DayRow: View {
     let artwork: String?
     let painting: (width: Double, height: Double, under: Bool)
     let sounding: Bool
+    /// Dragging its bottom edge changes its end; nil for one with no end of its own.
+    let edge: RowDrag?
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
@@ -717,6 +832,16 @@ private struct DayRow: View {
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
         .sottovaMenu { entries }
+        .overlay(alignment: .bottom) {
+            if let edge {
+                Color.clear
+                    .frame(height: 6)
+                    .contentShape(.rect)
+                    .pointerStyle(.rowResize)
+                    .gesture(edge)
+                    .help("drag to change when it stops")
+            }
+        }
     }
 
     private var tick: some View {

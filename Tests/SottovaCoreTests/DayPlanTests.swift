@@ -613,8 +613,11 @@ struct DayPlanTests {
         #expect(day.minute(at: day.y(minute: 7 * 60 + 2, hourHeight: scale), hourHeight: scale) == 7 * 60)
         #expect(day.minute(at: day.y(minute: 7 * 60 + 3, hourHeight: scale), hourHeight: scale) == 7 * 60 + 5)
         #expect(day.minute(at: day.y(minute: 7 * 60 + 8, hourHeight: scale), hourHeight: scale, snap: 15) == 7 * 60 + 15)
-        #expect(day.minute(at: -5, hourHeight: scale) == day.firstHour * 60)
-        #expect(day.minute(at: 99999, hourHeight: scale) == day.lastHour * 60)
+        // past the rail's ends, on to the day's
+        #expect(day.minute(at: -scale / 2, hourHeight: scale) == day.firstHour * 60 - 30)
+        #expect(day.minute(at: day.span * scale + scale, hourHeight: scale) == day.lastHour * 60 + 60)
+        #expect(day.minute(at: -99999, hourHeight: scale) == 0)
+        #expect(day.minute(at: 99999, hourHeight: scale) == 24 * 60)
         #expect(day.timeText(minute: 16 * 60) == "4 PM")
         #expect(day.timeText(minute: 16 * 60 + 15) == "4:15 PM")
         #expect(day.timeText(minute: 12 * 60) == "noon")

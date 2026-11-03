@@ -498,15 +498,16 @@ extension DayPlan {
     }
 
     /// The time of day a point on the rail is at, in minutes from midnight to the nearest `snap`, through any break.
+    /// Above and below the rail the scale goes on to the day's ends, so a row can be dragged past them.
     public func minute(at y: Double, hourHeight: Double = Rail.hourHeight, snap: Int = 5) -> Int {
-        let minutes = hour(drawn: max(y, 0) / hourHeight) * 60
-        return min(max(Int((minutes / Double(snap)).rounded()) * snap, firstHour * 60), lastHour * 60)
+        let minutes = hour(drawn: y / hourHeight) * 60
+        return min(max(Int((minutes / Double(snap)).rounded()) * snap, 0), 24 * 60)
     }
 
     public func y(minute: Int, hourHeight: Double) -> Double { drawn(hour: Double(minute) / 60) * hourHeight }
 
-    /// "4 PM", "4:15 PM", "noon", as the rail says a row's start.
-    public func timeText(minute: Int) -> String { railTime(hour: minute / 60, minute: minute % 60, full: true) }
+    /// "4 PM", "4:15 PM", "noon", as the rail says a row's start; not `full`, "4:15" as it says an end.
+    public func timeText(minute: Int, full: Bool = true) -> String { railTime(hour: minute / 60, minute: minute % 60, full: full) }
 
     /// "10 AM to noon", as a dropped row would read.
     public func dropLabel(hour: Int) -> (start: String, span: String) {

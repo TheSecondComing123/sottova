@@ -391,4 +391,39 @@ struct AlarmOrderTests {
         #expect(back.missed == row.missed)
         #expect(back.missed?.reason == "The Mac was off.")
     }
+
+    @Test func movingARowsStartKeepsItsLengthAndItsDays() {
+        var compline = Alarm(source: "compline", name: "Compline", hour: 20, minute: 0, weekdays: Set(1...7))
+        (compline.minutes, compline.daysOff) = (60, ["2026-11-04"])
+        compline.move(to: 21 * 60 + 35)
+        #expect((compline.hour, compline.minute, compline.minutes) == (21, 35, 60))
+        #expect(compline.weekdays == Set(1...7) && compline.daysOff == ["2026-11-04"])
+        // never off the end of the day
+        compline.move(to: 24 * 60)
+        #expect((compline.hour, compline.minute) == (23, 55))
+    }
+
+    @Test func anEndHasToComeAfterTheStart() {
+        let compline = Alarm(source: "compline", name: "Compline", hour: 20, minute: 0, weekdays: Set(1...7))
+        #expect(compline.length(endingAt: 21 * 60 + 30) == 90)
+        #expect(compline.length(endingAt: 20 * 60) == nil)
+        #expect(compline.length(endingAt: 19 * 60) == nil)
+        // midnight ends the day it starts
+        #expect(compline.length(endingAt: 24 * 60) == 240)
+    }
+
+    @MainActor @Test func aMoveUndoesInOneStepToTheTimeItHad() {
+        let c = Controller(storage: nil)
+        var compline = Alarm(source: "compline", name: "Compline", hour: 20, minute: 0, weekdays: Set(1...7))
+        compline.minutes = 60
+        c.addAlarm(compline)
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        c.undo = undo
+        undo.beginUndoGrouping()
+        c.changeAlarm(compline.id) { $0.move(to: 21 * 60 + 35) }
+        undo.endUndoGrouping()
+        undo.undo()
+        #expect(c.alarms[0] == compline)
+    }
 }
