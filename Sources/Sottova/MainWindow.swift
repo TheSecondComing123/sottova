@@ -31,6 +31,7 @@ struct MainWindow: View {
                     .clipped()
             }
             .overlay(alignment: .top) { Hairline() }
+            .overlay(alignment: .bottom) { Toast().padding(.bottom, 16).padding(.horizontal, 16) }
             .overlay(alignment: .topTrailing) {
                 if router.showsQueue {
                     QueuePanel(close: toggleQueue)
