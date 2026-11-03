@@ -230,10 +230,19 @@ struct SongList: View {
                                 .offset(y: -2)
                                 .foregroundStyle(Theme.text)
                                 .accessibilityAddTraits(.isHeader)
-                            Text(count(of: songs.count, in: all.count, filtered: !needle.isEmpty))
-                                .role(.body)
-                                .foregroundStyle(Theme.faint)
-                                .padding(.top, 16)
+                            // centered on the count's line, so the buttons coming and going don't move it
+                            HStack(spacing: 12) {
+                                Text(count(of: songs.count, in: all.count, filtered: !needle.isEmpty))
+                                    .role(.body)
+                                    .foregroundStyle(Theme.faint)
+                                if router.selected.count > 1 {
+                                    PickActions(songs: songs.filter { router.selected.contains($0.id) })
+                                        .transition(.opacity)
+                                }
+                            }
+                            .frame(height: 24)
+                            .padding(.top, 13)
+                            .animation(Theme.quick, value: router.selected.count > 1)
                         }
                         Spacer(minLength: 0)
                         TextField("Filter", text: $router.songFilter, prompt: Text(""))
@@ -290,7 +299,7 @@ struct SongList: View {
     }
 
     private func count(of shown: Int, in all: Int, filtered: Bool) -> String {
-        if router.selected.count > 1 { return "\(router.selected.count) of \(all) picked" }
+        if router.selected.count > 1 { return "\(router.selected.count) picked" }
         if filtered { return shown == 0 ? "" : "\(shown) of \(all)" }
         return Format.count(all, "song")
     }
@@ -324,6 +333,37 @@ struct SongList: View {
         }
         .buttonStyle(.plain)
         .accessibilityValue(sort == column ? (reversed ? "sorted, reversed" : "sorted") : "")
+    }
+}
+
+/// What a pick of several can do, beside its count.
+private struct PickActions: View {
+    let songs: [Song]
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Menu {
+                ForEach(Array(MenuEntry.collections(songs, name: "\(songs.count) songs", controller: controller).enumerated()), id: \.offset) { _, entry in
+                    if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Add to").role(.body).foregroundStyle(Theme.text)
+                    Ph.caretDown.icon(.bold, size: 8).foregroundStyle(Theme.muted)
+                }
+                .padding(.leading, 11)
+                .padding(.trailing, 9)
+                .frame(height: 24)
+                .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
+                .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .fixedSize()
+            ThemeButton(title: "Play next") { controller.playNext(songs) }
+        }
     }
 }
 

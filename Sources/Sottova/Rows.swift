@@ -89,12 +89,17 @@ extension MenuEntry {
 
     /// "Add to collection ▸": every one of yours, then a new one named after what's being added.
     @MainActor static func addToCollection(_ songs: [Song], name: String, controller: Controller) -> MenuEntry {
+        .submenu("Add to collection", collections(songs, name: name, controller: controller))
+    }
+
+    /// The same list for Songs' Add to button.
+    @MainActor static func collections(_ songs: [Song], name: String, controller: Controller) -> [MenuEntry] {
         var entries = controller.playlists.map { playlist in MenuEntry.item(playlist.name) { controller.add(songs, to: playlist.id) } }
         if !entries.isEmpty {
             entries.append(.divider)
         }
         entries.append(.item("New collection") { controller.newPlaylist(named: name, songs: songs) })
-        return .submenu("Add to collection", entries)
+        return entries
     }
 
     /// One of yours, from the sidebar or a tile. Rename opens its page with the name selected.
