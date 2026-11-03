@@ -47,8 +47,8 @@ struct CoverImage: View {
 /// Cover and words over the songs, all scrolling together, at every width.
 struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     let cover: String?
-    /// Nothing in it yet: the only place here an empty frame belongs.
-    let empty: Bool
+    /// Set as a type cover when there's no painting, as Now does.
+    let title: String
     var dropTargeted = false
     /// The row it plays for, as words you can click.
     var row: Alarm?
@@ -72,15 +72,19 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    @ViewBuilder
     private var art: some View {
-        if let cover {
-            CoverImage(key: cover, size: layout.cover)
-        } else if empty {
+        Group {
+            if let cover {
+                CoverImage(key: cover, size: layout.cover)
+            } else {
+                Artwork(key: nil, size: layout.cover, radius: Radius.small, title: title)
+            }
+        }
+        .overlay {
             RoundedRectangle(cornerRadius: Radius.small)
-                .fill(dropTargeted ? Theme.primary.opacity(0.1) : .clear)
-                .strokeBorder(dropTargeted ? Theme.primary : Theme.frame, lineWidth: 1)
-                .frame(width: layout.cover, height: layout.cover)
+                .fill(Theme.primary.opacity(0.1))
+                .strokeBorder(Theme.primary, lineWidth: 1)
+                .opacity(dropTargeted ? 1 : 0)
         }
     }
 
@@ -235,7 +239,7 @@ struct AlbumCollection: View {
 
     var body: some View {
         if let album = controller.catalog.albumsByID[id] {
-            CollectionFrame(cover: album.artwork, empty: false, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
+            CollectionFrame(cover: album.artwork, title: album.title, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
                             lines: [songCount(album.songs)]
                                 + ownSilence(controller.albumSettings[id], songs: album.songs, controller: controller),
                             credit: (album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") }, album.artwork)) {
@@ -314,7 +318,7 @@ struct YourCollection: View {
             let cover = controller.playlistCovers[pid] ?? songs.first?.artwork
             let isEmpty = playlist.paths.isEmpty
             let missing = playlist.paths.count - songs.count
-            CollectionFrame(cover: cover, empty: isEmpty, dropTargeted: isEmpty && target == 0, row: isEmpty ? nil : DayPlan(alarms: controller.alarms).firstRow(of: pid),
+            CollectionFrame(cover: cover, title: playlist.name, dropTargeted: isEmpty && target == 0, row: isEmpty ? nil : DayPlan(alarms: controller.alarms).firstRow(of: pid),
                             lines: isEmpty ? [] : [songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")]
                                 + ownSilence(isEmpty ? nil : playlist.gaps, songs: songs, controller: controller),
                             credit: (Controller.coverURL(forPlaylist: pid), controller.playlistCovers[pid])) {
@@ -325,17 +329,20 @@ struct YourCollection: View {
                         PlayButton(songs: songs, source: pid)
                         ShuffleButton(songs: songs, source: pid)
                     }
-                    ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
+                    // empty, the field under the header is already there
+                    if !isEmpty {
+                        ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
+                    }
                     menu(playlist, songs: songs)
                 }
             } songs: { narrow in
                 if isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        addField(who: nil)
+                        addField(who: nil, alone: true)
                         Text("or drag songs or a folder here")
                             .role(.body)
                             .foregroundStyle(Theme.faint)
-                            .padding(.leading, 24)
+                            .padding(.leading, 22)
                     }
                     .padding(.leading, -22)
                     .frame(maxWidth: .infinity, minHeight: 400, alignment: .topLeading)
@@ -510,9 +517,12 @@ struct YourCollection: View {
         return true
     }
 
-    private func addField(who: CGFloat?) -> some View {
-        AddSongs(requests: addRequests, have: Set(controller.playlists.first { $0.id == pid }?.paths ?? []), who: who) { song in
+    private func addField(who: CGFloat?, alone: Bool = false) -> some View {
+        AddSongs(requests: addRequests, have: Set(controller.playlists.first { $0.id == pid }?.paths ?? []), who: who, alone: alone) { song in
             withAnimation(Theme.quick) { controller.add([song], to: pid) }
+            if let paths = controller.playlists.first(where: { $0.id == pid })?.paths, let last = paths.indices.last {
+                router.selected = [Playlist.rowKey(last, paths[last])]
+            }
         }
     }
 
@@ -618,6 +628,8 @@ private struct AddSongs: View {
     let have: Set<String>
     /// The rows' Who column, so a hit's names line up with theirs.
     let who: CGFloat?
+    /// The only Add songs on an empty collection: it shows it's a field before it's hovered.
+    let alone: Bool
     let add: (Song) -> Void
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
@@ -632,10 +644,6 @@ private struct AddSongs: View {
         ScrollViewReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 0) {
-                    // where a row's speaker sits
-                    Ph.plus.icon(.bold, size: 10)
-                        .foregroundStyle(focused ? Theme.muted : Theme.faint)
-                        .frame(width: 22, alignment: .leading)
                     TextField("Add songs", text: $query, prompt: Text(""))
                         .textFieldStyle(.plain)
                         .focusEffectDisabled()
@@ -658,9 +666,11 @@ private struct AddSongs: View {
                             focused = false
                         }
                 }
+                // on the rows' text column
+                .padding(.leading, 22)
                 .padding(.trailing, 12)
                 .frame(height: 28)
-                .background(Theme.selection.opacity(focused || hovering ? 1 : 0), in: .rect(cornerRadius: Radius.small))
+                .background(Theme.selection.opacity(focused || hovering ? 1 : alone ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
                 .contentShape(.rect)
                 .onHover { hovering = $0 }
                 .onTapGesture { focused = true }
@@ -709,31 +719,38 @@ private struct AddHit: View {
                 .truncationMode(.middle)
             Spacer(minLength: 16)
             if here {
-                Text("already here").foregroundStyle(Theme.faint).padding(.trailing, 12)
+                Text("already here").foregroundStyle(Theme.faint).padding(.trailing, 16)
             }
             Text(Format.time(song.duration))
                 .monospacedDigit()
                 .foregroundStyle(Theme.faint)
-                .padding(.trailing, 12)
-            Button(action: add) {
-                Ph.plus.icon(.bold, size: 10)
-                    .foregroundStyle(hovering ? Theme.text : Theme.muted)
-                    .frame(width: 20, height: 20)
-                    .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
-                    .contentShape(.rect)
-            }
-            .buttonStyle(PressStyle())
-            .help(top ? "add it (Return)" : "add it")
-            .accessibilityLabel("Add \(song.title)")
+                .frame(width: 40, alignment: .trailing)
         }
         .role(.body)
         .padding(.leading, 22)
-        .padding(.trailing, 6)
+        .padding(.trailing, 12)
         .frame(height: 28)
-        .background(Theme.selection.opacity(hovering ? 1 : top ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
+        .background {
+            RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(hovering ? 1 : top ? 0.5 : 0)).padding(.trailing, here ? 0 : -18)
+        }
+        // past the time, where a row's × sits
+        .overlay(alignment: .trailing) {
+            if !here {
+                Button(action: add) {
+                    Ph.plus.icon(.bold, size: 10)
+                        .foregroundStyle(hovering ? Theme.text : Theme.muted)
+                        .frame(width: 20, height: 20)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle())
+                .help(top ? "add it (Return)" : "add it")
+                .accessibilityLabel("Add \(song.title)")
+                .offset(x: 14)
+            }
+        }
         .contentShape(.rect)
         .onHover { hovering = $0 }
-        .onTapGesture(count: 2, perform: add)
+        .onTapGesture(count: 2) { if !here { add() } }
     }
 }
 
