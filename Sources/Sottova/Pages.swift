@@ -19,6 +19,8 @@ struct PageScroll<Content: View>: View {
                 // capped so a wide window doesn't spread a song's columns a screen apart
                 .frame(maxWidth: maxWidth, alignment: .leading)
                 .padding(insets)
+                // the toast's height and its gap above the foot, so it never sits over the last row
+                .padding(.bottom, 48)
                 // to the page's foot and edges, under the rows, so a click on nothing lets go of the pick
                 .frame(maxWidth: .infinity, minHeight: layout.height, alignment: .top)
                 .background { Color.clear.contentShape(.rect).onTapGesture { router.clearPick() } }
