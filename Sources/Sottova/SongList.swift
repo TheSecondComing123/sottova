@@ -31,6 +31,7 @@ struct LibraryLine: View {
     @Environment(\.appearsActive) private var active
     @Environment(\.songDrag) private var drag
     @State private var hovering = false
+    @State private var naming = false
 
     private var picked: [Song] {
         guard router.selected.count > 1, router.selected.contains(song.id) else { return [song] }
@@ -85,8 +86,10 @@ struct LibraryLine: View {
         .accessibilityAction(named: "Play", play)
         .modifier(RowDrag(several: isPicked && router.selected.count > 1, id: song.id, namespace: drag) { dragStarted?() })
         .sottovaMenu {
-            MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, controller: controller, router: router, navigate: navigate)
+            MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, naming: { naming = true },
+                           controller: controller, router: router, navigate: navigate)
         }
+        .popover(isPresented: $naming, arrowEdge: .bottom) { NameCollection(songs: picked, open: $naming, name: MenuEntry.name(for: picked, controller: controller)) }
     }
 
     private func name(_ text: String, go: @escaping () -> Void) -> some View {
@@ -340,11 +343,12 @@ struct SongList: View {
 private struct PickActions: View {
     let songs: [Song]
     @Environment(Controller.self) private var controller
+    @State private var naming = false
 
     var body: some View {
         HStack(spacing: 8) {
             Menu {
-                ForEach(Array(MenuEntry.collections(songs, name: "\(songs.count) songs", controller: controller).enumerated()), id: \.offset) { _, entry in
+                ForEach(Array(MenuEntry.collections(songs, name: "", controller: controller) { naming = true }.enumerated()), id: \.offset) { _, entry in
                     if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
                 }
             } label: {
@@ -362,8 +366,58 @@ private struct PickActions: View {
             .menuIndicator(.hidden)
             .buttonStyle(.plain)
             .fixedSize()
+            .popover(isPresented: $naming, arrowEdge: .bottom) { NameCollection(songs: songs, open: $naming, name: MenuEntry.name(for: songs, controller: controller)) }
+            #if SHOT
+            .onAppear { naming = UserDefaults.standard.bool(forKey: "shotNameCollection") }
+            #endif
             ThemeButton(title: "Play next") { controller.playNext(songs) }
         }
+    }
+}
+
+/// Asks what a new collection of `songs` is called, makes it and opens it.
+struct NameCollection: View {
+    let songs: [Song]
+    @Binding var open: Bool
+    @Environment(Controller.self) private var controller
+    @Environment(\.navigate) private var navigate
+    @State private var name: String
+    @FocusState private var typing: Bool
+
+    /// Named before the field takes focus, so the name comes up selected and typing replaces it.
+    init(songs: [Song], open: Binding<Bool>, name: String) {
+        (self.songs, _open, _name) = (songs, open, State(initialValue: name))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(songs.count == 1 ? "New collection with this song" : "New collection with these \(songs.count) songs")
+                .role(.body)
+                .foregroundStyle(Theme.muted)
+            TextField("Name", text: $name, prompt: Text(""))
+                .role(.body)
+                .foregroundStyle(Theme.text)
+                .focused($typing)
+                .defaultFocus($typing, true)
+                .onSubmit(create)
+                .onExitCommand { open = false }
+                .modifier(FieldLook(focused: typing))
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                ThemeButton(title: "Cancel") { open = false }
+                ThemeButton(title: "Create", primary: true, action: create)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(14)
+        .frame(width: 280)
+    }
+
+    private func create() {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        open = false
+        controller.newCollection(named: name, songs: songs).map { navigate(.playlist($0)) }
     }
 }
 

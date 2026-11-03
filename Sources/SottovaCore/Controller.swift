@@ -1239,6 +1239,18 @@ public final class Controller {
         return playlist.id
     }
 
+    /// One made from songs you picked, which Edit › Undo moves to the Trash and Redo makes again.
+    @discardableResult
+    public func newCollection(named name: String, songs: [Song]) -> String? {
+        guard let id = newPlaylist(named: name, songs: songs), let made = playlists.first(where: { $0.id == id })?.name else { return nil }
+        undo?.registerUndo(withTarget: self) { controller in
+            controller.trashPlaylist(id)
+            controller.undo?.registerUndo(withTarget: controller) { $0.newCollection(named: made, songs: songs) }
+        }
+        undo?.setActionName("New collection")
+        return id
+    }
+
     /// Adds at the end, or before `index`.
     public func add(_ songs: [Song], to id: String, at index: Int? = nil) {
         update(id) { $0.insert(songs.map(\.id), at: index ?? $0.paths.count) }
