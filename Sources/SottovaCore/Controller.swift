@@ -411,7 +411,15 @@ public final class Controller {
     public func playNext(_ songs: [Song], source: String? = nil, at index: Int = 0) {
         queuedNext += 1
         let source = source ?? Self.source(of: songs)
-        upNext.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: min(index, upNext.count))
+        let at = min(index, upNext.count)
+        var queue = upNext
+        queue.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: at)
+        let what = called(songs.map(\.id)), back = "Took \(what) out of the queue"
+        if at == 0 {
+            setQueue(queue, songs.count == 1 ? "Play Next" : "Play \(Self.songsTitle(songs.count)) Next", "Playing \(what) next", back: back)
+        } else {
+            setQueue(queue, "Add \(Self.songsTitle(songs.count)) to Queue", "Added \(what) to the queue", back: back)
+        }
     }
 
     public struct Notice: Equatable {
@@ -465,6 +473,8 @@ public final class Controller {
     public func addAlarm(_ alarm: Alarm) {
         alarms.append(alarm)
         alarmsChanged()
+        undo?.registerUndo(withTarget: self) { $0.removeAlarm(alarm.id) }
+        did("Add \(alarm.name)", "Added \(alarm.name) to your day", back: "Took \(alarm.name) off your day")
     }
 
     /// The one way to edit an alarm, on the row as it is now: a copy held since before it last went off would bring
@@ -1258,9 +1268,17 @@ public final class Controller {
         playlist.paths.compactMap { catalog.songsByID[$0] }
     }
 
-    /// A new playlist named `name`, or "name 2" when that's taken. Returns its id.
+    /// A new playlist named `name`, or "name 2" when that's taken. Returns its id. Edit › Undo moves it to the
+    /// Trash and Redo puts it back.
     @discardableResult
-    public func newPlaylist(named name: String = "New collection", songs: [Song] = [], fromAlbum: String? = nil) -> String? {
+    public func newPlaylist(named name: String = "New collection", songs: [Song] = []) -> String? {
+        guard let id = makePlaylist(named: name, songs: songs), let made = playlists.first(where: { $0.id == id })?.name else { return nil }
+        undo?.registerUndo(withTarget: self) { $0.unmake(id) }
+        did("New Collection", "Made \(made)", back: "Moved \(made) to the Trash")
+        return id
+    }
+
+    private func makePlaylist(named name: String, songs: [Song], fromAlbum: String? = nil) -> String? {
         guard let store = playlistStore else { return nil }
         var candidate = name, n = 2
         // the file too: "A/B" lands on A-B.m3u8, and a file that couldn't be read isn't in the list
@@ -1275,23 +1293,6 @@ public final class Controller {
         playlists.append(playlist)
         playlists.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         return playlist.id
-    }
-
-    /// One made from songs you picked, which Edit › Undo moves to the Trash and Redo makes again.
-    @discardableResult
-    public func newCollection(named name: String, songs: [Song]) -> String? {
-        guard let id = newPlaylist(named: name, songs: songs), let made = playlists.first(where: { $0.id == id })?.name else { return nil }
-        undo?.registerUndo(withTarget: self) { controller in
-            // trashing it would take those rows with it, and nothing brings them back
-            guard !controller.alarms.contains(where: { $0.source == id }) else {
-                controller.notice = Notice("\(made) is on your day, so it stays", undoable: false)
-                return
-            }
-            controller.trashPlaylist(id)
-            controller.undo?.registerUndo(withTarget: controller) { $0.newCollection(named: made, songs: songs) }
-        }
-        did("New Collection", "Made \(made)", back: "Moved \(made) to the Trash")
-        return id
     }
 
     /// Adds at the end, or before `index`.
@@ -1466,19 +1467,78 @@ public final class Controller {
         return url.path
     }
 
-    /// Moves the file to the Trash, where it can be put back.
+    /// Moves the file to the Trash; Edit › Undo puts it back, with the rows on Your day it took.
     public func trashPlaylist(_ id: String) {
+        guard let name = playlists.first(where: { $0.id == id })?.name else { return }
         do {
-            try FileManager.default.trashItem(at: URL(filePath: id), resultingItemURL: nil)
-            try? FileManager.default.trashItem(at: Self.coverURL(forPlaylist: id), resultingItemURL: nil)
-            forget(id)
-            // what's left pointing at it has nothing to play; the window asks before this happens
-            if alarms.contains(where: { $0.source == id }) {
-                alarms.removeAll { $0.source == id }
-                alarmsChanged()
-            }
+            let gone = try moveToTrash(id)
+            undo?.registerUndo(withTarget: self) { $0.putBack(gone) }
+            did("Move \(name) to Trash", "Moved \(name) to the Trash", back: "Put back \(name)")
         } catch {
             problem = "couldn't move the collection to the Trash: \(error.localizedDescription)"
+        }
+    }
+
+    /// Where a trashed collection went, and the rows it took with it, by where they stood.
+    private struct Trashed {
+        let playlist: Playlist, file: URL?, cover: URL?
+        let rows: [(Int, Alarm)]
+    }
+
+    private func moveToTrash(_ id: String) throws -> Trashed {
+        guard let playlist = playlists.first(where: { $0.id == id }) else { throw CocoaError(.fileNoSuchFile) }
+        var file: NSURL?, cover: NSURL?
+        try FileManager.default.trashItem(at: URL(filePath: id), resultingItemURL: &file)
+        try? FileManager.default.trashItem(at: Self.coverURL(forPlaylist: id), resultingItemURL: &cover)
+        // a copy of an album gives its rows back to the album instead
+        let rows = playlist.fromAlbum != nil ? [] : alarms.enumerated().filter { $0.element.source == id }.map { ($0.offset, $0.element) }
+        forget(id)
+        // what's left pointing at it has nothing to play; the window asks before this happens
+        if !rows.isEmpty {
+            alarms.removeAll { $0.source == id }
+            alarmsChanged()
+        }
+        return Trashed(playlist: playlist, file: file as URL?, cover: cover as URL?, rows: rows)
+    }
+
+    private func putBack(_ gone: Trashed) {
+        let id = gone.playlist.id
+        do {
+            guard let file = gone.file else { throw CocoaError(.fileNoSuchFile) }
+            try FileManager.default.moveItem(at: file, to: URL(filePath: id))
+        } catch {
+            notice = Notice("couldn't get \(gone.playlist.name) back from the Trash: \(error.localizedDescription)", undoable: false)
+            return
+        }
+        if let cover = gone.cover { try? FileManager.default.moveItem(at: cover, to: Self.coverURL(forPlaylist: id)) }
+        playlists.append(gone.playlist)
+        playlists.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        loadPlaylistCovers()
+        if let album = gone.playlist.fromAlbum {
+            albumSettings[album] = nil
+            repointAlarms(from: album, to: id)
+        }
+        for (i, row) in gone.rows {
+            var row = row
+            row.scheduleOnce()
+            alarms.insert(row, at: min(i, alarms.count))
+        }
+        if !gone.rows.isEmpty { alarmsChanged() }
+        undo?.registerUndo(withTarget: self) { $0.trashPlaylist(id) }
+    }
+
+    /// Undoing a new collection. One a row on Your day plays stays: trashing it by ⌘Z would take the row too.
+    private func unmake(_ id: String) {
+        guard let playlist = playlists.first(where: { $0.id == id }) else { return }
+        guard playlist.fromAlbum != nil || !alarms.contains(where: { $0.source == id }) else {
+            notice = Notice("\(playlist.name) is on your day, so it stays", undoable: false)
+            return
+        }
+        do {
+            let gone = try moveToTrash(id)
+            undo?.registerUndo(withTarget: self) { $0.putBack(gone) }
+        } catch {
+            notice = Notice("couldn't move \(playlist.name) to the Trash: \(error.localizedDescription)", undoable: false)
         }
     }
 
@@ -1500,7 +1560,7 @@ public final class Controller {
         if let copy = playlists.first(where: { $0.fromAlbum == album.id }) { return copy.id }
         backUpData()
         // the playlist file is written before the album's gaps move into it
-        guard let id = newPlaylist(named: album.title, songs: album.songs, fromAlbum: album.id) else { return nil }
+        guard let id = makePlaylist(named: album.title, songs: album.songs, fromAlbum: album.id) else { return nil }
         albumSettings[album.id] = nil
         if let first = album.songs.first {
             let cover = URL(filePath: first.id).deletingLastPathComponent().appending(path: "cover.jpg")
@@ -1509,6 +1569,8 @@ public final class Controller {
             }
         }
         repointAlarms(from: album.id, to: id)
+        undo?.registerUndo(withTarget: self) { $0.unmake(id) }
+        did("Make \(album.title) Yours", "Made \(album.title) yours", back: "\(album.title) is an album again")
         return id
     }
 
@@ -2647,7 +2709,7 @@ extension Controller {
         refreshTracks()
         while catalog.songs.count < rows.count { try await Task.sleep(for: .milliseconds(10)) }
         let album = { (title: String) in self.catalog.albums.first { $0.title == title }! }
-        let own = { (title: String) in self.newPlaylist(named: title, songs: album(title).songs, fromAlbum: album(title).id)! }
+        let own = { (title: String) in self.makePlaylist(named: title, songs: album(title).songs, fromAlbum: album(title).id)! }
         let compline = own("Compline")
         for (index, name) in [(2, "Sorrow, stay"), (3, "Trembling shadow"), (5, "Candle out")] { setBreak(true, at: index, in: compline); namePart(name, at: index, in: compline) }
         namePart("Dusk", at: 0, in: compline)

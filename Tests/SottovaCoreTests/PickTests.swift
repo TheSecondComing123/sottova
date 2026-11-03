@@ -18,7 +18,7 @@ struct PickTests {
         undo.groupsByEvent = false
         c.undo = undo
         undo.beginUndoGrouping()
-        let id = try #require(c.newCollection(named: "Vespers", songs: ["/1", "/2"].map(song)))
+        let id = try #require(c.newPlaylist(named: "Vespers", songs: ["/1", "/2"].map(song)))
         undo.endUndoGrouping()
         #expect(undo.undoActionName == "New Collection")
         undo.undo()
@@ -37,7 +37,7 @@ struct PickTests {
         undo.groupsByEvent = false
         c.undo = undo
         undo.beginUndoGrouping()
-        let id = try #require(c.newCollection(named: "Vespers", songs: ["/1", "/2"].map(song)))
+        let id = try #require(c.newPlaylist(named: "Vespers", songs: ["/1", "/2"].map(song)))
         undo.endUndoGrouping()
         c.undo = nil
         c.addAlarm(Alarm(source: id, name: "Vespers", hour: 18, minute: 0, weekdays: [2]))

@@ -1275,9 +1275,9 @@ struct AlarmRunTests {
         let c = Controller(storage: nil)
         let undo = UndoManager()
         undo.groupsByEvent = false
-        c.undo = undo
         let once = Alarm(source: "a", name: "A", hour: 7, minute: 2, day: .now - 86_400)
         c.addAlarm(once)
+        c.undo = undo
         undo.beginUndoGrouping()
         c.removeAlarm(once.id)
         undo.endUndoGrouping()

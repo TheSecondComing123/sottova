@@ -308,7 +308,7 @@ struct SottovaCommands: Commands {
             return ["Play", "Play next", "Add to queue", "Add to collection", "Trim…", "Show in Finder"].map { .item($0, enabled: false) {} }
         }
         return MenuEntry.song(first, picked: songs, play: router.playPick, remove: router.removePick.map { remove in { _ in remove() } }, part: nil, naming: {
-            guard let id = controller.newCollection(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
+            guard let id = controller.newPlaylist(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
             router.renaming = id
             router.go(to: .playlist(id))
         }, controller: controller, router: router, navigate: navigate)

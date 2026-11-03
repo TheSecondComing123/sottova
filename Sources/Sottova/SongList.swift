@@ -430,7 +430,7 @@ struct NameCollection: View {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
         open = false
-        controller.newCollection(named: name, songs: songs).map { navigate(.playlist($0)) }
+        controller.newPlaylist(named: name, songs: songs).map { navigate(.playlist($0)) }
     }
 }
 

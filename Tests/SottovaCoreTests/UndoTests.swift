@@ -74,6 +74,82 @@ struct UndoTests {
         #expect(c.notice?.text == "Cleared the queue, 12 songs")
     }
 
+    @Test func anAddedRowGoesOnUndoAndComesBackOnRedo() {
+        let c = Controller(storage: nil)
+        let lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: [2])
+        let undo = undoing(c) { c.addAlarm(lauds) }
+        #expect(undo.undoActionName == "Add Lauds")
+        #expect(c.notice?.text == "Added Lauds to your day")
+        undo.undo()
+        #expect(c.alarms.isEmpty)
+        #expect(c.notice?.text == "Took Lauds off your day")
+        undo.redo()
+        #expect(c.alarms == [lauds])
+    }
+
+    @Test func aTrashedCollectionComesBackWithItsRows() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let id = try #require(c.newPlaylist(named: "Compline", songs: ["/1", "/2"].map(song)))
+        let lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: [2])
+        let row = Alarm(source: id, name: "Compline", hour: 20, minute: 0, weekdays: [2])
+        c.addAlarm(row)
+        c.addAlarm(lauds)
+        let undo = undoing(c) { c.trashPlaylist(id) }
+        #expect(undo.undoActionName == "Move Compline to Trash")
+        #expect(c.notice?.text == "Moved Compline to the Trash")
+        #expect(!FileManager.default.fileExists(atPath: id))
+        #expect(c.alarms == [lauds])
+        undo.undo()
+        #expect(FileManager.default.fileExists(atPath: id))
+        #expect(c.playlists.map(\.id) == [id])
+        #expect(c.playlists.first?.paths == ["/1", "/2"])
+        #expect(c.alarms == [row, lauds])
+        #expect(c.notice?.text == "Put back Compline")
+        undo.redo()
+        #expect(c.playlists.isEmpty)
+        #expect(c.alarms == [lauds])
+    }
+
+    @Test func aCopyMadeYoursGoesOnUndoAndTheAlbumGetsItsRowsBack() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        let album = Album(id: "lauds\u{1f}/m/Lauds", title: "Lauds", artist: "Various Artists", year: nil, artwork: nil, songs: [song("/m/Lauds/1.flac")])
+        c.addAlarm(Alarm(source: album.id, name: "Lauds", hour: 7, minute: 2, weekdays: [2]))
+        var id: String?
+        let undo = undoing(c) { id = c.makeYours(album) }
+        let copy = try #require(id)
+        #expect(undo.undoActionName == "Make Lauds Yours")
+        #expect(c.alarms.map(\.source) == [copy])
+        undo.undo()
+        #expect(c.playlists.isEmpty)
+        #expect(c.alarms.map(\.source) == [album.id])
+        undo.redo()
+        #expect(c.playlists.map(\.id) == [copy])
+        #expect(c.alarms.map(\.source) == [copy])
+    }
+
+    @Test func playNextAndAddToQueueUndoUnlessTheQueueMovedOn() {
+        let c = Controller(storage: nil)
+        c.playNext(["/1", "/2"].map(song))
+        let queued = c.upNext
+        var undo = undoing(c) { c.playNext([song("/m/Ave verum corpus.flac")]) }
+        #expect(undo.undoActionName == "Play Next")
+        #expect(c.notice?.text == "Playing Ave verum corpus next")
+        undo.undo()
+        #expect(c.upNext == queued)
+        undo = undoing(c) { c.playNext(["/3", "/4"].map(song), at: c.upNext.count) }
+        #expect(undo.undoActionName == "Add 2 Songs to Queue")
+        #expect(c.notice?.text == "Added 2 songs to the queue")
+        _ = c.dequeue()
+        let now = c.upNext
+        undo.undo()
+        #expect(c.upNext == now)
+        #expect(c.notice?.text == "the queue has moved on since, so undo leaves it")
+    }
+
     @Test func undoingAnEditBringsBackWhatYouSetAndNotWhenItLastWentOff() {
         let c = Controller(storage: nil)
         let lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: [2])
@@ -320,7 +396,9 @@ struct UndoTests {
         let c = Controller(storage: nil)
         c.playNext(["/1", "/2", "/3"].map(song))
         let undo = undoing(c) { c.removeQueued([c.upNext[1].id]) }
+        c.undo = nil
         c.playNext([song("/4")], at: 2)
+        c.undo = undo
         let now = c.upNext
         undo.undo()
         #expect(c.upNext == now)
