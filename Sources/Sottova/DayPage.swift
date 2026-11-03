@@ -516,7 +516,7 @@ private struct DaysOffField: View {
                     .padding(.top, 10)
             }
             .padding(12)
-            .frame(width: Self.cell.width * 7 + 24, height: Self.height, alignment: .top)
+            .frame(width: Self.cell.width * 7 + 24, alignment: .top)
         }
     }
 
@@ -547,7 +547,7 @@ private struct DaysOffField: View {
     private func grid(_ month: DayPlan.Month) -> some View {
         let places: [DayPlan.Month.Day?] = Array(repeating: nil, count: month.lead) + month.days
         return VStack(spacing: 0) {
-            ForEach(0..<6, id: \.self) { week in
+            ForEach(0..<(places.count + 6) / 7, id: \.self) { week in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { column in
                         let index = week * 7 + column
