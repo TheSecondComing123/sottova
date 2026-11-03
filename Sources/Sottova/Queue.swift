@@ -6,6 +6,7 @@ import SottovaCore
 struct QueuePanel: View {
     let close: () -> Void
     @Environment(Controller.self) private var controller
+    @State private var picked = Set<QueueEntry.ID>()
 
     private static let rowHeight: CGFloat = 36
 
@@ -20,11 +21,15 @@ struct QueuePanel: View {
                     Text("\(controller.upNext.count), \(Format.length(queuedLength))")
                         .monospacedDigit()
                         .foregroundStyle(Theme.faint)
+                    Spacer(minLength: 8)
+                    ThemeButton(title: "Clear") { withAnimation(Theme.quick) { controller.clearQueue() } }
+                        .help("empty the queue")
                 }
             }
             .role(.body)
+            .frame(height: 24)
             .padding(.horizontal, 14)
-                .padding(.bottom, 5)
+            .padding(.bottom, 5)
             if controller.upNext.isEmpty {
                 Text("Drop songs here")
                     .role(.body)
@@ -35,7 +40,7 @@ struct QueuePanel: View {
                     .contentShape(.rect)
                     .dropDestination(for: URL.self) { urls, _ in queue(urls, at: 0) }
             } else {
-                List {
+                List(selection: $picked) {
                     ForEach(controller.upNext) { entry in
                         QueueRow(entry: entry).row()
                     }
@@ -50,6 +55,13 @@ struct QueuePanel: View {
                         }
                     }
                 }
+                .onDeleteCommand {
+                    withAnimation(Theme.quick) { controller.removeQueued(picked) }
+                    picked = []
+                }
+                #if SHOT
+                .onAppear { picked = Set(controller.upNext.prefix(UserDefaults.standard.integer(forKey: "shotQueuePicked")).map(\.id)) }
+                #endif
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .animation(Theme.quick, value: controller.upNext)
@@ -118,7 +130,7 @@ private struct QueueRow: View {
             }
             if hovering {
                 IconButton(icon: .x, weight: .bold, help: "remove from the queue", size: 24) {
-                    withAnimation(Theme.quick) { controller.removeQueued(entry.id) }
+                    withAnimation(Theme.quick) { controller.removeQueued([entry.id]) }
                 }
             }
         }
@@ -130,7 +142,7 @@ private struct QueueRow: View {
                 + (song.map { song in [.item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) }] } ?? [])
                 + [
                     .divider,
-                    .item("Remove from the queue") { withAnimation(Theme.quick) { controller.removeQueued(entry.id) } },
+                    .item("Remove from the queue") { withAnimation(Theme.quick) { controller.removeQueued([entry.id]) } },
                 ]
         }
     }

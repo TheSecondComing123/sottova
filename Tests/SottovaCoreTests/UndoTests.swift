@@ -250,6 +250,32 @@ struct UndoTests {
         undo.undo()
         #expect(c.upNext == queued)
     }
+
+    @Test func removedQueuedSongsComeBackInTheirPlaces() {
+        let c = Controller(storage: nil)
+        c.playNext(["/1", "/2", "/3", "/4"].map(song))
+        let queued = c.upNext
+        let undo = undoing(c) { c.removeQueued([queued[1].id, queued[3].id]) }
+        #expect(c.upNext.map(\.path) == ["/1", "/3"])
+        #expect(undo.undoActionName == "Remove from queue")
+        undo.undo()
+        #expect(c.upNext == queued)
+        undo.redo()
+        #expect(c.upNext.map(\.path) == ["/1", "/3"])
+    }
+
+    @Test func aReorderedQueueGoesBack() {
+        let c = Controller(storage: nil)
+        c.playNext(["/1", "/2", "/3"].map(song))
+        let queued = c.upNext
+        let undo = undoing(c) { c.moveQueued(fromOffsets: [0], toOffset: 3) }
+        #expect(c.upNext.map(\.path) == ["/2", "/3", "/1"])
+        #expect(undo.undoActionName == "Move in queue")
+        undo.undo()
+        #expect(c.upNext == queued)
+        undo.redo()
+        #expect(c.upNext.map(\.path) == ["/2", "/3", "/1"])
+    }
 }
 
 @MainActor

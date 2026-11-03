@@ -168,7 +168,7 @@ struct AlbumGapsTests {
         c.playNext([a, b])
         c.playNext([a])
         #expect(c.upNext.map(\.path) == ["/a", "/a", "/b"])
-        c.removeQueued(c.upNext[1].id)
+        c.removeQueued([c.upNext[1].id])
         #expect(c.upNext.map(\.path) == ["/a", "/b"])
         c.moveQueued(fromOffsets: [0], toOffset: 2)
         #expect(c.upNext.map(\.path) == ["/b", "/a"])

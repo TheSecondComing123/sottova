@@ -1536,11 +1536,20 @@ public final class Controller {
         let moving = offsets.map { upNext[$0] }
         var rest = upNext.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
         rest.insert(contentsOf: moving, at: destination - offsets.count { $0 < destination })
-        upNext = rest
+        setQueue(rest, "Move in queue")
     }
 
-    public func removeQueued(_ id: QueueEntry.ID) {
-        upNext.removeAll { $0.id == id }
+    public func removeQueued(_ ids: Set<QueueEntry.ID>) {
+        setQueue(upNext.filter { !ids.contains($0.id) }, "Remove from queue")
+    }
+
+    /// Undo puts back the whole queue as it was, which is right only while nothing has played from it since.
+    private func setQueue(_ queue: [QueueEntry], _ name: String) {
+        let before = upNext
+        guard queue != before else { return }
+        upNext = queue
+        undo?.registerUndo(withTarget: self) { $0.setQueue(before, name) }
+        undo?.setActionName(name)
     }
 
     /// Plays a queued song now; what was queued after it still follows.
