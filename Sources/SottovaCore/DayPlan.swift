@@ -221,7 +221,7 @@ public struct DayPlan: Sendable {
             let text: String
             if first <= today {
                 text = calendar.isDate(last, inSameDayAs: today) ? "Off today"
-                    : "Off till \(shortDate(calendar.date(byAdding: .day, value: 1, to: last) ?? last))"
+                    : "Off till \(shortDate(back(alarm, after: last)))"
             } else if run.count == 1 {
                 text = "Off \(relativeDay(first))"
             } else {
@@ -229,6 +229,12 @@ public struct DayPlan: Sendable {
             }
             return (run.map { Alarm.day($0, calendar: calendar) }, text)
         }
+    }
+
+    /// The first day it plays after a run ending on `last`; a day off after that would have joined the run.
+    private func back(_ alarm: Alarm, after last: Date) -> Date {
+        let after = calendar.date(byAdding: .day, value: 1, to: last) ?? last
+        return alarm.withoutDaysOff.next(after: after - 1, calendar: calendar).map(calendar.startOfDay) ?? after
     }
 
     /// The first `runs` runs on one line, for under the calendar: "Off Dec 21 to Jan 4", "Off tomorrow, Nov 20 to

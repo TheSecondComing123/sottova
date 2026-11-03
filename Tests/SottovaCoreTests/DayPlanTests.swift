@@ -308,6 +308,8 @@ struct DayPlanTests {
         #expect(token(off(lauds, ["2026-11-27"])) == "Off Nov 27")
         #expect(token(off(lauds, (21...31).map { "2026-12-\($0)" } + (1...4).map { "2027-01-0\($0)" })) == "Off Dec 21 to Jan 4")
         #expect(token(off(lauds, ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"])) == "Off till Nov 5")
+        // the weekend isn't when it's back: Monday is
+        #expect(token(off(lauds, (2...6).map { "2026-11-0\($0)" })) == "Off till Nov 9")
         // yesterday's is kept but over
         #expect(token(off(lauds, ["2026-11-01"])) == nil)
         #expect(token(lauds) == nil)
