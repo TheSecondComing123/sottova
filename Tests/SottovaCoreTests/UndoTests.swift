@@ -276,6 +276,16 @@ struct UndoTests {
         undo.redo()
         #expect(c.upNext.map(\.path) == ["/2", "/3", "/1"])
     }
+
+    @Test func aQueueEditDoesntUndoOverWhatChangedSince() {
+        let c = Controller(storage: nil)
+        c.playNext(["/1", "/2", "/3"].map(song))
+        let undo = undoing(c) { c.removeQueued([c.upNext[1].id]) }
+        c.playNext([song("/4")], at: 2)
+        let now = c.upNext
+        undo.undo()
+        #expect(c.upNext == now)
+    }
 }
 
 @MainActor

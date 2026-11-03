@@ -1548,12 +1548,15 @@ public final class Controller {
         setQueue(upNext.filter { !ids.contains($0.id) }, "Remove from queue")
     }
 
-    /// Undo puts back the whole queue as it was, which is right only while nothing has played from it since.
+    /// Undo puts back the whole queue as it was, so only while nothing has played from it or joined it since.
     private func setQueue(_ queue: [QueueEntry], _ name: String) {
         let before = upNext
         guard queue != before else { return }
         upNext = queue
-        undo?.registerUndo(withTarget: self) { $0.setQueue(before, name) }
+        undo?.registerUndo(withTarget: self) { controller in
+            guard controller.upNext == queue else { return }
+            controller.setQueue(before, name)
+        }
         undo?.setActionName(name)
     }
 
