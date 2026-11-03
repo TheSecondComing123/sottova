@@ -74,21 +74,9 @@ struct PageLayoutTests {
         }
     }
 
-    @Test func aPaintingFitsItsBlock() {
-        for width in [855.0, 1196, 1240, 1470, 1920] {
-            let day = PageLayout(windowWidth: width, pageHeight: 898).day
-            let width = day.blockWidth(oneColumn: day.narrow)
-            #expect(day.painting(block: 52, blockWidth: width, lines: 1) == (40, 40, false))
-            for block in stride(from: 52.0, through: 1400, by: 3) {
-                let (wide, tall, under) = day.painting(block: block, blockWidth: width, lines: 3)
-                #expect(tall >= 40 && tall <= block - 12)
-                if under {
-                    #expect(wide == width - 12 && tall >= 160 && wide <= tall * 4)
-                    #expect(tall + 12 + 31 + 54 <= block)
-                } else {
-                    #expect(wide == tall && (wide + 75 + 220 <= width || wide == 40))
-                }
-            }
+    @Test func theTitleTakesItsLineAtEveryWidth() {
+        for page in Self.windows where !page.day.narrow {
+            #expect(page.day.railRoom(others: 1, played: 0) == page.height - 16 - 24 - 16 - 46)
         }
     }
 

@@ -304,7 +304,7 @@ struct SottovaCommands: Commands {
                 router.go(to: .playlist(id))
             },
             .item("New collection from selection", enabled: !songs.isEmpty, shortcut: KeyboardShortcut("n", modifiers: [.command, .shift])) {
-                guard let id = controller.newCollection(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
+                guard let id = controller.newPlaylist(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
                 router.renaming = id
                 router.go(to: .playlist(id))
             },

@@ -137,16 +137,19 @@ struct ThemeButton: View {
     var iconWeight = Ph.IconWeight.fill
     let action: () -> Void
     @State private var hovering = false
+    /// `.large` beside a large title, as on Now.
+    @Environment(\.controlSize) private var size
 
     var body: some View {
+        let large = size == .large
         Button(action: action) {
-            HStack(spacing: 6) {
-                if let icon { icon.icon(iconWeight, size: 11) }
-                Text(title).role(.body)
+            HStack(spacing: large ? 7 : 6) {
+                if let icon { icon.icon(iconWeight, size: large ? 13 : 11) }
+                Text(title).role(large ? .item : .body)
             }
                 .foregroundStyle(primary ? Theme.onPrimary : on ? Theme.primary : Theme.text)
-                .padding(.horizontal, 11)
-                .frame(height: 24)
+                .padding(.horizontal, large ? 14 : 11)
+                .frame(height: large ? 30 : 24)
                 .background(primary ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(hovering ? Theme.buttonHover : Theme.selection), in: .rect(cornerRadius: Radius.small))
                 .brightness(primary && hovering ? 0.06 : 0)
                 .overlay {

@@ -1255,6 +1255,8 @@ struct AlarmRunTests {
         let played = c.playedToday()
         #expect(played.map(\.title) == ["t0", "t1"])
         #expect(played.map(\.row) == ["Lauds", nil])
+        // to play it again from the list
+        #expect(played.map(\.path) == [album.songs[0].id, album.songs[1].id])
         #expect(c.playedToday(now: .now + 2 * 86_400).isEmpty)
     }
 

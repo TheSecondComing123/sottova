@@ -102,6 +102,7 @@ struct NowPage: View {
                 }
                 ThemeButton(title: "Open") { navigate(route) }
             }
+            .controlSize(.large)
             .padding(.top, 4)
         }
     }
@@ -292,11 +293,10 @@ private struct NowCover: View {
             .clipShape(.rect(cornerRadius: Radius.small))
             .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Color(white: 0.5, opacity: 0.28), lineWidth: 1))
             .scaleEffect(reduceMotion ? 1 : scale)
-            // or multiply takes the image and its outline separately
+            // multiply over a cream ground turned a dim painting into a khaki stain; plain opacity keeps its colors,
+            // a little stronger than on dark so it still reads as a painting
             .compositingGroup()
-            // on a light ground plain opacity reads as fog; multiply keeps the painting's darks
             .opacity(light ? Track.multiplied(level) : level)
-            .blendMode(light ? .multiply : .normal)
             .accessibilityHidden(true)
     }
 }

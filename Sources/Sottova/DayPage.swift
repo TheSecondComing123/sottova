@@ -7,6 +7,7 @@ import SottovaCore
 struct DayPage: View {
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
+    @Environment(\.navigate) private var navigate
     @State private var dropHour: Int?
     /// The time under the pointer on an empty stretch of the rail, where a click adds a row.
     @State private var adding: Int?
@@ -37,22 +38,20 @@ struct DayPage: View {
             let now = now(context.date)
             let plan = controller.dayPlan(now: now, wholeDay: droppingHere)
             PageScroll(insets: EdgeInsets(top: layout.insets.top, leading: layout.margin, bottom: layout.insets.bottom, trailing: layout.margin), maxWidth: .infinity) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    newButton
+                }
+                .padding(.bottom, 14)
                 if oneColumn(plan) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Your day").role(.title).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
-                        Spacer(minLength: 0)
-                        newButton
-                    }
-                    .padding(.bottom, 14)
                     day(plan)
                     others(plan, now: now)
                     playedList(plan)
                 } else {
                     HStack(alignment: .top, spacing: DayLayout.gap) {
-                        // the first block level with New
-                        VStack(alignment: .leading, spacing: 0) { day(plan) }.padding(.top, 8)
+                        VStack(alignment: .leading, spacing: 0) { day(plan) }
                         VStack(alignment: .leading, spacing: 0) {
-                            newButton.frame(maxWidth: .infinity, alignment: .trailing)
                             others(plan, now: now)
                             playedList(plan)
                         }
@@ -63,10 +62,28 @@ struct DayPage: View {
             .task(id: "\(controller.current?.id ?? "")\(controller.status)\(Calendar.current.component(.day, from: now))") {
                 played = controller.playedToday(now: now)
             }
+            .onChange(of: order(plan), initial: true) { pickable(order(plan)) }
         }
         .onAppear { wake.refresh() }
-        .onChange(of: dragging) { if !dragging { endMove() } }
+        // cut off: it goes back
+        .onChange(of: dragging) { if !dragging { withAnimation(Self.snapBack) { endMove() } } }
         .onDisappear(perform: endMove)
+    }
+
+    private func order(_ plan: DayPlan) -> [String] { plan.rows.map(\.id.uuidString) }
+
+    /// Blocks pick like songs: a click picks, Delete deletes, Return edits, through the page's keys.
+    private func pickable(_ order: [String]) {
+        router.run = SongRun(route: .alarms, order: order, play: { id in
+            if let alarm = controller.alarms.first(where: { $0.id.uuidString == id }) { router.alarm = .edit(alarm) }
+        }, remove: { ids in
+            for alarm in controller.alarms where ids.contains(alarm.id.uuidString) { controller.removeAlarm(alarm.id) }
+        })
+        #if SHOT
+        if let name = UserDefaults.standard.string(forKey: "shotPickRow"), let row = controller.alarms.first(where: { $0.name == name }) {
+            router.selected = [row.id.uuidString]
+        }
+        #endif
     }
 
     private func endMove() {
@@ -136,10 +153,11 @@ struct DayPage: View {
             let line = plan.line(for: row, nextPart: nextPart(row.alarm), rising: rising, waiting: sounding == row.id ? waiting : nil, cantWake: unwoken == row.id)
             return (row.id, line + stillWakes(row.alarm))
         }, uniquingKeysWith: { first, _ in first })
-        // room beside a painting at its usual size, and more than enough under one
         let blockWidth = layout.blockWidth(oneColumn: oneColumn(plan))
-        let room = blockWidth - 12 - 23 - 72 - 12 - 28
-        let rail = plan.rail(hourHeight: scale, lines: pieces.mapValues { WordFlow.lines($0, width: room) })
+        let room = Dictionary(plan.rows.map { ($0.id, DayRow.wordsRoom(name: $0.alarm.name, sounding: sounding == $0.id, blockWidth: blockWidth)) },
+                              uniquingKeysWith: { first, _ in first })
+        let lines = { (id: Alarm.ID) in WordFlow.lines(pieces[id] ?? [], width: room[id] ?? blockWidth) }
+        let rail = plan.rail(hourHeight: scale, lines: Dictionary(plan.rows.map { ($0.id, lines($0.id)) }, uniquingKeysWith: { first, _ in first }))
         var drop = dropHour.map { ($0, controller.alarmName(of: router.draggingCollection ?? "")) }
         #if SHOT
         if let shot = router.shotDrop { drop = (shot.hour, shot.name) }
@@ -154,7 +172,7 @@ struct DayPage: View {
             return Moving(id: row.id, end: parts.count > 2, minute: minute)
         } ?? self.moving
         #endif
-        let drawn = { (mark: DayPlan.Rail.Mark) in Drawn(mark: mark, plan: plan, scale: scale, moving: moving, lines: WordFlow.lines(pieces[mark.id] ?? [], width: room)) }
+        let drawn = { (mark: DayPlan.Rail.Mark) in Drawn(mark: mark, plan: plan, scale: scale, moving: moving, lines: lines(mark.id)) }
         return ZStack(alignment: .topLeading) {
             Rectangle().fill(Theme.hairline).frame(width: 1, height: rail.height).offset(x: 72)
             ForEach(rail.breaks, id: \.y) { gap in
@@ -198,10 +216,11 @@ struct DayPage: View {
                 let movable = canMove(mark.id, plan: plan)
                 let edge: RowDrag? = movable && mark.alarm.endsByMidnight ? drag(mark, end: true, plan: plan, scale: scale) : nil
                 DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
-                       painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines(pieces[mark.id] ?? [], width: blockWidth - 67)), sounding: sounding == mark.id,
-                       edge: edge)
+                       height: height, nameWidth: DayRow.nameWidth(mark.alarm.name, blockWidth: blockWidth), sounding: sounding == mark.id, edge: edge, order: order(plan))
                     .frame(height: height)
+                    .shadow(color: .black.opacity(moving?.id == mark.id ? 0.5 : 0), radius: moving?.id == mark.id ? 16 : 0, y: moving?.id == mark.id ? 8 : 0)
                     .gesture(drag(mark, end: false, plan: plan, scale: scale), isEnabled: movable)
+                    .pointerStyle(movable ? moving?.id == mark.id && moving?.end == false ? .grabActive : .grabIdle : nil)
                     .zIndex(moving?.id == mark.id ? 1 : 0)
                     .padding(.leading, DayLayout.blockLeft)
                     .offset(y: block.lowerBound)
@@ -234,6 +253,8 @@ struct DayPage: View {
     private var nowDate: Date { now(.now) }
 
     private static let railSpace = "rail"
+    /// Let go off the rail, Esc or cut off: the block goes back where it was.
+    private static let snapBack = Animation.easeOut(duration: 0.2)
 
     /// A row from last night has no start on today's rail to drag.
     private func canMove(_ id: Alarm.ID, plan: DayPlan) -> Bool {
@@ -252,7 +273,7 @@ struct DayPage: View {
                     guard escape == nil else { return }
                     escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                         guard event.keyCode == 53 else { return event }
-                        moving = nil
+                        withAnimation(Self.snapBack) { moving = nil }
                         return nil
                     }
                 } else if moving?.id != alarm.id {
@@ -263,9 +284,12 @@ struct DayPage: View {
             }
             .onEnded { drag in
                 guard let moved = moving, moved.id == alarm.id else { return }
-                endMove()
                 // above or below is still a time: the first and last rows go earlier and later that way
-                guard (0...railSize.width).contains(drag.location.x) else { return }
+                guard (0...railSize.width).contains(drag.location.x) else {
+                    withAnimation(Self.snapBack) { endMove() }
+                    return
+                }
+                endMove()
                 if end {
                     guard let length = alarm.length(endingAt: moved.minute), length != alarm.minutes else { return }
                     controller.changeAlarm(alarm.id, action: "Change End of \(alarm.name)") { $0.minutes = length }
@@ -295,6 +319,7 @@ struct DayPage: View {
                 if case .active(let point) = phase { adding = empty(point) } else { adding = nil }
             }
             .onTapGesture { point in
+                router.clearPick()
                 if let minute = empty(point) { router.alarm = .newAt(minute) }
             }
             .sottovaMenu {
@@ -338,7 +363,7 @@ struct DayPage: View {
     private func others(_ plan: DayPlan, now: Date) -> some View {
         let rest = rest(plan)
         if !rest.isEmpty {
-            heading("Other days").padding(.top, 24).padding(.bottom, 6)
+            heading("Other days").padding(.top, oneColumn(plan) ? 24 : 0).padding(.bottom, 6)
             ForEach(rest) { alarm in
                 OtherLine(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id) + stillWakes(alarm))
             }
@@ -364,7 +389,7 @@ struct DayPage: View {
                         .popover(isPresented: $allPlayed, arrowEdge: .trailing) { allPlayedList(plan) }
                 }
             }
-            .padding(.top, 24)
+            .padding(.top, oneColumn(plan) || !rest(plan).isEmpty ? 24 : 0)
             .padding(.bottom, 6)
             .padding(.leading, oneColumn(plan) ? DayLayout.blockLeft : 0)
             ForEach(played.reversed().prefix(cap), id: \.at) { line in
@@ -377,8 +402,23 @@ struct DayPage: View {
                 }
                 .role(.body)
                 .frame(height: 24)
+                .playedLine(line, play: replay, entries: playedEntries)
             }
         }
+    }
+
+    private func replay(_ line: Controller.Played) {
+        if let song = controller.catalog.songsByID[line.path] { controller.play([song]) }
+    }
+
+    private func playedEntries(_ line: Controller.Played) -> [MenuEntry] {
+        guard let song = controller.catalog.songsByID[line.path] else { return [] }
+        return [
+            .item("Play") { controller.play([song]) },
+            .divider,
+            .item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) },
+            .item("Go to artist") { navigate(.artist(song.artist)) },
+        ]
     }
 
     private func allPlayedList(_ plan: DayPlan) -> some View {
@@ -392,12 +432,23 @@ struct DayPage: View {
                     }
                     .role(.body)
                     .frame(height: 24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .playedLine(line, play: replay, entries: playedEntries)
                 }
             }
             .padding(12)
         }
         .frame(width: 380)
         .frame(maxHeight: 420)
+    }
+}
+
+private extension View {
+    /// A line of What played: a double-click plays it again, right-click has where it's from.
+    func playedLine(_ line: Controller.Played, play: @escaping (Controller.Played) -> Void, entries: @escaping (Controller.Played) -> [MenuEntry]) -> some View {
+        contentShape(.rect)
+            .onTapGesture(count: 2) { play(line) }
+            .sottovaMenu { entries(line) }
     }
 }
 
@@ -507,7 +558,6 @@ private struct RailTime: View {
 
     private var text: some View {
         Text(label.text)
-            .underline(alarm != nil, color: Theme.faint)
             .font(.system(size: strong ? 13 : 11, weight: strong ? .medium : .regular))
             .lineHeight(.exact(points: 18))
             .monospacedDigit()
@@ -601,10 +651,11 @@ private struct DaysOffPopover: ViewModifier {
     @State private var frame: CGRect = .zero
     /// The row's "Off…" word, in this view's space.
     @State private var word: CGRect?
+    @State private var days: CGRect?
 
     func body(content: Content) -> some View {
         let window = NSApp.windows.first { $0.isVisible && $0.isMainWindow }?.contentView?.bounds.height ?? .infinity
-        let at = router.daysOffFromWord ? word : nil
+        let at = (router.daysOffFromWord ? word : nil) ?? days
         let bottom = frame.minY + (at?.maxY ?? frame.height)
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
@@ -612,6 +663,12 @@ private struct DaysOffPopover: ViewModifier {
                 GeometryReader { proxy in
                     let rect = anchor.map { proxy[$0] }
                     Color.clear.onChange(of: rect, initial: true) { word = rect }
+                }
+            }
+            .backgroundPreferenceValue(DaysWord.self) { anchor in
+                GeometryReader { proxy in
+                    let rect = anchor.map { proxy[$0] }
+                    Color.clear.onChange(of: rect, initial: true) { days = rect }
                 }
             }
             .popover(isPresented: Binding(get: { router.daysOff == alarm.id }, set: { if !$0, router.daysOff == alarm.id { router.daysOff = nil } }),
@@ -799,53 +856,84 @@ private struct DaysOffField: View {
     }
 }
 
-/// A row's block: its tick, painting, name and words, with the rest of what it does behind the dots.
+/// A row's block: its painting down the left at the block's full height, then its tick, name and words on one line, so
+/// every name starts at one x and a long row only gets a taller strip.
 private struct DayRow: View {
     let alarm: Alarm
     /// Turned off or off today.
     let off: Bool
     let pieces: [DayPlan.Piece]
     let artwork: String?
-    let painting: (width: Double, height: Double, under: Bool)
+    let height: Double
+    let nameWidth: Double
     let sounding: Bool
     /// Dragging its bottom edge changes its end; nil for one with no end of its own.
     let edge: RowDrag?
+    /// The rail's blocks, for ⇧-click.
+    let order: [String]
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
     @State private var hovering = false
 
+    static let strip = 72.0
+    private static let nameFont = NSFont.systemFont(ofSize: Role.row.size, weight: .medium)
+    /// Strip, gap, tick, the gap after the name, the gap before the buttons, × and ••• with their gap, the inset.
+    private static let around = strip + 7 + 28 + 12 + 8 + 56 + 8
+
+    /// The name gets what it needs up to half the line, so a long one can't squeeze its words into a column.
+    static func nameWidth(_ name: String, blockWidth: Double) -> Double {
+        min(ceil((name as NSString).size(withAttributes: [.font: nameFont]).width), (blockWidth - around) / 2)
+    }
+
+    /// Where the words flow, beside the name.
+    static func wordsRoom(name: String, sounding: Bool, blockWidth: Double) -> Double {
+        max(blockWidth - around - nameWidth(name, blockWidth: blockWidth) - (sounding ? 19 : 0), 80)
+    }
+
     var body: some View {
-        Group {
-            if painting.under {
-                VStack(alignment: .leading, spacing: 8) {
-                    art
-                    HStack(alignment: .top, spacing: 0) { tick; words; Spacer(minLength: 8); buttons }
+        HStack(alignment: .top, spacing: 0) {
+            art
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                tick
+                name.frame(maxWidth: nameWidth + (sounding ? 19 : 0), alignment: .leading)
+                WordFlow {
+                    ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0, off: off) }
                 }
-            } else {
-                HStack(alignment: .top, spacing: 0) {
-                    tick
-                    HStack(alignment: .top, spacing: 12) { art; words }
-                    Spacer(minLength: 8)
-                    buttons
-                }
+                .foregroundStyle(off ? Theme.faint : Theme.muted)
+                .padding(.leading, 12)
+                .daysOffPopover(alarm)
+                Spacer(minLength: 8)
             }
+            .padding(.leading, 7)
+            .padding(.top, 8)
+            buttons.padding(.top, 7).padding(.trailing, 8)
         }
+        .animation(.easeOut(duration: 0.15), value: off)
         .onHover { hovering = $0 }
-        .padding(6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
-            RoundedRectangle(cornerRadius: Radius.small)
-                .fill(sounding ? Theme.primary.opacity(0.1) : Theme.selection.opacity(off ? 0.4 : 1))
+            // its own fill, not a button's: a card sits on the page, a button is pressed
+            Rectangle().fill(sounding ? Theme.primary.opacity(0.1) : Theme.hover.opacity(off ? 0.5 : 1))
+            Rectangle().fill(picked ? Theme.selection : Theme.hairline.opacity(shown ? 0.4 : 0))
+        }
+        .clipShape(.rect(cornerRadius: Radius.small))
+        .overlay {
+            if picked { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1) }
         }
         // on the whole block, so the painting counts; its words and tick keep their own clicks
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
+        .simultaneousGesture(TapGesture().onEnded { router.select(alarm.id.uuidString, in: order) })
+        .accessibilityAddTraits(picked ? .isSelected : [])
         .sottovaMenu { entries }
         .overlay(alignment: .bottom) {
             if let edge {
-                Color.clear
-                    .frame(height: 6)
+                RoundedRectangle(cornerRadius: 1.5).fill(Theme.faint)
+                    .frame(width: 24, height: 3)
+                    .opacity(shown ? 1 : 0)
+                    .animation(.easeOut(duration: shown ? 0.12 : 0.08), value: shown)
+                    .frame(maxWidth: .infinity, minHeight: 8)
                     .contentShape(.rect)
                     .pointerStyle(.rowResize)
                     .gesture(edge)
@@ -855,36 +943,34 @@ private struct DayRow: View {
     }
 
     private var tick: some View {
-        RowTick(alarm: alarm).padding(.top, 4).frame(width: 23, alignment: .topLeading)
+        RowTick(alarm: alarm).frame(width: 28, alignment: .leading)
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4.5 }
     }
 
+    private var picked: Bool { router.selected.contains(alarm.id.uuidString) }
+
+    /// A square a little past the block's height, cropped to the strip: sized in steps so dragging an end doesn't decode
+    /// the painting again on every frame.
     private var art: some View {
-        Artwork(key: artwork, size: painting.height, width: painting.width, radius: 3, outlined: true)
+        let side = max((height / 120).rounded(.up) * 120, Self.strip)
+        return Artwork(key: artwork, size: side, radius: 0)
+            .frame(width: Self.strip, height: height)
+            .clipped()
             .opacity(off ? 0.4 : 1)
     }
 
-    private var words: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 6) {
-                Button { navigate(alarm.route(in: controller)) } label: {
-                    Text(alarm.name).role(.row).foregroundStyle(off ? Theme.faint : Theme.text).lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .help("open \(alarm.name)")
-                // so what's sounding doesn't rest on color alone
-                if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
-            }
-            WordFlow {
-                ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0, off: off) }
-            }
-            .foregroundStyle(off ? Theme.faint : Theme.muted)
+    /// Not a link: a click on it picks the block, like anywhere on it. ••• and right-click have Open collection.
+    private var name: some View {
+        HStack(spacing: 6) {
+            Text(alarm.name).role(.row).foregroundStyle(off ? Theme.faint : Theme.text).lineLimit(1)
+            // so what's sounding doesn't rest on color alone
+            if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
         }
-        .daysOffPopover(alarm)
     }
 
     /// Delete shows on hover, in its place all along so nothing moves; it's in the menus too.
     private var buttons: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 8) {
             Button { controller.removeAlarm(alarm.id) } label: {
                 Ph.x.icon(.bold, size: 11)
                     .foregroundStyle(Theme.muted)
@@ -897,7 +983,7 @@ private struct DayRow: View {
             .accessibilityLabel("delete \(alarm.name)")
             .opacity(shown ? 1 : 0)
             .allowsHitTesting(shown)
-            .animation(Theme.quick, value: shown)
+            .animation(.easeOut(duration: shown ? 0.12 : 0.08), value: shown)
             RowDots(alarm: alarm, entries: entries)
         }
     }
@@ -909,7 +995,7 @@ private struct DayRow: View {
         return hovering
     }
 
-    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }
+    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router, navigate: navigate).entries }
 }
 
 private struct RowDots: View {
@@ -948,12 +1034,8 @@ private struct OtherLine: View {
             HStack(spacing: 8) {
                 RailTime(label: DayPlan.Rail.Label(text: DayPlan.startText(alarm), y: 0, kind: alarm.on ? .row : .off, row: alarm.id), alarm: alarm)
                 RowTick(alarm: alarm)
-                Button { navigate(alarm.route(in: controller)) } label: {
-                    Text(alarm.name).role(.body).fontWeight(.medium).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .help("open \(alarm.name)")
-                .layoutPriority(1)
+                Text(alarm.name).role(.body).fontWeight(.medium).foregroundStyle(alarm.on ? Theme.text : Theme.faint).lineLimit(1)
+                    .layoutPriority(1)
                 if !warning {
                     ViewThatFits(in: .horizontal) {
                         words(pieces)
@@ -978,7 +1060,7 @@ private struct OtherLine: View {
         .sottovaMenu { entries }
     }
 
-    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router).entries }
+    private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router, navigate: navigate).entries }
 
     private func words(_ pieces: [DayPlan.Piece]) -> some View {
         HStack(spacing: 10) { ForEach(pieces, id: \.text) { RowWord(alarm: alarm, piece: $0) } }
@@ -1004,7 +1086,7 @@ private struct RowTick: View {
             SystemWake.shared.renew(for: controller.alarms)
         }))
         .toggleStyle(Tick())
-        .frame(width: 14, height: 14)
+        .frame(width: 24, height: 24)
     }
 }
 
@@ -1014,10 +1096,11 @@ private struct RowActions {
     let alarm: Alarm
     let controller: Controller
     let router: Router
+    let navigate: Navigate
     private var preview: AlarmPreview { .shared }
 
     var entries: [MenuEntry] {
-        [.item("Edit…") { router.alarm = .edit(alarm) }]
+        [.item("Edit…") { router.alarm = .edit(alarm) }, .item("Open collection") { navigate(alarm.route(in: controller)) }]
             + (alarm.whileHere ? [] : [.item(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }])
             + [
                 .item(alarm.on ? "Turn off" : "Turn on") { change { $0.on = !alarm.on } },
@@ -1062,7 +1145,7 @@ private struct RowActions {
 private struct Tick: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         Button { configuration.isOn.toggle() } label: {
-            CheckBox(on: configuration.isOn).contentShape(.rect)
+            CheckBox(on: configuration.isOn).frame(width: 24, height: 24).contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }

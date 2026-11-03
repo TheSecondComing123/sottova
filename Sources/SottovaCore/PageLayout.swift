@@ -95,12 +95,12 @@ public struct DayLayout: Equatable, Sendable {
 
     private func othersHeight(_ others: Int) -> Double { others == 0 ? 0 : 42 + Double(others) * Self.line }
 
-    /// Height the rail has before it scrolls. 16: the first block sits a little above its time, the last can run past the foot.
+    /// Height the rail has before it scrolls, under the title. 16: the first block sits a little above its time, the last can run past the foot.
     public func railRoom(others: Int, played: Int) -> Double {
-        let page = height - Self.top - Self.bottom - 16
+        let page = height - Self.top - Self.bottom - 16 - 46
         guard oneColumn(others: others, played: played) else { return page }
         let shown = played == 0 ? 0 : 41 + Double(min(played, 3)) * Self.line
-        return page - 46 - othersHeight(others) - shown
+        return page - othersHeight(others) - shown
     }
 
     /// `span`: the rail's hours once long gaps are drawn short. A long day scrolls.
@@ -110,16 +110,4 @@ public struct DayLayout: Equatable, Sendable {
 
     /// Lines of What played on the page; the rest are behind All.
     public var playedCap: Int { narrow ? 3 : 8 }
-
-    /// A row's painting. In a tall block it fills the width, cropped, over the name and words; a strip too thin to read
-    /// as a painting doesn't count as tall. Otherwise it's square beside them. `lines`: the words' lines under it.
-    public func painting(block: Double, blockWidth: Double, lines: Int) -> (width: Double, height: Double, under: Bool) {
-        let tall = block - 12, wide = blockWidth - 12
-        // the name and its gaps, then the words
-        let over = tall - 31 - 18 * Double(lines)
-        if over >= 160, wide <= over * 4 { return (wide, over, true) }
-        // padding, tick and dots across, and room for the words
-        let side = max(40, min(tall, blockWidth - 75 - 220))
-        return (side, side, false)
-    }
 }

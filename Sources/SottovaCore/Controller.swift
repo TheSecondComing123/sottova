@@ -834,6 +834,7 @@ public final class Controller {
 
     public struct Played: Equatable, Sendable {
         public let at: Date
+        public let path: String
         public let title: String
         /// The row it played for, by its name now.
         public let row: String?
@@ -843,7 +844,7 @@ public final class Controller {
     /// What played today, soonest first, from the log and the piece that's on, which is only logged once it's over.
     public func playedToday(now: Date = .now, calendar: Calendar = .current) -> [Played] {
         let played = { (path: String, at: Date, row: Alarm.ID?) in
-            Played(at: at, title: self.catalog.songsByID[path]?.title ?? URL(filePath: path).deletingPathExtension().lastPathComponent,
+            Played(at: at, path: path, title: self.catalog.songsByID[path]?.title ?? URL(filePath: path).deletingPathExtension().lastPathComponent,
                    row: self.alarms.first { $0.id == row }?.name, artwork: self.catalog.songsByID[path]?.artwork)
         }
         var today = storage.map { PlayRecord.read($0.appending(path: "plays.jsonl"), last: 2000) }?
