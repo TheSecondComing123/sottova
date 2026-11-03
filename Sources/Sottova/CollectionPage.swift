@@ -353,6 +353,7 @@ struct YourCollection: View {
     private func rows(_ playlist: Playlist, songs: [Song], narrow: Bool) -> some View {
         let columns = CollectionColumns(songs: songs, narrow: narrow)
         let next = Set(controller.alarms.filter { $0.source == pid && $0.rotates }.map { controller.partChoices(for: $0).next })
+        let keys = playlist.paths.indices.filter { controller.catalog.songsByID[playlist.paths[$0]] != nil }.map { Playlist.rowKey($0, playlist.paths[$0]) }
         return LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(Array(playlist.paths.enumerated()), id: \.offset) { index, path in
                 if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
@@ -373,13 +374,13 @@ struct YourCollection: View {
                         withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
                         naming = index
                     })
-                    .id(path)
+                    .id(Playlist.rowKey(index, path))
                     .overlay(alignment: .top) { insertionLine(at: index) }
                     .dropDestination(for: URL.self) { urls, _ in drop(urls, at: index, in: playlist) } isTargeted: { on in
                         if on { target = index } else if target == index { target = nil }
                     }
             }
-            .environment(\.songOrder, playlist.paths)
+            .environment(\.songOrder, keys)
             // below the last row: drop to add at the end
             Color.clear
                 .frame(height: 48)
@@ -388,11 +389,11 @@ struct YourCollection: View {
                     if on { target = playlist.paths.count } else if target == playlist.paths.count { target = nil }
                 }
         }
-        .modifier(SongListRun(order: songs.map(\.id), play: { id in
-            if let index = songs.firstIndex(where: { $0.id == id }) { controller.play(songs, from: index, source: pid) }
-        }, remove: { ids in
+        .modifier(SongListRun(order: keys, play: { key in
+            if let index = keys.firstIndex(of: key) { controller.play(songs, from: index, source: pid) }
+        }, remove: { keys in
             guard let current = controller.playlists.first(where: { $0.id == pid }) else { return }
-            withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: IndexSet(current.paths.indices.filter { ids.contains(current.paths[$0]) })) }
+            remove(current.rows(keys))
         }))
         .padding(.leading, -22)
         .padding(.trailing, -12)
@@ -408,13 +409,13 @@ struct YourCollection: View {
     private func row(_ path: String, at index: Int, in playlist: Playlist, songs: [Song], columns: CollectionColumns) -> some View {
         if let song = controller.catalog.songsByID[path] {
             let playable = playlist.paths[..<index].count { controller.catalog.songsByID[$0] != nil }
-            LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song), remove: { ids in
-                // one row is this row, even when the song is in here twice
-                let rows = ids == [path] ? IndexSet([index]) : IndexSet(playlist.paths.indices.filter { ids.contains(playlist.paths[$0]) })
-                withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: rows) }
+            let key = Playlist.rowKey(index, path)
+            LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song), remove: { _ in
+                // the menu offers the pick only when this row is in it
+                remove(router.selected.count > 1 && router.selected.contains(key) ? playlist.rows(router.selected) : [index])
             }, dragStarted: { dragFrom = index }, part: index == 0 ? nil : (playlist.breaks.contains(index), {
                 withAnimation(Theme.quick) { controller.setBreak(!playlist.breaks.contains(index), at: index, in: pid) }
-            })) {
+            }), key: key) {
                 controller.play(songs, from: playable, source: pid)
             }
         } else {
@@ -430,7 +431,7 @@ struct YourCollection: View {
             .frame(height: 28)
             .help(path)
             .sottovaMenu {
-                [.item("Remove from this collection") { withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: [index]) } }]
+                [.item("Remove from this collection") { remove([index]) }]
             }
         }
     }
@@ -452,17 +453,33 @@ struct YourCollection: View {
         withAnimation(Theme.quick) {
             let dragged = dragFrom.flatMap { playlist.paths.indices.contains($0) && paths == [playlist.paths[$0]] ? $0 : nil }
             dragFrom = nil
+            let picked = playlist.rows(router.selected)
             if paths.count == 1, folders.isEmpty, let from = dragged ?? playlist.paths.firstIndex(of: paths[0]) {
-                controller.movePlaylistSongs(pid, fromOffsets: [from], toOffset: index)
-            } else if paths.count > 1, folders.isEmpty, paths.allSatisfy(playlist.paths.contains) {
+                move([from], to: index, in: playlist)
+            } else if paths.count > 1, folders.isEmpty, picked.map({ playlist.paths[$0] }) == paths {
                 // several picked rows dragged within the list: move them, don't copy
-                controller.movePlaylistSongs(pid, fromOffsets: IndexSet(playlist.paths.indices.filter { paths.contains(playlist.paths[$0]) }), toOffset: index)
+                move(picked, to: index, in: playlist)
             } else {
                 let inFolders = controller.catalog.songs.filter { song in folders.contains { song.id.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") } }
+                router.selected = []
                 controller.add(paths.compactMap { controller.catalog.songsByID[$0] } + inFolders, to: pid, at: index)
             }
         }
         return true
+    }
+
+    private func remove(_ rows: IndexSet) {
+        router.selected = []
+        withAnimation(Theme.quick) { controller.removeFromPlaylist(pid, at: rows) }
+    }
+
+    /// Picked rows stay picked where they land.
+    private func move(_ rows: IndexSet, to index: Int, in playlist: Playlist) {
+        let wasPicked = rows.allSatisfy { router.selected.contains(Playlist.rowKey($0, playlist.paths[$0])) }
+        controller.movePlaylistSongs(pid, fromOffsets: rows, toOffset: index)
+        guard wasPicked, let moved = controller.playlists.first(where: { $0.id == pid }) else { return }
+        let start = index - rows.count { $0 < index }
+        router.selected = Set((start..<start + rows.count).map { Playlist.rowKey($0, moved.paths[$0]) })
     }
 
     @ViewBuilder

@@ -30,6 +30,19 @@ struct PlaylistTests {
         #expect(Playlist.parse(text, at: file) == p)
     }
 
+    @Test func aSongInTwiceIsTwoRowsToPick() {
+        let p = Playlist(id: "/l/x.m3u8", name: "x", paths: ["/1", "/2", "/3", "/2"])
+        let second = Playlist.rowKey(3, "/2")
+        #expect(second != Playlist.rowKey(1, "/2"))
+        #expect(p.rows([second]) == [3])
+        #expect(p.rows([Playlist.rowKey(1, "/2"), Playlist.rowKey(2, "/3")]) == [1, 2])
+        // a row that's moved since names nothing, so Delete can't take the song now in its place
+        #expect(p.rows([Playlist.rowKey(2, "/2")]).isEmpty)
+        #expect(Playlist.path(ofRow: second) == "/2")
+        // Songs picks by the song itself
+        #expect(Playlist.path(ofRow: "/2") == "/2")
+    }
+
     @Test func readsWhatOtherPlayersWrite() {
         let file = URL(filePath: "/m/lists/x.m3u8")
         let text = "\u{FEFF}#EXTM3U\r\n#EXTINF:12,Someone - Something\r\n../music/a.flac\r\n#EXTVLCOPT:foo\r\n"

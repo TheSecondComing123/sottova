@@ -37,7 +37,12 @@ struct ShotReady: ViewModifier {
             if let filter = defaults.string(forKey: "shotFilter") { router.songFilter = filter }
             if let picked = defaults.string(forKey: "shotPicked") {
                 let titles = picked.components(separatedBy: "|")
-                router.selected = Set(controller.catalog.songs.filter { titles.contains($0.title) }.map(\.id))
+                if case .playlist(let id) = router.route, let playlist = controller.playlists.first(where: { $0.id == id }) {
+                    router.selected = Set(playlist.paths.indices.filter { titles.contains(controller.catalog.songsByID[playlist.paths[$0]]?.title ?? "") }
+                        .map { Playlist.rowKey($0, playlist.paths[$0]) })
+                } else {
+                    router.selected = Set(controller.catalog.songs.filter { titles.contains($0.title) }.map(\.id))
+                }
             }
             if let name = defaults.string(forKey: "shotRow") {
                 router.alarm = controller.alarms.first { $0.name == name }.map { .edit($0) } ?? .new(nil)
