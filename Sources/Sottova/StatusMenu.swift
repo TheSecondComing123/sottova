@@ -106,7 +106,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     private func sleep() -> MenuEntry {
-        var entry = MenuEntry.submenu("Sleep", Self.sleepChoices(controller))
+        var entry = MenuEntry.submenu("Sleep timer", Self.sleepChoices(controller))
         entry.enabled = controller.status != .idle
         return entry
     }

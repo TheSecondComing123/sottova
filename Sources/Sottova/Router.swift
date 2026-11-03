@@ -264,7 +264,7 @@ struct SottovaCommands: Commands {
             Button("Volume down") { controller.volume = max(controller.volume - 0.1, 0) }
                 .keyboardShortcut(.downArrow)
                 .disabled(router.typing)
-            Menu("Sleep") { SleepChoices(controller: controller) }
+            Menu("Sleep timer") { SleepChoices(controller: controller) }
                 .disabled(controller.status == .idle)
         }
         CommandGroup(after: .newItem) {
