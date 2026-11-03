@@ -581,8 +581,10 @@ struct YourCollection: View {
                 .foregroundStyle(Theme.text)
                 .lineLimit(4)
                 .accessibilityAddTraits(.isHeader)
-                .onTapGesture(count: 2) { startRename(playlist) }
-                .help("double-click to rename")
+                .onTapGesture { startRename(playlist) }
+                .pointerStyle(.horizontalText)
+                .help("click to rename")
+                .accessibilityAction(named: "Rename") { startRename(playlist) }
         }
     }
 
@@ -864,6 +866,7 @@ private struct PartHeading: View {
                         .foregroundStyle(name == nil ? Theme.muted : Theme.text)
                         .lineLimit(1)
                         .onTapGesture(perform: start)
+                        .pointerStyle(.horizontalText)
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityAction(named: "Rename", start)
                 }
