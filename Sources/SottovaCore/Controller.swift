@@ -1327,7 +1327,7 @@ public final class Controller {
         let name = playlists.first { $0.id == id }?.name ?? ""
         editParts(id, on ? "New Part" : "Join Parts", on ? "Made a new part in \(name)" : "Joined two parts in \(name)", back: "Put \(name)'s parts back") {
             var split: Int?, joined: Int?, parts = 0
-            update(id) { playlist in
+            let saved = update(id) { playlist in
                 guard index > 0, index < playlist.paths.count, playlist.breaks.contains(index) != on else { return }
                 let part = playlist.breaks.filter { $0 < index }.count
                 parts = playlist.breaks.count + 1
@@ -1340,6 +1340,7 @@ public final class Controller {
                     joined = part + 1
                 }
             }
+            guard saved else { return }
             for i in alarms.indices where alarms[i].source == id && alarms[i].nextPart < parts {
                 if let split, alarms[i].nextPart > split { alarms[i].nextPart += 1 }
                 if let joined, alarms[i].nextPart >= joined { alarms[i].nextPart -= 1 }
@@ -1370,7 +1371,7 @@ public final class Controller {
         let name = playlists.first { $0.id == id }?.name ?? ""
         editParts(id, "Move Part", "Moved a part of \(name)", back: "Put \(name)'s parts back") {
             var moved: [Int] = []
-            update(id) { moved = $0.movePart(part, to: destination) }
+            guard update(id, { moved = $0.movePart(part, to: destination) }) else { return }
             for i in alarms.indices where alarms[i].source == id && moved.indices.contains(alarms[i].nextPart) {
                 alarms[i].nextPart = moved[alarms[i].nextPart]
             }
@@ -1401,7 +1402,7 @@ public final class Controller {
 
     private func restoreParts(_ id: String, to state: PartsState, _ action: String, _ text: String, back: String) {
         editParts(id, action, text, back: back) {
-            update(id) { ($0.paths, $0.breaks, $0.partNames) = (state.paths, state.breaks, state.names) }
+            guard update(id, { ($0.paths, $0.breaks, $0.partNames) = (state.paths, state.breaks, state.names) }) else { return }
             for i in alarms.indices { if let next = state.next[alarms[i].id] { alarms[i].nextPart = next } }
             alarmsChanged()
         }
@@ -1600,10 +1601,15 @@ public final class Controller {
         }
     }
 
-    private func update(_ id: String, _ change: (inout Playlist) -> Void) {
-        guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
-        change(&playlists[index])
-        save(playlists[index])
+    /// On disk first: a collection that couldn't be saved stays as it was, and callers leave its rows alone too.
+    @discardableResult
+    private func update(_ id: String, _ change: (inout Playlist) -> Void) -> Bool {
+        guard let index = playlists.firstIndex(where: { $0.id == id }) else { return false }
+        var changed = playlists[index]
+        change(&changed)
+        guard save(changed) else { return false }
+        playlists[index] = changed
+        return true
     }
 
     @discardableResult

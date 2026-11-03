@@ -46,6 +46,24 @@ struct CollectionRowTests {
         return row
     }
 
+    @Test func failedPartSaveDoesNotPersistDifferentAlarmRotation() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Parts", songs: songs))
+        c.setBreak(true, at: 2, in: id)
+        let row = rotatingRow(id, next: 1)
+        c.addAlarm(row)
+        let original = URL(filePath: id), backup = dir.appending(path: "original.m3u8")
+        try FileManager.default.moveItem(at: original, to: backup)
+        try FileManager.default.createDirectory(at: original, withIntermediateDirectories: false)
+        c.setBreak(true, at: 1, in: id)
+        let saved = try JSONDecoder().decode([Alarm].self, from: Data(contentsOf: dir.appending(path: "alarms.json")))
+        let disk = Playlist.parse(try String(contentsOf: backup, encoding: .utf8), at: original)
+        #expect(c.problem?.contains("couldn't save") == true)
+        #expect(c.playlists[0].breaks == disk.breaks)
+        #expect(saved[0].nextPart == row.nextPart)
+    }
+
     @Test func quietPageNamesLatestStartingOpenRow() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "America/New_York")!
