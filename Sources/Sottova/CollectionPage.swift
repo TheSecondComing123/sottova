@@ -1039,12 +1039,7 @@ struct CollectionGrid: View {
     private func section(_ title: String?, _ collections: [MusicCollection], plan: DayPlan) -> some View {
         if !collections.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                if let title {
-                    Text(title)
-                        .role(.item)
-                        .foregroundStyle(Theme.text)
-                        .accessibilityAddTraits(.isHeader)
-                }
+                if let title { GroupHead(title: title) }
                 LazyVGrid(columns: TileGrid.columns, alignment: .leading, spacing: TileGrid.rowGap) {
                     ForEach(collections) { CollectionCard(collection: $0, hours: plan.shortHours(of: $0.id)) }
                 }
@@ -1185,6 +1180,22 @@ struct TileCaption: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).role(.body).fontWeight(.medium).foregroundStyle(Theme.text).lineLimit(1)
             Text(detail ?? " ").role(.body).foregroundStyle(Theme.muted).lineLimit(1)
+        }
+    }
+}
+
+/// A section's head on a grid page, in a collection part's type and hairline, so the app has one.
+struct GroupHead: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .role(.row)
+                .foregroundStyle(Theme.text)
+                .frame(height: 22)
+                .accessibilityAddTraits(.isHeader)
+            Rectangle().fill(Theme.hairline).frame(height: 1)
         }
     }
 }

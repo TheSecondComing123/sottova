@@ -21,12 +21,8 @@ struct FreeMusicPage: View {
                 .padding(.top, 2)
                 .padding(.bottom, 24)
             ForEach(ShelfSet.Kind.allCases, id: \.self) { kind in
-                Text(kind.rawValue)
-                    .role(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Theme.text)
-                    .accessibilityAddTraits(.isHeader)
-                    .padding(.bottom, 10)
+                GroupHead(title: kind.rawValue)
+                    .padding(.bottom, 14)
                 LazyVGrid(columns: TileGrid.columns, alignment: .leading, spacing: TileGrid.rowGap) {
                     ForEach(Shelf.sets.filter { $0.kind == kind }) { tile($0) }
                 }
