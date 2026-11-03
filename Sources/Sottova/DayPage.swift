@@ -74,6 +74,8 @@ struct DayPage: View {
 
     /// Blocks pick like songs: a click picks, Delete deletes, Return edits, through the page's keys.
     private func pickable(_ order: [String]) {
+        // a block that left today, by an edit or an undo, takes its pick with it
+        router.selected.formIntersection(order)
         router.run = SongRun(route: .alarms, order: order, play: { id in
             if let alarm = controller.alarms.first(where: { $0.id.uuidString == id }) { router.alarm = .edit(alarm) }
         }, remove: { ids in
