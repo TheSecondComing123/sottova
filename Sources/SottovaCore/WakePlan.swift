@@ -7,11 +7,14 @@ public enum WakePlan {
     /// How far ahead wakes go in, so a repeating alarm doesn't ask for the password every morning.
     public static let ahead: TimeInterval = 14 * 86_400
 
-    /// A sudoers rule that lets this user schedule a wake at a date and time, and nothing else, without a password.
-    /// It goes in with the one password prompt, so later wakes are added as the days go by without asking again.
-    public static let rule = "/etc/sudoers.d/sottova-2"
+    /// A sudoers rule that lets this user schedule or cancel a wake at a date and time, and nothing else, without a
+    /// password. It goes in with the one password prompt, so later wakes are added and taken away as the days go by
+    /// without asking again.
+    public static let rule = "/etc/sudoers.d/sottova-3"
+    /// The rule before days off could only add wakes. It still does, and the password prompt for a day off replaces it.
+    public static let addOnlyRule = "/etc/sudoers.d/sottova-2"
     /// The first rule ended in `*`, which also matches spaces, so it let extra arguments through. It still schedules
-    /// wakes, and the next password prompt replaces it. The app can't read either file, only see which one exists.
+    /// wakes, and the next password prompt replaces it. The app can't read any of these files, only see which exist.
     public static let looseRule = "/etc/sudoers.d/sottova"
 
     private nonisolated(unsafe) static let format: DateFormatter = {
@@ -41,15 +44,39 @@ public enum WakePlan {
             .sorted()
     }
 
+    /// The wakes the rows would need if none were turned off or had days off.
+    public static func wouldNeed(for alarms: [Alarm], now: Date) -> Set<Date> {
+        Set(needed(for: alarms.map { row in
+            var row = row.withoutDaysOff
+            row.on = true
+            return row
+        }, now: now))
+    }
+
+    /// The wakes to take away: ones Sottova added (`ours`) that are still scheduled, for a day off or a row turned off,
+    /// that no other row needs. Never one from another app or the owner, one past two weeks or in the next minute;
+    /// and with no rows to go by, none.
+    public static func cancels(for alarms: [Alarm], scheduled: Set<Date>, ours: Set<Date>, now: Date) -> [Date] {
+        guard !alarms.isEmpty else { return [] }
+        return wouldNeed(for: alarms, now: now).intersection(scheduled).intersection(ours)
+            .subtracting(needed(for: alarms, now: now))
+            .filter { $0 > now + 60 && $0 <= now + ahead }
+            .sorted()
+    }
+
     public static func pmsetArguments(for date: Date) -> [String] {
         ["-n", "/usr/bin/pmset", "schedule", "wakeorpoweron", format.string(from: date)]
     }
 
-    /// Written and checked under a name with a dot, which sudo skips, so a bad rule never takes effect; the loose
-    /// first rule goes once the new one is in.
+    public static func cancelArguments(for date: Date) -> [String] {
+        ["-n", "/usr/bin/pmset", "schedule", "cancel", "wakeorpoweron", format.string(from: date)]
+    }
+
+    /// Written and checked under a name with a dot, which sudo skips, so a bad rule never takes effect; the older
+    /// rules go only once the new one is in, so a cancel or a failure leaves them adding wakes as before.
     public static func installScript(user: String) -> String {
-        let line = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron \(datePattern)"
-        let install = "echo '\(line)' > /etc/sudoers.d/.sottova && chmod 440 /etc/sudoers.d/.sottova && /usr/sbin/visudo -cf /etc/sudoers.d/.sottova && mv /etc/sudoers.d/.sottova \(rule) && rm -f \(looseRule) || { rm -f /etc/sudoers.d/.sottova; exit 1; }"
+        let line = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron \(datePattern), /usr/bin/pmset schedule cancel wakeorpoweron \(datePattern)"
+        let install = "echo '\(line)' > /etc/sudoers.d/.sottova && chmod 440 /etc/sudoers.d/.sottova && /usr/sbin/visudo -cf /etc/sudoers.d/.sottova && mv /etc/sudoers.d/.sottova \(rule) && rm -f \(addOnlyRule) \(looseRule) || { rm -f /etc/sudoers.d/.sottova; exit 1; }"
         return "do shell script \"\(install)\" with administrator privileges"
     }
 

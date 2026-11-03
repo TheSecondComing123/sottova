@@ -172,7 +172,7 @@ struct AlarmSheet: View {
             when
             Strip(selection: $repeats)
             settings
-            if let alarm, !alarm.whileHere, !SystemWake.shared.trusted, !SystemWake.shared.missing(for: [alarm]).isEmpty {
+            if let alarm, !alarm.whileHere, !SystemWake.shared.canAdd, !SystemWake.shared.missing(for: [alarm]).isEmpty {
                 Text("Saving asks for your password once.")
                     .role(.small)
                     .foregroundStyle(Theme.muted)
@@ -419,9 +419,10 @@ extension Controller {
     }
 }
 
-/// Wakes the Mac from sleep before each alarm, through pmset. Scheduling needs root, so it asks for the password;
-/// reading what's scheduled doesn't. The commands run off the main actor, so a password prompt or a slow pmset can't
-/// hold up the audio ticks; they run one at a time, in the order they were asked for.
+/// Wakes the Mac from sleep before each alarm, through pmset, and takes back the ones it added for a day off or a row
+/// turned off. Scheduling needs root, so it asks for the password; reading what's scheduled doesn't. The commands run
+/// off the main actor, so a password prompt or a slow pmset can't hold up the audio ticks; they run one at a time, in
+/// the order they were asked for.
 @Observable @MainActor
 final class SystemWake {
     static let shared = SystemWake()
@@ -446,9 +447,46 @@ final class SystemWake {
     private func read() async {
         guard let pmset = await WakePlan.run("/usr/bin/pmset", ["-g", "sched"]) else { return }
         scheduled = WakePlan.scheduled(in: pmset.output)
+        ours = ours.intersection(scheduled)
     }
 
+    /// The wakes this app added and pmset still has: the only ones it ever cancels, as the schedule doesn't say who
+    /// asked for each.
+    private var ours: Set<Date> {
+        get { Set((UserDefaults.standard.array(forKey: "addedWakes") as? [Double] ?? []).map(Date.init(timeIntervalSince1970:))) }
+        set { UserDefaults.standard.set(newValue.map(\.timeIntervalSince1970).sorted(), forKey: "addedWakes") }
+    }
+
+    /// Wakes added before the app kept track: once, the scheduled ones within two weeks that a row needs.
+    private func adoptOnce(_ alarms: [Alarm]) {
+        guard !alarms.isEmpty, !UserDefaults.standard.bool(forKey: "addedWakesAdopted") else { return }
+        ours.formUnion(WakePlan.wouldNeed(for: alarms, now: .now).intersection(scheduled))
+        UserDefaults.standard.set(true, forKey: "addedWakesAdopted")
+    }
+
+    /// The rule that adds and cancels is in.
     var trusted: Bool { FileManager.default.fileExists(atPath: WakePlan.rule) }
+
+    /// Some rule is in, so a wake can be added without asking.
+    var canAdd: Bool { trusted || addsOnly }
+
+    /// An older rule that only adds.
+    private var addsOnly: Bool {
+        !trusted && [WakePlan.addOnlyRule, WakePlan.looseRule].contains { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    /// Whether the Mac still wakes for a day off on this row, as only the newer rule can take a wake back.
+    func stillWakes(_ row: Alarm, among alarms: [Alarm], now: Date = .now) -> Bool {
+        #if SHOT
+        // the real schedule says nothing about the copy's rows
+        return !row.daysOff.isEmpty && UserDefaults.standard.bool(forKey: "shotStillWakes")
+        #else
+        guard !trusted, !row.daysOff.isEmpty else { return false }
+        let mine = Set(WakePlan.needed(for: [row.withoutDaysOff], now: now))
+        // whoever added it, a wake still listed wakes the Mac
+        return !mine.isDisjoint(with: WakePlan.cancels(for: alarms, scheduled: scheduled, ours: scheduled, now: now))
+        #endif
+    }
 
     func missing(for alarms: [Alarm], now: Date = .now) -> [Date] {
         WakePlan.needed(for: alarms, now: now).filter { !scheduled.contains($0) }
@@ -459,36 +497,48 @@ final class SystemWake {
         WakePlan.needed(for: alarms, now: now).first.map { !scheduled.contains($0) } ?? false
     }
 
-    /// Fills in the wakes without asking, once the rule is in. Runs at launch, on every wake from sleep, and every six hours.
+    /// Fills in the wakes without asking, once a rule is in. Runs at launch, on every wake from sleep, and every six hours.
     func renew(for alarms: [Alarm]) {
-        if trusted || FileManager.default.fileExists(atPath: WakePlan.looseRule) { schedule(for: alarms, asking: false) }
+        if trusted || addsOnly { schedule(for: alarms, asking: false) }
     }
 
-    /// Schedules every missing wake, asking for the password first if the rule isn't in yet. A wake left from a
-    /// deleted alarm stays: it only wakes the Mac, which goes back to sleep.
+    /// Schedules every missing wake and cancels the ones a day off or a row turned off no longer needs, asking for the
+    /// password first if the rule for that isn't in yet. A wake left from a deleted alarm stays: it only wakes the
+    /// Mac, which goes back to sleep.
     func schedule(for alarms: [Alarm], asking: Bool = true) {
         inTurn { await self.fill(alarms, asking: asking) }
     }
 
     private func fill(_ alarms: [Alarm], asking: Bool) async {
         await read()
+        adoptOnce(alarms)
         let dates = missing(for: alarms)
-        // the loose rule keeps wakes topped up, so nothing may be missing; saving an alarm still swaps it out
+        let cancels = WakePlan.cancels(for: alarms, scheduled: scheduled, ours: ours, now: .now)
+        // the loose rule keeps wakes topped up, so nothing may be missing; saving an alarm still swaps it out. Someone
+        // who never takes a day off is never asked again for the rule that cancels
         let loose = !trusted && FileManager.default.fileExists(atPath: WakePlan.looseRule)
-        guard !dates.isEmpty || (loose && asking) else { return }
-        if !trusted, asking {
+        let forDaysOff = !WakePlan.cancels(for: alarms.filter(\.on), scheduled: scheduled, ours: ours, now: .now).isEmpty
+        let wanted = !trusted && (!dates.isEmpty && !addsOnly || forDaysOff || loose)
+        guard !dates.isEmpty || !cancels.isEmpty && trusted || (forDaysOff || loose) && asking else { return }
+        if wanted, asking {
             let install = await WakePlan.run("/usr/bin/osascript", ["-e", WakePlan.installScript(user: NSUserName())])
             if install?.status != 0 {
                 failure = WakePlan.installFailure(install?.error ?? "")
                 return
             }
         }
-        var failed = 0
-        for date in dates where await WakePlan.run("/usr/bin/sudo", WakePlan.pmsetArguments(for: date))?.status != 0 {
-            failed += 1
+        var added: [Date] = []
+        for date in dates where await WakePlan.run("/usr/bin/sudo", WakePlan.pmsetArguments(for: date))?.status == 0 {
+            added.append(date)
         }
-        failure = failed == 0 ? nil : "couldn't schedule \(failed) of the wakes: the system said no"
+        if trusted {
+            for date in cancels { _ = await WakePlan.run("/usr/bin/sudo", WakePlan.cancelArguments(for: date)) }
+        }
         await read()
+        ours.formUnion(scheduled.intersection(added))
+        // a cancel that's still listed didn't take, whatever sudo said
+        let failed = dates.count - added.count + (trusted ? cancels.filter(scheduled.contains).count : 0)
+        failure = failed == 0 ? nil : "couldn't change \(failed) of the wakes: the system said no"
     }
 }
 

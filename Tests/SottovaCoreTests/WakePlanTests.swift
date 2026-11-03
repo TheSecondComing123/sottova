@@ -37,6 +37,55 @@ struct WakePlanTests {
         #expect(WakePlan.needed(for: [lauds], now: date(10, 6, 58)).first == date(10, 7, 0))
     }
 
+    @Test func aDayOffNeedsNoWake() {
+        var lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        lauds.daysOff = [Alarm.day(date(11, 12, 0))]
+        let needed = WakePlan.needed(for: [lauds], now: date(10, 12, 0))
+        #expect(needed.count == 13)
+        #expect(!needed.contains(date(11, 7, 0)))
+    }
+
+    @Test func onlyWakesSottovaAddedForADayOffOrARowTurnedOffAreCancelled() {
+        let now = date(10, 12, 0)
+        var lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        lauds.daysOff = Set([12, 13, 14, 30].map { Alarm.day(date($0, 12, 0)) })
+        // Fridays at the same time: the 13th still needs its wake
+        let twin = Alarm(source: "t", name: "Twin", hour: 7, minute: 2, weekdays: [6])
+        var off = Alarm(source: "o", name: "Off", hour: 9, minute: 0, weekdays: Set(1...7))
+        off.on = false
+        let kept = date(11, 7, 0), dayOff = date(12, 7, 0), shared = date(13, 7, 0), foreign = date(14, 7, 0)
+        let far = date(30, 7, 0), turnedOff = date(11, 8, 58), deleted = date(15, 10, 0)
+        let scheduled: Set<Date> = [kept, dayOff, shared, foreign, far, turnedOff, deleted]
+        let ours = scheduled.subtracting([foreign])
+        #expect(WakePlan.cancels(for: [lauds, twin, off], scheduled: scheduled, ours: ours, now: now) == [turnedOff, dayOff])
+        // not within the next minute, and nothing without rows to go by
+        #expect(WakePlan.cancels(for: [lauds, twin, off], scheduled: scheduled, ours: ours, now: date(12, 6, 59) + 30).isEmpty)
+        #expect(WakePlan.cancels(for: [], scheduled: scheduled, ours: ours, now: now).isEmpty)
+    }
+
+    @Test func theWakesToTrackAtFirstAreTheOnesARowNeeds() {
+        var lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: Set(1...7))
+        lauds.daysOff = [Alarm.day(date(12, 12, 0))]
+        let scheduled: Set<Date> = [date(11, 7, 0), date(12, 7, 0), date(11, 6, 58), date(30, 7, 0)]
+        #expect(WakePlan.wouldNeed(for: [lauds], now: date(10, 12, 0)).intersection(scheduled) == [date(11, 7, 0), date(12, 7, 0)])
+    }
+
+    @Test func theCancelIsTheOneTheRuleAllows() {
+        #expect(WakePlan.cancelArguments(for: date(2, 7, 0)) == ["-n", "/usr/bin/pmset", "schedule", "cancel", "wakeorpoweron", "11/02/2026 07:00:00"])
+    }
+
+    @Test func theNewRuleIsCheckedAndInPlaceBeforeTheOldOnesGo() throws {
+        let script = WakePlan.installScript(user: "me")
+        #expect(WakePlan.rule == "/etc/sudoers.d/sottova-3")
+        #expect(script.contains("NOPASSWD: /usr/bin/pmset schedule wakeorpoweron \(WakePlan.datePattern), /usr/bin/pmset schedule cancel wakeorpoweron \(WakePlan.datePattern)'"))
+        let check = try #require(script.range(of: "visudo -cf"))
+        let move = try #require(script.range(of: "mv /etc/sudoers.d/.sottova /etc/sudoers.d/sottova-3"))
+        let remove = try #require(script.range(of: "rm -f /etc/sudoers.d/sottova-2 /etc/sudoers.d/sottova "))
+        #expect(check.lowerBound < move.lowerBound && move.lowerBound < remove.lowerBound)
+        // a failure takes away only the file it was writing
+        #expect(script.contains("|| { rm -f /etc/sudoers.d/.sottova; exit 1; }"))
+    }
+
     @Test func theSudoCallIsTheOneTheRuleAllows() {
         let arguments = WakePlan.pmsetArguments(for: date(2, 7, 0))
         #expect(arguments == ["-n", "/usr/bin/pmset", "schedule", "wakeorpoweron", "11/02/2026 07:00:00"])

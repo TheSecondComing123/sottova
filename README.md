@@ -150,16 +150,20 @@ sottova only goes online for the painting search while that sheet is open, and f
 waking the Mac needs root, because sottova schedules wakes with `pmset`. the first time you save a timed row, it asks for your password once and adds this rule:
 
 ```
-/etc/sudoers.d/sottova-2
-<you> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron [0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9] [0-9][0-9]?[0-9][0-9]?[0-9][0-9]
+/etc/sudoers.d/sottova-3
+<you> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wakeorpoweron [0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9] [0-9][0-9]?[0-9][0-9]?[0-9][0-9], /usr/bin/pmset schedule cancel wakeorpoweron [0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9] [0-9][0-9]?[0-9][0-9]?[0-9][0-9]
 ```
 
-it lets sottova add a wake at a date and time, and nothing else, without asking again. it's checked with `visudo` before it goes in. wakes are kept two weeks ahead, topped up at launch and whenever the Mac wakes. cancel the prompt and rows only play when the Mac is already awake.
+it lets sottova add or cancel a wake at a date and time, and nothing else, without asking again. it's checked with `visudo` before it goes in. wakes are kept two weeks ahead, topped up at launch and whenever the Mac wakes. cancel the prompt and rows only play when the Mac is already awake.
+
+sottova only cancels wakes it added itself, for a day off or a row you turned off, and never one another row still needs. a wake you or another app scheduled stays.
+
+an older version added `/etc/sudoers.d/sottova-2`, which can only add wakes. it keeps working. the first day off you take asks for your password once to swap it for `sottova-3`; until then the row plays nothing that day but the Mac still wakes.
 
 to undo it:
 
 ```sh
-sudo rm /etc/sudoers.d/sottova-2
+sudo rm /etc/sudoers.d/sottova-3
 pmset -g sched                  # see what's scheduled
 sudo pmset schedule cancelall   # removes every scheduled wake, not only sottova's
 ```
