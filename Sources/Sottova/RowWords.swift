@@ -106,9 +106,9 @@ struct WordMenu<Content: View>: View {
                 // a Menu's label doesn't inherit the row's foreground
                 .foregroundStyle(hovering ? Theme.text : on ? Theme.muted : Theme.faint)
                 .background {
-                    // the same inset both sides, the caret inside it; a block's fill is Theme.hover, so not that
+                    // ends at the caret, so the next word keeps its air; a block's fill is Theme.hover, so not that
                     RoundedRectangle(cornerRadius: 4).fill(hovering ? Theme.selection : .clear)
-                        .padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: -4))
+                        .padding(EdgeInsets(top: -1, leading: -4, bottom: -1, trailing: 0))
                 }
         }
         .menuStyle(.button)
@@ -179,7 +179,7 @@ struct VolumeWords: View {
 /// Words left to right, spaced, wrapping between them; one too long for a line wraps inside itself.
 struct WordFlow: Layout {
     // each word holds its caret's room as well
-    private static let spacing: CGFloat = 8
+    private static let spacing: CGFloat = 12
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let placed = place(subviews, width: proposal.width ?? .infinity)
