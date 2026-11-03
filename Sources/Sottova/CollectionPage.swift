@@ -614,7 +614,7 @@ private struct PartHeading: View {
                     .foregroundStyle(Theme.faint)
                     .fixedSize()
                 if next {
-                    Text("next").role(.body).foregroundStyle(Theme.muted).fixedSize()
+                    Text("next").role(.body).foregroundStyle(Theme.primary).fixedSize()
                 }
                 Spacer(minLength: 24)
             }
