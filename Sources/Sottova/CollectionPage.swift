@@ -61,7 +61,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     @Environment(\.listLayout) private var layout
 
     var body: some View {
-        PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin)) {
+        PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin), maxWidth: 1240) {
             HStack(alignment: .bottom, spacing: 24) {
                 art
                 words
