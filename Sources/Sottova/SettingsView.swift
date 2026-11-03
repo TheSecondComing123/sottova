@@ -10,6 +10,8 @@ struct SettingsView: View {
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginProblem: String?
     @State private var showsSkipped = false
+    /// A folder about to be removed, asked about first: its songs go with it.
+    @State private var removing: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -96,12 +98,12 @@ struct SettingsView: View {
     private var music: some View {
         section("Music") {
             ForEach(controller.folders, id: \.self) { folder in
-                let path = folder.path(percentEncoded: false).replacingOccurrences(of: NSHomeDirectory(), with: "~").trimmingSuffix("/")
+                let path = shortPath(folder)
                 HStack(spacing: 16) {
                     Text(path).role(.body).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle).help(path)
                     Spacer(minLength: 0)
                     Text(Format.count(songCount(in: folder), "song")).role(.body).monospacedDigit().foregroundStyle(Theme.muted).fixedSize()
-                    ThemeButton(title: "Remove") { controller.removeFolder(folder) }
+                    ThemeButton(title: "Remove") { removing = folder }
                         .help("stop watching this folder; the files stay where they are")
                 }
                 .modifier(SettingsRow())
@@ -114,6 +116,17 @@ struct SettingsView: View {
             .modifier(SettingsRow())
             if !controller.skippedFiles.isEmpty { skipped }
         }
+        .confirmationDialog(removing.map { "Remove \(shortPath($0))?" } ?? "", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                            presenting: removing) { folder in
+            Button("Remove", role: .destructive) { controller.removeFolder(folder) }
+        } message: { folder in
+            let count = songCount(in: folder)
+            Text("Its \(Format.count(count, "song")) \(count == 1 ? "leaves" : "leave") your library. The files stay where they are.")
+        }
+    }
+
+    private func shortPath(_ folder: URL) -> String {
+        folder.path(percentEncoded: false).replacingOccurrences(of: NSHomeDirectory(), with: "~").trimmingSuffix("/")
     }
 
     private var skipped: some View {
