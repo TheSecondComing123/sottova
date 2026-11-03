@@ -156,7 +156,7 @@ public struct DayPlan: Sendable {
         // the sidebar reads the same windows, so this can't say nothing's on while it says "till 9"
         if let open = alarms.filter(\.on).compactMap({ alarm in alarm.window(containing: now, calendar: calendar).map { (alarm.name, $0.end) } }).max(by: { $0.1 < $1.1 }) {
             let next = following(after: now)
-            return Quiet(headline: open.0, line: "till \(time(open.1)), not playing", foot: next.flatMap(foot), next: next.map(nextLine))
+            return Quiet(headline: open.0, line: "till \(fullTime(open.1)), not playing", foot: next.flatMap(foot), next: next.map(nextLine))
         }
         guard let next = following(after: now) else {
             return Quiet(headline: "Nothing on your day", line: "", foot: nil)
@@ -179,13 +179,12 @@ public struct DayPlan: Sendable {
             ?? following(after: now)?.alarm.source
     }
 
-    /// Beside a collection in the sidebar: "till 7" while it has the time, otherwise "7:02" or "8 PM". Nil if it has no row on.
+    /// Beside a collection in the sidebar: "till 7 PM" while it has the time, otherwise "7:02 AM" or "8 PM". Nil if it has no row on.
     public func label(of source: String) -> String? {
         let mine = alarms.filter { $0.on && $0.source == source }
-        if let end = mine.compactMap({ $0.window(containing: now, calendar: calendar)?.end }).max() { return "till \(time(end))" }
+        if let end = mine.compactMap({ $0.window(containing: now, calendar: calendar)?.end }).max() { return "till \(fullTime(end))" }
         guard let first = mine.min(by: { ($0.hour, $0.minute) < ($1.hour, $1.minute) }) else { return nil }
-        let bare = Self.time(hour: first.hour, minute: first.minute, twelveHour: twelveHour)
-        let label = first.minute == 0 && twelveHour ? "\(bare) \(first.hour < 12 ? "AM" : "PM")" : bare
+        let label = railTime(hour: first.hour, minute: first.minute, full: true)
         // its next time is a day off: the one it comes back on
         guard let next = first.next(after: now, calendar: calendar), next != first.withoutDaysOff.next(after: now, calendar: calendar) else { return label }
         let week = calendar.date(byAdding: .day, value: 7, to: calendar.startOfDay(for: now)) ?? now
@@ -393,6 +392,12 @@ public struct DayPlan: Sendable {
 
     private func dayName(_ date: Date) -> String {
         calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: 1, to: now) ?? now) ? " tomorrow" : " " + date.formatted(Date.FormatStyle(locale: Locale(identifier: "en_US"), timeZone: calendar.timeZone).weekday(.wide))
+    }
+
+    /// "7 PM", where `time` would say "7": alone on a line, a time says which half of the day.
+    private func fullTime(_ date: Date) -> String {
+        let clock = calendar.dateComponents([.hour, .minute], from: date)
+        return railTime(hour: clock.hour ?? 0, minute: clock.minute ?? 0, full: true)
     }
 
     private func time(_ date: Date) -> String {

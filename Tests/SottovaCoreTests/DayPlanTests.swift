@@ -60,7 +60,7 @@ struct DayPlanTests {
         // 8:30 on Compline's own hour, nothing playing: the sidebar says till 9, so Now names that hour
         let quiet = plan([lauds, compline], date(2, 20, 30)).quiet()
         #expect(quiet.headline == "Compline")
-        #expect(says(quiet.line, "till 9", "not playing"))
+        #expect(says(quiet.line, "till 9 PM", "not playing"))
         // what comes after it still shows, and whether the Mac will wake for that
         let after = plan([lauds, compline], date(2, 20, 30)).quiet(wakeScheduled: true)
         #expect(after.next == "Lauds at 7:02 tomorrow")
@@ -204,8 +204,8 @@ struct DayPlanTests {
 
     @Test func sidebarLabels() {
         let day = plan([lauds, overworld, compline], date(2, 15, 40))
-        #expect(day.label(of: "lauds") == "7:02")
-        #expect(day.label(of: "overworld") == "till 7")
+        #expect(day.label(of: "lauds") == "7:02 AM")
+        #expect(day.label(of: "overworld") == "till 7 PM")
         #expect(day.label(of: "compline") == "8 PM")
         #expect(day.label(of: "other") == nil)
         #expect(plan([overworld], date(2, 12)).label(of: "overworld") == "3 PM")
@@ -388,9 +388,9 @@ struct DayPlanTests {
     }
 
     @Test func whileTheNextTimeIsOffTheSidebarNamesTheNextOne() {
-        #expect(plan([off(lauds, ["2026-11-03"])], date(2, 12)).label(of: "lauds") == "7:02 Wed")
-        #expect(plan([off(lauds, (3...30).map { "2026-11-\(String(format: "%02d", $0))" })], date(2, 12)).label(of: "lauds") == "7:02 Dec 1")
-        #expect(plan([off(lauds, ["2026-11-04"])], date(2, 12)).label(of: "lauds") == "7:02")
+        #expect(plan([off(lauds, ["2026-11-03"])], date(2, 12)).label(of: "lauds") == "7:02 AM Wed")
+        #expect(plan([off(lauds, (3...30).map { "2026-11-\(String(format: "%02d", $0))" })], date(2, 12)).label(of: "lauds") == "7:02 AM Dec 1")
+        #expect(plan([off(lauds, ["2026-11-04"])], date(2, 12)).label(of: "lauds") == "7:02 AM")
         #expect(plan([off(lauds, ["2026-11-03"])], date(2, 22)).quiet().line == "7:02 Wednesday")
     }
 
