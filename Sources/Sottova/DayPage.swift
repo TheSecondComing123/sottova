@@ -64,7 +64,8 @@ struct DayPage: View {
             .onChange(of: order(plan), initial: true) { pickable(order(plan)) }
         }
         .onAppear { wake.refresh() }
-        .onChange(of: dragging) { if !dragging { endMove() } }
+        // cut off: it goes back
+        .onChange(of: dragging) { if !dragging { withAnimation(Self.snapBack) { endMove() } } }
         .onDisappear(perform: endMove)
     }
 
@@ -216,7 +217,9 @@ struct DayPage: View {
                 DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
                        height: height, nameWidth: DayRow.nameWidth(mark.alarm.name, blockWidth: blockWidth), sounding: sounding == mark.id, edge: edge, order: order(plan))
                     .frame(height: height)
+                    .shadow(color: .black.opacity(moving?.id == mark.id ? 0.5 : 0), radius: moving?.id == mark.id ? 16 : 0, y: moving?.id == mark.id ? 8 : 0)
                     .gesture(drag(mark, end: false, plan: plan, scale: scale), isEnabled: movable)
+                    .pointerStyle(movable ? moving?.id == mark.id && moving?.end == false ? .grabActive : .grabIdle : nil)
                     .zIndex(moving?.id == mark.id ? 1 : 0)
                     .padding(.leading, DayLayout.blockLeft)
                     .offset(y: block.lowerBound)
@@ -249,6 +252,8 @@ struct DayPage: View {
     private var nowDate: Date { now(.now) }
 
     private static let railSpace = "rail"
+    /// Let go off the rail, Esc or cut off: the block goes back where it was.
+    private static let snapBack = Animation.easeOut(duration: 0.2)
 
     /// A row from last night has no start on today's rail to drag.
     private func canMove(_ id: Alarm.ID, plan: DayPlan) -> Bool {
@@ -267,7 +272,7 @@ struct DayPage: View {
                     guard escape == nil else { return }
                     escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                         guard event.keyCode == 53 else { return event }
-                        moving = nil
+                        withAnimation(Self.snapBack) { moving = nil }
                         return nil
                     }
                 } else if moving?.id != alarm.id {
@@ -278,9 +283,12 @@ struct DayPage: View {
             }
             .onEnded { drag in
                 guard let moved = moving, moved.id == alarm.id else { return }
-                endMove()
                 // above or below is still a time: the first and last rows go earlier and later that way
-                guard (0...railSize.width).contains(drag.location.x) else { return }
+                guard (0...railSize.width).contains(drag.location.x) else {
+                    withAnimation(Self.snapBack) { endMove() }
+                    return
+                }
+                endMove()
                 if end {
                     guard let length = alarm.length(endingAt: moved.minute), length != alarm.minutes else { return }
                     controller.changeAlarm(alarm.id, action: "Change End of \(alarm.name)") { $0.minutes = length }
@@ -894,8 +902,11 @@ private struct DayRow: View {
         .sottovaMenu { entries }
         .overlay(alignment: .bottom) {
             if let edge {
-                Color.clear
-                    .frame(height: 6)
+                RoundedRectangle(cornerRadius: 1.5).fill(Theme.faint)
+                    .frame(width: 24, height: 3)
+                    .opacity(shown ? 1 : 0)
+                    .animation(.easeOut(duration: shown ? 0.12 : 0.08), value: shown)
+                    .frame(maxWidth: .infinity, minHeight: 8)
                     .contentShape(.rect)
                     .pointerStyle(.rowResize)
                     .gesture(edge)
