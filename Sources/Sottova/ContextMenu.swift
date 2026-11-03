@@ -83,10 +83,14 @@ struct MenuEntries: View {
 
 extension View {
     /// A native right-click menu. The entries are built when the menu opens, so they show the state at that moment.
-    func sottovaMenu(_ entries: @escaping () -> [MenuEntry]) -> some View {
+    /// `open` hears it come and go, for a row to show which one the menu is about.
+    func sottovaMenu(open: ((Bool) -> Void)? = nil, _ entries: @escaping () -> [MenuEntry]) -> some View {
         overlay(RightClick { event, view in
             let entries = entries()
-            if !entries.isEmpty { NSMenu.popUpContextMenu(NSMenu(entries), with: event, for: view) }
+            guard !entries.isEmpty else { return }
+            open?(true)
+            NSMenu.popUpContextMenu(NSMenu(entries), with: event, for: view)
+            open?(false)
         })
         .accessibilityAction(named: "Show menu") {
             let entries = entries()
