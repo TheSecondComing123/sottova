@@ -380,10 +380,12 @@ struct YourCollection: View {
             .onChange(of: renaming.wrappedValue) { _, new in
                 if new == pid { startRename(playlist) }
             }
+            .onChange(of: pid, initial: true) { router.shownCollection = pid }
             .onChange(of: router.addSongsRequests) { addRequests += 1 }
             .onChange(of: router.newPartRequests) { if router.selected.count > 1 { newPartFromPick(playlist) } }
         } else {
             Missing(text: "this collection isn't in your library anymore")
+                .onAppear { router.shownCollection = nil }
         }
     }
 

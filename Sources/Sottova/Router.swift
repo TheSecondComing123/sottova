@@ -13,6 +13,9 @@ final class Router {
     var dismissedFoot: String?
     /// The filter on Songs, here so a name anywhere can open Songs filtered to it.
     var songFilter = ""
+    /// The collection the open page shows: renaming it there moves the file to a new id under the same route, which
+    /// stays put so the page isn't rebuilt and ⌘Z can take the name back.
+    var shownCollection: String?
     /// A collection on its way from the sidebar onto an hour; the drop itself can't be read until it lands.
     var draggingCollection: String?
     #if SHOT
@@ -276,7 +279,7 @@ struct SottovaCommands: Commands {
 
     /// One of yours, open: what its page and its right-click do. Anything else: the same items, off.
     private var collectionEntries: [MenuEntry] {
-        guard router.presetEdit == nil, case .playlist(let id) = router.route, let playlist = controller.playlists.first(where: { $0.id == id }) else {
+        guard router.presetEdit == nil, case .playlist = router.route, let playlist = controller.playlists.first(where: { $0.id == router.shownCollection }) else {
             return ["Play", "Shuffle", "Add songs", "New part from selection", "Rename", "Choose cover…", "Start at…", "Show in Finder", "Move to Trash"]
                 .map { .item($0, enabled: false) {} }
         }
