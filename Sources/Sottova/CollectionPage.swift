@@ -169,7 +169,26 @@ struct PlayButton: View {
     @Environment(Controller.self) private var controller
 
     var body: some View {
-        ThemeButton(title: "Play", primary: true, icon: .play) { controller.playCollection(songs, source: source) }
+        // going, it pauses; paused or not this one, it plays
+        if let state = controller.collectionState(songs, source: source), !state.paused {
+            ThemeButton(title: "Pause", primary: true, icon: .pause) { controller.pause() }
+        } else {
+            ThemeButton(title: "Play", primary: true, icon: .play) { controller.playCollection(songs, source: source) }
+        }
+    }
+}
+
+/// Shuffle, lit while this one is going shuffled; pressed again, a new order.
+struct ShuffleButton: View {
+    let songs: [Song]
+    var source: String?
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        let on = controller.collectionState(songs, source: source)?.shuffled == true
+        ThemeButton(title: "Shuffle", on: on, icon: .shuffle, iconWeight: .bold) { controller.play(songs.shuffled(), source: source, shuffled: true) }
+            .help(on ? "playing shuffled; click for a new order" : "play in a random order")
+            .accessibilityValue(on ? "on" : "")
     }
 }
 
@@ -235,7 +254,7 @@ struct AlbumCollection: View {
             } actions: {
                 HStack(spacing: 6) {
                     PlayButton(songs: album.songs)
-                    ThemeButton(title: "Shuffle", icon: .shuffle, iconWeight: .bold) { controller.play(album.songs.shuffled(), shuffled: true) }
+                    ShuffleButton(songs: album.songs)
                     CollectionMenu {
                         Button("Start at…") { router.alarm = .new(.album(id)) }
                         SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.albumSettings[id] = $0 }
@@ -304,7 +323,7 @@ struct YourCollection: View {
                 if !isEmpty {
                     HStack(spacing: 6) {
                         PlayButton(songs: songs, source: pid)
-                        ThemeButton(title: "Shuffle", icon: .shuffle, iconWeight: .bold) { controller.play(songs.shuffled(), source: pid, shuffled: true) }
+                        ShuffleButton(songs: songs, source: pid)
                         menu(playlist, songs: songs)
                     }
                 }

@@ -127,6 +127,8 @@ extension View {
 struct ThemeButton: View {
     let title: String
     var primary = false
+    /// A mode that's in effect, such as shuffling: drawn in the accent.
+    var on = false
     var icon: Ph?
     var iconWeight = Ph.IconWeight.fill
     let action: () -> Void
@@ -137,12 +139,12 @@ struct ThemeButton: View {
                 if let icon { icon.icon(iconWeight, size: 11) }
                 Text(title).role(.body)
             }
-                .foregroundStyle(primary ? Theme.onPrimary : Theme.text)
+                .foregroundStyle(primary ? Theme.onPrimary : on ? Theme.primary : Theme.text)
                 .padding(.horizontal, 11)
                 .frame(height: 24)
                 .background(primary ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
                 .overlay {
-                    if !primary { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
+                    if !primary { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(on ? Theme.primary : Theme.stroke, lineWidth: on ? 1 : 0.5) }
                 }
         }
         .buttonStyle(PressStyle(scale: 0.98))

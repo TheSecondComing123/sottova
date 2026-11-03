@@ -1646,6 +1646,12 @@ public final class Controller {
     }
 
     /// Play on a collection's page. If it's already going this brings the music back, out of a silence too.
+    /// Whether these songs are what's going, and how: for a page's Play and Shuffle. nil when something else is.
+    public func collectionState(_ songs: [Song], source: String? = nil) -> (paused: Bool, shuffled: Bool)? {
+        guard status != .idle, let origin, origin.key == Origin.key(of: songs, source: source) else { return nil }
+        return (status == .paused, origin.shuffled)
+    }
+
     public func playCollection(_ songs: [Song], source: String? = nil) {
         guard origin?.key == Origin.key(of: songs, source: source), status != .idle else {
             play(songs, source: source)

@@ -110,6 +110,18 @@ struct RelaunchTests {
         #expect(try #require(c.machine.restRemaining) > left - 5)
     }
 
+    @Test func aCollectionKnowsWhetherItsPlayingAndHow() async throws {
+        let (c, album) = try await controller(storage: try temp())
+        #expect(c.collectionState(album.songs) == nil)
+        c.play(album.songs.shuffled(), shuffled: true)
+        #expect(c.collectionState(album.songs)?.shuffled == true)
+        #expect(c.collectionState(album.songs)?.paused == false)
+        c.toggle()
+        #expect(c.collectionState(album.songs)?.paused == true)
+        c.play(album.songs)
+        #expect(c.collectionState(album.songs)?.shuffled == false)
+    }
+
     @Test func playOnTheCollectionEndsItsSilencePausedOrNot() async throws {
         let (c, album) = try await controller(storage: try temp())
         c.addAlarm(row(album))
