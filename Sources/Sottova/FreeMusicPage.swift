@@ -14,67 +14,73 @@ struct FreeMusicPage: View {
                 .offset(y: -2)
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
-                .padding(.bottom, 19)
-            // capped: across a wide page the button would sit a screen from its name
-            ForEach(Shelf.sets) { row($0).frame(maxWidth: 720) }
-            Text("CC BY sets credit the artist.")
+            Text("Ten openly licensed albums. Downloads go to Music, Sottova Library.")
                 .role(.body)
-                .foregroundStyle(Theme.faint)
-                .padding(.top, 16)
+                .foregroundStyle(Theme.muted)
+                .padding(.top, 2)
+                .padding(.bottom, 24)
+            ForEach(ShelfSet.Kind.allCases, id: \.self) { kind in
+                Text(kind.rawValue)
+                    .role(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.text)
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.bottom, 10)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 148, maximum: 220), spacing: 20, alignment: .top)], alignment: .leading, spacing: 24) {
+                    ForEach(Shelf.sets.filter { $0.kind == kind }) { tile($0) }
+                }
+                .padding(.bottom, 32)
+            }
         }
     }
 
-    private func row(_ set: ShelfSet) -> some View {
+    /// Set from type: the real covers come down with the album, and this page fetches nothing until asked.
+    private func tile(_ set: ShelfSet) -> some View {
         let running = shelf.downloading.contains(set.id)
         let progress = shelf.progress[set.id] ?? 0
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(set.title)
-                    .role(.body)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+        return VStack(alignment: .leading, spacing: 8) {
+            Artwork(key: nil, radius: Radius.small, title: set.title, subtitle: set.creator)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(set.title), \(set.creator)")
+            HStack(spacing: 4) {
                 // a failure takes the line, whole
                 Group {
                     if let failure = shelf.failed[set.id], !running {
                         Text(failure).fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text("\(set.creator), \(set.license), \(Self.size(set.megabytes))").lineLimit(1)
+                        Text(running ? "\(Int(progress * Double(set.megabytes))) MB of \(Self.size(set.megabytes))" : "\(set.license), \(Self.size(set.megabytes))")
+                            .monospacedDigit()
+                            .lineLimit(2)
+                            .help(set.license.hasPrefix("CC BY") ? "CC BY sets credit the artist." : "")
                     }
                 }
                 .role(.body)
                 .foregroundStyle(Theme.muted)
+                Spacer(minLength: 0)
+                if running {
+                    // what's already downloaded stays on disk, so this isn't a Cancel
+                    ThemeButton(title: "Stop") { ShelfDownload.tasks[set.id]?.cancel() }
+                } else if shelf.failed[set.id] != nil {
+                    ThemeButton(title: "Try again") { start(set) }
+                } else if ShelfDownload.isDone(set) {
+                    Ph.check.icon(.bold, size: 12)
+                        .foregroundStyle(Theme.muted)
+                        .frame(width: 28, height: 28)
+                        .help("in your library")
+                        .accessibilityLabel("in your library")
+                } else {
+                    IconButton(icon: .trayArrowDown, help: "download \(set.title)", size: 28) { start(set) }
+                }
             }
-            Spacer(minLength: 0)
-            if running {
-                Text("\(Int(progress * Double(set.megabytes))) MB")
-                    .role(.body)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.muted)
-                // what's already downloaded stays on disk, so this isn't a Cancel
-                ThemeButton(title: "Stop") { ShelfDownload.tasks[set.id]?.cancel() }
-            } else if shelf.failed[set.id] != nil {
-                ThemeButton(title: "Try again") { start(set) }
-            } else if ShelfDownload.isDone(set) {
-                Ph.check.icon(.bold, size: 12)
-                    .foregroundStyle(Theme.muted)
-                    .frame(width: 28, height: 28)
-                    .help("in your library")
-                    .accessibilityLabel("in your library")
-            } else {
-                IconButton(icon: .trayArrowDown, help: "download \(set.title)", size: 28) { start(set) }
-            }
-        }
-        .frame(minHeight: 44)
-        .overlay(alignment: .bottom) {
-            if running {
-                Rectangle().fill(Theme.hairline).frame(height: 2)
-                    .overlay(alignment: .leading) {
-                        GeometryReader { geo in
-                            Rectangle().fill(Theme.faint).frame(width: geo.size.width * progress, height: 2)
-                        }
+            .frame(minHeight: 28)
+            // always there, so the rows below don't move when a download starts or ends
+            Rectangle().fill(Theme.hairline).frame(height: 2)
+                .overlay(alignment: .leading) {
+                    GeometryReader { geo in
+                        Rectangle().fill(Theme.faint).frame(width: geo.size.width * progress, height: 2)
                     }
-            }
+                }
+                .opacity(running ? 1 : 0)
         }
     }
 
