@@ -36,7 +36,8 @@ extension MenuEntry {
                 .addToCollection(songs, name: "", controller: controller, naming: naming),
             ]
             if let remove {
-                entries.append(.item("Remove \(songs.count) from this collection") { remove(Set(songs.map(\.id))) })
+                entries.append(.item("Remove \(songs.count) from this collection", shortcut: KeyboardShortcut(.delete),
+                                     action: unlessTyping { remove(Set(songs.map(\.id))) }))
             }
             return entries
         }
@@ -48,7 +49,7 @@ extension MenuEntry {
         ]
         entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })
         if let remove {
-            entries.append(.item("Remove from this collection") { remove([song.id]) })
+            entries.append(.item("Remove from this collection", shortcut: KeyboardShortcut(.delete), action: unlessTyping { remove([song.id]) }))
         }
         if let part {
             entries.append(.item(part.starts ? "Join the part before" : "Start a new part here", action: part.flip))
@@ -135,14 +136,14 @@ extension MenuEntry {
             .item("Start at…") { router.alarm = .new(.playlist(playlist.id)) },
             .item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
             .divider,
-            .item("Move to Trash") {
+            .item("Move to Trash", action: unlessTyping {
                 if !controller.alarmsLost(trashing: playlist).isEmpty {
                     router.trashing = playlist.id
                     return
                 }
                 if router.route == .playlist(playlist.id) { navigate(.home) }
                 controller.trashPlaylist(playlist.id)
-            },
+            }),
         ]
     }
 }

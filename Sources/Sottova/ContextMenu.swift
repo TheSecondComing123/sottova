@@ -16,10 +16,13 @@ struct MenuEntry {
     var checked = false
     /// Off: shown dimmed and can't be chosen, so the menu keeps its shape.
     var enabled = true
+    /// Pressed from the menu bar; a right-click menu only shows it.
+    var shortcut: KeyboardShortcut?
     let kind: Kind
 
-    static func item(_ title: String, checked: Bool = false, enabled: Bool = true, action: @escaping () -> Void) -> MenuEntry {
-        MenuEntry(title: title, checked: checked, enabled: enabled, kind: .action(action))
+    static func item(_ title: String, checked: Bool = false, enabled: Bool = true, shortcut: KeyboardShortcut? = nil,
+                     action: @escaping () -> Void) -> MenuEntry {
+        MenuEntry(title: title, checked: checked, enabled: enabled, shortcut: shortcut, kind: .action(action))
     }
 
     static func submenu(_ title: String, _ entries: [MenuEntry]) -> MenuEntry {
@@ -28,6 +31,26 @@ struct MenuEntry {
 
     static var divider: MenuEntry { MenuEntry(kind: .divider) }
 
+    /// ⌘⌫ is a menu's key and a text field's: pressed while typing, it stays the field's.
+    static func unlessTyping(_ action: @escaping () -> Void) -> () -> Void {
+        {
+            if NSApp.currentEvent?.type == .keyDown, let field = NSApp.keyWindow?.firstResponder as? NSTextView {
+                field.deleteToBeginningOfLine(nil)
+            } else {
+                action()
+            }
+        }
+    }
+}
+
+private extension NSEvent.ModifierFlags {
+    init(_ modifiers: EventModifiers) {
+        self = []
+        if modifiers.contains(.command) { insert(.command) }
+        if modifiers.contains(.shift) { insert(.shift) }
+        if modifiers.contains(.option) { insert(.option) }
+        if modifiers.contains(.control) { insert(.control) }
+    }
 }
 
 /// The same entries as a SwiftUI menu's contents: a ••• button's, or the menu bar's.
@@ -48,6 +71,7 @@ struct MenuEntries: View {
                         Button(entry.title, action: action)
                     }
                 }
+                .keyboardShortcut(entry.shortcut)
                 .disabled(!entry.enabled)
             case .submenu(let entries):
                 Menu(entry.title) { MenuEntries(entries: entries) }
@@ -90,6 +114,11 @@ extension NSMenu {
                 item.representedObject = MenuRun.Box(action)
                 item.state = entry.checked ? .on : .off
                 item.isEnabled = entry.enabled
+                if let shortcut = entry.shortcut {
+                    // AppKit spells the delete key as backspace
+                    item.keyEquivalent = shortcut.key == .delete ? "\u{8}" : String(shortcut.key.character)
+                    item.keyEquivalentModifierMask = NSEvent.ModifierFlags(shortcut.modifiers)
+                }
                 addItem(item)
             case .submenu(let entries):
                 let item = NSMenuItem(title: entry.title, action: nil, keyEquivalent: "")

@@ -280,25 +280,52 @@ struct SottovaCommands: Commands {
                 openWindow(id: "main")
                 router.alarm = .new(nil)
             }
+            .keyboardShortcut("n", modifiers: [.command, .option])
         }
     }
 
     private var navigate: Navigate { Navigate { router.open($0, in: controller) } }
 
-    /// One of yours, open: what its page and its right-click do. Anything else: the same items, off.
+    /// One of yours, open: what its page and its right-click do. An album: Play and Shuffle. Anything else: the same
+    /// items, off. New ones first, always there.
     private var collectionEntries: [MenuEntry] {
-        guard router.presetEdit == nil, case .playlist = router.route, let playlist = controller.playlists.first(where: { $0.id == router.shownCollection }) else {
-            return ["Play", "Shuffle", "Add songs", "New part from selection", "Rename", "Choose cover…", "Start at…", "Show in Finder", "Move to Trash"]
-                .map { .item($0, enabled: false) {} }
+        let songs = router.presetEdit == nil ? router.pickedPaths.compactMap { controller.catalog.songsByID[$0] } : []
+        let new: [MenuEntry] = [
+            .item("New collection", enabled: router.presetEdit == nil, shortcut: KeyboardShortcut("n")) {
+                openWindow(id: "main")
+                guard let id = controller.newPlaylist() else { return }
+                router.renaming = id
+                router.go(to: .playlist(id))
+            },
+            .item("New collection from selection", enabled: !songs.isEmpty, shortcut: KeyboardShortcut("n", modifiers: [.command, .shift])) {
+                guard let id = controller.newCollection(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
+                router.renaming = id
+                router.go(to: .playlist(id))
+            },
+            .divider,
+        ]
+        let off = ["Play", "Shuffle", "Add songs", "New part from selection", "Rename", "Choose cover…", "Start at…", "Show in Finder", "Move to Trash"]
+            .map { MenuEntry.item($0, enabled: false) {} }
+        guard router.presetEdit == nil else { return new + off }
+        if case .album(let id) = router.route, let album = controller.catalog.albums.first(where: { $0.id == id }) {
+            var entries = off
+            entries[0] = .item("Play") { controller.play(album.songs) }
+            entries[1] = .item("Shuffle") { controller.play(album.songs.shuffled(), shuffled: true) }
+            return new + entries
+        }
+        guard case .playlist = router.route, let playlist = controller.playlists.first(where: { $0.id == router.shownCollection }) else {
+            return new + off
         }
         var entries = MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate,
                                       renaming: Binding(get: { router.renaming }, set: { router.renaming = $0 }))
         if playlist.paths.isEmpty { entries[0].enabled = false; entries[1].enabled = false }
+        // Move to Trash, last: with songs picked, ⌘⌫ is the Song menu's Remove
+        if router.selected.isEmpty { entries[entries.count - 1].shortcut = KeyboardShortcut(.delete) }
         entries.insert(contentsOf: [
             .item("Add songs") { router.addSongsRequests += 1 },
             .item("New part from selection", enabled: router.selected.count > 1) { router.newPartRequests += 1 },
         ], at: 2)
-        return entries
+        return new + entries
     }
 
     /// What the pick's right-click offers, less what only makes sense on the row itself.
