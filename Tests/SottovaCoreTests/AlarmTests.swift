@@ -412,6 +412,15 @@ struct AlarmOrderTests {
         #expect(compline.length(endingAt: 24 * 60) == 240)
     }
 
+    @Test func onlyARowEndingByMidnightHasAnEndToDrag() {
+        var compline = Alarm(source: "compline", name: "Compline", hour: 23, minute: 0, weekdays: Set(1...7))
+        #expect(!compline.endsByMidnight)
+        compline.minutes = 60
+        #expect(compline.endsByMidnight)
+        compline.minutes = 90
+        #expect(!compline.endsByMidnight)
+    }
+
     @MainActor @Test func aMoveUndoesInOneStepToTheTimeItHad() {
         let c = Controller(storage: nil)
         var compline = Alarm(source: "compline", name: "Compline", hour: 20, minute: 0, weekdays: Set(1...7))

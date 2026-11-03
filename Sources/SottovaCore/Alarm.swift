@@ -116,6 +116,9 @@ public struct Alarm: Codable, Identifiable, Equatable, Sendable {
         return end > start ? end - start : nil
     }
 
+    /// A window over by midnight; one running into tomorrow has no end on today's rail to drag.
+    public var endsByMidnight: Bool { minutes.map { hour * 60 + minute + $0 <= 24 * 60 } ?? false }
+
     /// "2026-11-03": the key `daysOff` keeps a day under.
     public static func day(_ date: Date, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)

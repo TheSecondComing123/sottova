@@ -186,7 +186,7 @@ struct DayPage: View {
                 let block = drawn(mark).block
                 let height = block.upperBound - block.lowerBound
                 let movable = canMove(mark.id, plan: plan)
-                let edge: RowDrag? = movable && mark.alarm.minutes != nil ? drag(mark, end: true, plan: plan, scale: scale) : nil
+                let edge: RowDrag? = movable && mark.alarm.endsByMidnight ? drag(mark, end: true, plan: plan, scale: scale) : nil
                 DayRow(alarm: mark.alarm, off: mark.off, pieces: pieces[mark.id] ?? [], artwork: controller.alarmArtwork(of: mark.alarm.source),
                        painting: layout.painting(block: height, blockWidth: blockWidth, lines: WordFlow.lines(pieces[mark.id] ?? [], width: blockWidth - 67)), sounding: sounding == mark.id,
                        edge: edge)
