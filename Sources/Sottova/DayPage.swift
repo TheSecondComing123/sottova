@@ -916,10 +916,12 @@ private struct DayRow: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
             // its own fill, not a button's: a card sits on the page, a button is pressed
-            Rectangle().fill(sounding ? Theme.primary.opacity(0.1) : Theme.hover.opacity(off ? 0.5 : 1))
+            // quiet, as a long block is mostly fill: the hairline gives it its edge
+            Rectangle().fill(sounding ? Theme.primary.opacity(0.1) : Theme.hover.opacity(off ? 0.25 : 0.45))
             Rectangle().fill(picked ? Theme.selection : Theme.hairline.opacity(shown ? 0.4 : 0))
         }
         .clipShape(.rect(cornerRadius: Radius.small))
+        .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.hairline, lineWidth: 1) }
         .overlay {
             if picked { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.primary, lineWidth: 1) }
         }
