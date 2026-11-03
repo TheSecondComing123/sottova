@@ -27,6 +27,8 @@ struct MainWindow: View {
                     // refusing the one that brings an inactive window forward
                     .zIndex(1)
                 page.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // a scrolled page's rows would otherwise draw on up through the bar, which has no fill
+                    .clipped()
             }
             .overlay(alignment: .top) { Hairline() }
             .overlay(alignment: .topTrailing) {
