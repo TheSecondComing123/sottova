@@ -29,6 +29,17 @@ struct PageScroll<Content: View>: View {
             .onChange(of: router.scrollTo) { _, id in
                 if let id { reader.scrollTo(id) }
             }
+            #if SHOT
+            .task {
+                let free = UserDefaults.standard.string(forKey: "shotFree")
+                let id = free == "downloading" ? "musopen-chopin" : free == "failed" ? "ChrisZabriskieDirectToVideo" :
+                    free == "downloaded" ? Shelf.sets.first { $0.title == "Cloud Cover" }?.id : nil
+                if let id {
+                    await Task.yield()
+                    reader.scrollTo(id, anchor: .center)
+                }
+            }
+            #endif
         }
         // rows fade out at the page's foot
         .scrollEdgeEffectStyle(.soft, for: .bottom)

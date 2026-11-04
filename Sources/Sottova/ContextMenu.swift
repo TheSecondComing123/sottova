@@ -220,7 +220,11 @@ func shotMenu(at point: NSPoint, in window: NSWindow) {
 func shotMenuReady() {
     let timer = Timer(timeInterval: 0.6, repeats: false) { _ in
         let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[CFString: Any]] ?? []
-        let menu = windows.first { $0[kCGWindowOwnerPID] as? pid_t == getpid() && $0[kCGWindowLayer] as? Int ?? 0 > 0 }
+        let menu = windows.first {
+            let bounds = $0[kCGWindowBounds] as? [String: Any] ?? [:]
+            return $0[kCGWindowOwnerPID] as? pid_t == getpid() && $0[kCGWindowLayer] as? Int ?? 0 > 0 &&
+                (bounds["Width"] as? Double ?? 0) > 80 && (bounds["Height"] as? Double ?? 0) > 20
+        }
         try? Data(String(menu?[kCGWindowNumber] as? Int ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
     }
     RunLoop.main.add(timer, forMode: .common)

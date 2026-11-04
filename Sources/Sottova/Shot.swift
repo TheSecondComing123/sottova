@@ -8,9 +8,18 @@ import SottovaCore
 struct ShotReady: ViewModifier {
     let controller: Controller
     let router: Router
+    @State private var seeded = false
+    @State private var mounted = false
 
     func body(content: Content) -> some View {
-        content.task {
+        ZStack {
+            if seeded {
+                content.onAppear { mounted = true }
+            } else {
+                Color.clear
+            }
+        }.task {
+            guard !seeded else { return }
             let defaults = UserDefaults.standard
             if defaults.string(forKey: "shotAppearance") == "light" { NSApp.appearance = NSAppearance(named: .aqua) }
             try? await controller.shotEnter(defaults.string(forKey: "shotState") ?? "idle",
@@ -18,8 +27,20 @@ struct ShotReady: ViewModifier {
             // before the route: resized in the same turn as a withAnimation, SwiftUI's updateAnimatedWindowSize runs the
             // window's width away until AppKit throws. Nothing but this harness resizes from code
             let width = defaults.object(forKey: "shotWidth") != nil ? defaults.double(forKey: "shotWidth") : 1240
-            let window = NSApp.windows.first { $0.title == "Sottova" }
             let height = defaults.object(forKey: "shotHeight") != nil ? defaults.double(forKey: "shotHeight") : 800
+            seeded = true
+            for _ in 0..<120 {
+                if mounted { break }
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+            guard mounted else { return }
+            var window: NSWindow?
+            for _ in 0..<120 {
+                window = NSApp.windows.first { $0.isVisible && ($0.title == "Sottova" || $0.frameAutosaveName == "main") }
+                if window != nil { break }
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+            guard window != nil else { return }
             window?.setContentSize(NSSize(width: width, height: height))
             let routes: [String: Route] = ["home": .home, "songs": .songs, "collections": .collections, "artists": .artists, "alarms": .alarms, "shelf": .shelf]
             if let name = defaults.string(forKey: "shotNewCollection") { _ = controller.newPlaylist(named: name) }
@@ -36,6 +57,13 @@ struct ShotReady: ViewModifier {
             }
             router.droppingMusic = defaults.bool(forKey: "shotDragging")
             if let filter = defaults.string(forKey: "shotFilter") { router.songFilter = filter }
+            controller.problem = defaults.string(forKey: "shotProblem")
+            if let title = defaults.string(forKey: "shotTrim"), let song = controller.catalog.songs.first(where: { $0.title == title }) {
+                router.trimming = song
+            }
+            if let name = defaults.string(forKey: "shotCover"), let playlist = controller.playlists.first(where: { $0.name == name }) {
+                router.coverFor = .playlist(playlist.id)
+            }
             if let picked = defaults.string(forKey: "shotPicked") {
                 let titles = picked.components(separatedBy: "|")
                 if case .playlist(let id) = router.route, let playlist = controller.playlists.first(where: { $0.id == id }) {
@@ -102,6 +130,27 @@ struct ShotReady: ViewModifier {
             // setting up the state leaves notices of its own
             controller.notice = defaults.string(forKey: "shotNotice").map { .init($0, undoable: true, action: "") }  // an empty Edit › Undo is named ""
             try? await Task.sleep(for: .seconds(1))
+            if defaults.bool(forKey: "shotUndo"), let playlist = controller.playlists.first(where: { $0.name == "Compline" }),
+               let undo = controller.undo ?? window?.undoManager {
+                undo.removeAllActions()
+                while undo.groupingLevel > 0 { undo.endUndoGrouping() }
+                undo.groupsByEvent = false
+                controller.undo = undo
+                undo.beginUndoGrouping()
+                controller.removeFromPlaylist(playlist.id, at: [0])
+                undo.endUndoGrouping()
+                await Task.yield()
+            }
+            if let name = defaults.string(forKey: "shotTrash"), let playlist = controller.playlists.first(where: { $0.name == name }) {
+                NSApp.activate()
+                window?.makeKeyAndOrderFront(nil)
+                router.trashing = playlist.id
+                for _ in 0..<40 {
+                    if NSApp.windows.contains(where: { $0.isVisible && String(describing: type(of: $0)).contains("AlertPanel") }) { break }
+                    try? await Task.sleep(for: .milliseconds(25))
+                }
+                await Task.yield()
+            }
             // a covered window holds an animated change undrawn: a route with no resize to push it showed the old page
             window?.contentView?.layoutSubtreeIfNeeded()
             window?.displayIfNeeded()
@@ -122,7 +171,33 @@ struct ShotReady: ViewModifier {
                 try? Data(String(popover?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
                 return
             }
+            if let kind = defaults.string(forKey: "shotContextMenu"), let window {
+                window.makeKeyAndOrderFront(nil)
+                let navigate = Navigate { router.open($0, in: controller) }
+                var entries: [MenuEntry] = []
+                if kind == "sleep" {
+                    entries = StatusMenu.sleepChoices(controller)
+                } else if kind == "collection", let playlist = controller.playlists.first(where: { $0.name == "Compline" }) {
+                    entries = MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate,
+                                             renaming: Binding(get: { router.renaming }, set: { router.renaming = $0 }))
+                } else if kind == "album", let album = controller.catalog.albums.first(where: { $0.title == "Overworld" }) {
+                    entries = MenuEntry.album(album, controller: controller, router: router, navigate: navigate)
+                } else if kind == "song", let song = controller.catalog.songs.first(where: { $0.title == "Goldberg Variations: Aria" }) {
+                    let titles = (defaults.string(forKey: "shotPicked") ?? song.title).components(separatedBy: "|")
+                    let picked = controller.catalog.songs.filter { titles.contains($0.title) }
+                    entries = MenuEntry.song(song, picked: picked, play: router.playPick, remove: nil, part: nil, naming: {},
+                                             controller: controller, router: router, navigate: navigate)
+                }
+                let menu = NSMenu(entries)
+                let shown = defaults.string(forKey: "shotSubmenu").flatMap { title in menu.items.first { $0.title.hasPrefix(title) }?.submenu } ?? menu
+                if shown.numberOfItems > 0 {
+                    shotMenuReady()
+                    shown.popUp(positioning: nil, at: NSPoint(x: window.frame.midX, y: window.frame.midY), in: nil)
+                    return
+                }
+            }
             if let title = defaults.string(forKey: "shotMainMenu"), let window, let menu = NSApp.mainMenu?.item(withTitle: title)?.submenu {
+                window.makeKeyAndOrderFront(nil)
                 shotMenuReady()
                 menu.popUp(positioning: nil, at: NSPoint(x: window.frame.midX, y: window.frame.maxY - 80), in: nil)
                 return
@@ -140,7 +215,15 @@ struct ShotReady: ViewModifier {
                 return
             }
             // a sheet is its own window: asking for one takes the picture of it alone
-            try? Data(String((defaults.bool(forKey: "shotSheet") || defaults.string(forKey: "shotRow") != nil ? window?.attachedSheet?.windowNumber : nil) ?? window?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
+            let sheet = defaults.bool(forKey: "shotSheet") || defaults.string(forKey: "shotRow") != nil || router.trimming != nil || router.coverFor != nil || router.trashing != nil
+            let dialog = router.trashing == nil ? nil : NSApp.windows.first { $0.isVisible && $0.windowNumber != window?.windowNumber && $0.frame.width > 100 && $0.frame.height > 60 }
+            if let path = defaults.string(forKey: "shotNativePNG"), let view = dialog?.contentView,
+               let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(filePath: path))
+            }
+            let number = (sheet ? window?.attachedSheet?.windowNumber : nil) ?? dialog?.windowNumber ?? window?.windowNumber ?? 0
+            try? Data(String(number).utf8).write(to: ShotEnv.root.appending(path: "ready"))
         }
     }
 }

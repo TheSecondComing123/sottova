@@ -101,8 +101,8 @@ public enum WakePlan {
     /// Runs a command off the main actor and waits for it; nil when it can't start.
     public static func run(_ path: String, _ arguments: [String]) async -> (status: Int32, output: String, error: String)? {
         #if SHOT
-        guard path == "/usr/bin/pmset", arguments == ["-g", "sched"] else { return (0, "", "") }
-        #endif
+        return (0, "", "")
+        #else
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let (output, error) = (Pipe(), Pipe())
@@ -122,5 +122,6 @@ public enum WakePlan {
                 continuation.resume(returning: (process.terminationStatus, out, err))
             }
         }
+        #endif
     }
 }
