@@ -147,11 +147,25 @@ struct HourTests {
         let (c, album) = try await controller()
         c.play(album.songs.reversed())
         c.pause()
-        _ = open(c, album)
-        c.checkHours()
+        // the hour opens a couple of minutes after the pause
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: .now + 120)
+        c.addAlarm(hour(from: parts.hour!, parts.minute!, minutes: 60, source: album.id))
+        c.checkHours(now: .now + 150)
         #expect(c.status == .resting)
         #expect(c.origin?.shuffled == true)
         #expect(c.upNext.count == 2)
+    }
+
+    @Test func anHourLeavesAPauseYouPressedInItsWindow() async throws {
+        let (c, album) = try await controller()
+        _ = open(c, album)
+        c.play(album.songs.reversed())
+        let queued = c.upNext
+        c.pause()
+        c.checkHours()
+        #expect(c.status == .paused)
+        #expect(c.upNext == queued)
+        #expect(c.origin?.shuffled == false)
     }
 
     @Test func anHourLeavesWhatYouArePlayingAlone() async throws {

@@ -97,6 +97,7 @@ public final class Controller {
     /// How long a mixer takes to reach a new volume, at most: measured 35 ms at 44.1 and 48 kHz.
     static let mixerRamp = 0.04
     @ObservationIgnored private var pausedForSleep: Date?
+    @ObservationIgnored private var pausedByHand: Date?
     /// A longer sleep doesn't pick up where it was: often that's a scheduled wake, with nobody there.
     static let resumeWithin: TimeInterval = 60 * 60
     /// An alarm started what's playing: when its music ends it stops, with nobody there to press stop.
@@ -365,6 +366,8 @@ public final class Controller {
         catchUp()
         releaseHour()
         giveVolumeBack()
+        // what you paused is gone, so the pause is too
+        pausedByHand = nil
         fromAlarm = row != nil
         alarmDue = row?.time
         partDue = row
@@ -921,9 +924,11 @@ public final class Controller {
                 }
             }
         }
-        // paused counts as not playing: often it's only how a relaunch or a restart left things
+        // paused counts as not playing: often it's only how a relaunch or a restart left things.
+        // a pause you pressed since the window opened is still yours
         // not before there's a catalog, which it needs to find its songs
-        if hourPlaying == nil, let current, let window = open, status == .idle || status == .paused && !alarmTrying,
+        if hourPlaying == nil, let current, let window = open,
+           status == .idle || status == .paused && !alarmTrying && (pausedByHand ?? .distantPast) < window.start,
            current.lastFired != window.start, !catalog.songsByID.isEmpty {
             let songs = rowSongs(begin(current, at: window.start))
             if songs.isEmpty {
@@ -1848,6 +1853,7 @@ public final class Controller {
             command(.resume)
         case .playing, .resting:
             command(.pause)
+            pausedByHand = .now
         }
     }
 
@@ -2096,6 +2102,7 @@ public final class Controller {
             giveVolumeBack()
         }
         guard new != status else { return }
+        if new != .paused { pausedByHand = nil }
         status = new
         refreshNextTrack()
         keepAwake(wantsAwake)
