@@ -277,6 +277,7 @@ struct CheckBox: View {
 /// `.btn.def` as a style, for buttons with their own label and shortcut.
 struct PrimaryStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -286,13 +287,16 @@ struct PrimaryStyle: ButtonStyle {
             .frame(height: 24)
             .background(enabled ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
             .contentShape(.rect)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .opacity(reduceMotion && configuration.isPressed ? 0.75 : 1)
             .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
     }
 }
 
 /// `.btn` as a style.
 struct SecondaryStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .role(.body)
@@ -302,7 +306,8 @@ struct SecondaryStyle: ButtonStyle {
             .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
             .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
             .contentShape(.rect)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .opacity(reduceMotion && configuration.isPressed ? 0.75 : 1)
             .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
     }
 }

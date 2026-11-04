@@ -186,12 +186,13 @@ extension View {
 struct PressStyle: ButtonStyle {
     var scale: CGFloat = 0.96
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .opacity(enabled ? 1 : 0.4)
+            .opacity(enabled ? (reduceMotion && configuration.isPressed ? 0.75 : 1) : 0.4)
             .contentShape(.rect)
-            .scaleEffect(configuration.isPressed ? scale : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? scale : 1)
             .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
     }
 }

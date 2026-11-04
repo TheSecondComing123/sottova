@@ -24,7 +24,14 @@ struct SettingsView: View {
                 .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    look
+                    if let problem = controller.problem {
+                        ProblemNotice(message: problem) { controller.problem = nil }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Theme.raised, in: .rect(cornerRadius: Radius.small))
+                            .padding(.bottom, 12)
+                    }
+                    music
                     section("Your day") {
                         // says itself while off: after a restart, alarms wouldn't play
                         Toggle(isOn: $opensAtLogin) { label("Open at login", detail: loginProblem ?? (opensAtLogin ? nil : "Your day needs Sottova running.")) }
@@ -33,8 +40,8 @@ struct SettingsView: View {
                             .onChange(of: opensAtLogin) { _, on in setOpensAtLogin(on) }
                         CalendarRow()
                     }
-                    music
                     playing
+                    look
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 10)
@@ -100,7 +107,19 @@ struct SettingsView: View {
             ForEach(controller.folders, id: \.self) { folder in
                 let path = shortPath(folder)
                 HStack(spacing: 16) {
-                    Text(path).role(.body).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle).help(path)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(folder.lastPathComponent)
+                            .role(.body)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Theme.text)
+                        Text(path)
+                            .role(.small)
+                            .foregroundStyle(Theme.muted)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(-1)
                     Spacer(minLength: 0)
                     Text(Format.count(songCount(in: folder), "song")).role(.body).monospacedDigit().foregroundStyle(Theme.muted).fixedSize()
                     ThemeButton(title: "Remove") { removing = folder }
@@ -148,7 +167,7 @@ struct SettingsView: View {
     private var playing: some View {
         section("Playing") {
             HStack(spacing: 16) {
-                label("Loudness")
+                label("Loudness", detail: "Levels song volume")
                 Spacer(minLength: 0)
                 ThemePopup(title: Self.levels.first { $0.lufs == controller.settings.targetLufs }?.name ?? "\(Int(controller.settings.targetLufs)) LUFS") {
                     ForEach(Self.levels, id: \.lufs) { level in
@@ -168,11 +187,9 @@ struct SettingsView: View {
             Toggle(isOn: $controller.keepsMacAwake) { label("Keep the Mac awake during silence") }
                 .toggleStyle(ThemeCheckbox())
                 .modifier(SettingsRow())
-                .help("Otherwise the Mac can sleep between songs.")
-            Toggle(isOn: $controller.acceptsURLs) { label("Accept sottova:// links") }
+            Toggle(isOn: $controller.acceptsURLs) { label("Accept sottova:// links", detail: "For hotkeys and other apps") }
                 .toggleStyle(ThemeCheckbox())
                 .modifier(SettingsRow())
-                .help("Play, pause, toggle, skip, preset/name. State is in Application Support/Sottova/status.json.")
         }
     }
 
@@ -234,7 +251,10 @@ private struct CalendarRow: View {
             switch status {
             case .fullAccess:
                 HStack(spacing: 16) {
-                    Text("Calendars that count as busy").role(.body).foregroundStyle(Theme.text)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Calendars that count as busy").role(.body).foregroundStyle(Theme.text)
+                        Text("Music can wait while your calendar is busy.").role(.small).foregroundStyle(Theme.muted)
+                    }
                     Spacer(minLength: 0)
                     ThemePopup(title: "\(calendars.count(where: counts)) of \(calendars.count)") {
                         Button("All") { calendars.forEach { set(true, $0) } }
@@ -247,7 +267,7 @@ private struct CalendarRow: View {
                 }
                 .modifier(SettingsRow())
             case .notDetermined:
-                ask("Calendars that count as busy", help: "Rows can wait while your calendar is busy once you allow it.", button: "Allow") {
+                ask("Calendars that count as busy", help: "Music can wait while your calendar is busy.", button: "Allow") {
                     Task {
                         await Presence.askForCalendars()
                         refresh()
@@ -272,7 +292,10 @@ private struct CalendarRow: View {
 
     private func ask(_ title: String, help: String, button: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 16) {
-            Text(title).role(.body).foregroundStyle(Theme.text)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).role(.body).foregroundStyle(Theme.text)
+                Text(help).role(.small).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 0)
             ThemeButton(title: button, action: action).help(help)
         }

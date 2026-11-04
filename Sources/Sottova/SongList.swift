@@ -73,7 +73,7 @@ struct LibraryLine: View {
                 .frame(width: width)
             }
             if let width = columns.collection {
-                name(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)
+                name(song.album)
                     .frame(width: width, alignment: .leading)
             }
             Text(Format.time(song.duration))
@@ -219,7 +219,7 @@ private struct ColumnFit {
             let widest = Set(names).map { ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13)]).width }.max() ?? 0
             return min(max(widest + 23, 76), most).rounded()
         }
-        who = fit(songs.map(\.who), 160)
+        who = max(118, fit(songs.map(\.who), 160))
         performer = fit(songs.compactMap(\.performer), 190)
         collection = fit(songs.map(name), 180)
     }
@@ -260,7 +260,8 @@ struct SongList: View {
                 let sorted = controller.catalog.songs(by: sort, matching: needle)
                 let songs: [Song] = reversed ? sorted.reversed() : sorted
                 let columns = fit.columns(narrow: narrow)
-                PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: trailing)) {
+                let picked = songs.filter { router.selected.contains($0.id) }
+                PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: trailing), maxWidth: 1100) {
                     HStack(spacing: 16) {
                         HStack(alignment: .top, spacing: 18) {
                             Text("Songs")
@@ -270,23 +271,26 @@ struct SongList: View {
                                 .accessibilityAddTraits(.isHeader)
                             // centered on the count's line, so the buttons coming and going don't move it
                             HStack(spacing: 12) {
-                                Text(count(of: songs.count, in: all.count, filtered: !needle.isEmpty))
+                                Text(count(of: songs.count, in: all.count, picked: picked.count, filtered: !needle.isEmpty))
                                     .role(.body)
                                     .foregroundStyle(Theme.faint)
-                                if router.selected.count > 1 {
-                                    PickActions(songs: songs.filter { router.selected.contains($0.id) })
-                                        .transition(.opacity)
-                                }
                             }
                             .frame(height: 24)
                             .padding(.top, 13)
-                            .animation(Theme.quick, value: router.selected.count > 1)
                         }
                         Spacer(minLength: 0)
-                        SearchField(text: $router.songFilter, prompt: "Filter", focusAsks: focusAsks) { router.typing = $0 }
+                        SearchField(text: $router.songFilter, prompt: "Filter songs", focusAsks: focusAsks) { router.typing = $0 }
+                            .padding(.horizontal, 6)
+                            .frame(height: 26)
+                            .background(Theme.raised, in: .rect(cornerRadius: 6))
+                            .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.frame, lineWidth: 0.5) }
                             .frame(width: narrow ? 180 : 220)
                     }
                     .padding(.bottom, 19)
+                    if !picked.isEmpty {
+                        PickActions(songs: picked)
+                            .padding(.bottom, 12)
+                    }
                     if songs.isEmpty {
                         HStack(spacing: 4) {
                             Text("Nothing matches “\(router.songFilter)”.").foregroundStyle(Theme.muted)
@@ -313,7 +317,7 @@ struct SongList: View {
         }
         // a library's every name measured, so only when they change: not on each redraw
         .onChange(of: ColumnFit.Key(catalog: controller.catalog.version, names: controller.playlists.map(\.name)), initial: true) {
-            fit = ColumnFit(songs: all, collection: { controller.copy(ofAlbum: $0.albumID)?.name ?? $0.album })
+            fit = ColumnFit(songs: all, collection: { $0.album })
         }
         .onAppear(perform: answerSearch)
         .onChange(of: router.searchRequests) { answerSearch() }
@@ -326,19 +330,19 @@ struct SongList: View {
         focusAsks += 1
     }
 
-    private func count(of shown: Int, in all: Int, filtered: Bool) -> String {
-        if router.selected.count > 1 { return "\(router.selected.count) picked" }
+    private func count(of shown: Int, in all: Int, picked: Int, filtered: Bool) -> String {
+        if picked > 0 { return "\(picked) picked" }
         if filtered { return shown == 0 ? "" : "\(shown) of \(all)" }
         return Format.count(all, "song")
     }
 
     private func headings(_ columns: LineColumns) -> some View {
         HStack(spacing: 0) {
-            heading("Who", .who).frame(width: columns.who, alignment: .leading)
+            heading("Artist / composer", .who).frame(width: columns.who, alignment: .leading)
             heading("Title", .title).frame(maxWidth: .infinity, alignment: .leading)
             if !narrow {
                 heading("Performer", .performer).frame(width: columns.performer, alignment: .leading)
-                heading("Folder", .album).frame(width: columns.collection, alignment: .leading)
+                heading("Album", .album).frame(width: columns.collection, alignment: .leading)
             }
             heading("Time", .longest).frame(width: 40, alignment: .trailing)
         }
@@ -376,6 +380,8 @@ private struct SearchField: NSViewRepresentable {
         field.placeholderString = prompt
         field.font = .systemFont(ofSize: 13)
         field.focusRingType = .exterior
+        field.isBezeled = false
+        field.drawsBackground = false
         field.delegate = context.coordinator
         field.sendsSearchStringImmediately = true
         return field
@@ -416,28 +422,31 @@ private struct SearchField: NSViewRepresentable {
     }
 }
 
-/// What a pick of several can do, beside its count.
-private struct PickActions: View {
+/// Named actions for one song or a pick of several.
+struct PickActions: View {
     let songs: [Song]
+    var source: String?
     @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
     @State private var naming = false
 
     var body: some View {
         HStack(spacing: 8) {
+            PlayButton(songs: songs, source: source)
+            ThemeLink(text: "Play next", color: Theme.muted) { controller.playNext(songs, source: source) }
+                .role(.body)
             Menu {
                 ForEach(Array(MenuEntry.collections(songs, name: "", controller: controller) { naming = true }.enumerated()), id: \.offset) { _, entry in
                     if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Text("Add to").role(.body).foregroundStyle(Theme.text)
+                    Text("Add to").role(.body).foregroundStyle(Theme.muted)
                     Ph.caretDown.icon(.bold, size: 8).foregroundStyle(Theme.muted)
                 }
-                .padding(.leading, 11)
-                .padding(.trailing, 9)
+                .padding(.horizontal, 4)
                 .frame(height: 24)
-                .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
-                .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
+                .contentShape(.rect)
             }
             .menuStyle(.button)
             .menuIndicator(.hidden)
@@ -447,7 +456,10 @@ private struct PickActions: View {
             #if SHOT
             .onAppear { naming = UserDefaults.standard.bool(forKey: "shotNameCollection") }
             #endif
-            ThemeButton(title: "Play next") { controller.playNext(songs) }
+            if songs.count == 1, let song = songs.first {
+                ThemeLink(text: "Trim…", color: Theme.muted) { router.trimming = song }
+                    .role(.body)
+            }
         }
     }
 }
@@ -504,16 +516,20 @@ struct NameList: View {
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
-            Text("Artists")
-                .role(.title)
-                .offset(y: -2)
-                .foregroundStyle(Theme.text)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.bottom, 19)
-            LazyVGrid(columns: TileGrid.columns, alignment: .leading, spacing: TileGrid.rowGap) {
-                ForEach(Person.all(in: controller.catalog.songs)) { person in
-                    PersonTile(person: person) { navigate(.artist(person.name)) }
+        if controller.catalog.songs.isEmpty {
+            EmptyLibrary(what: "artists")
+        } else {
+            PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40), maxWidth: 1040) {
+                Text("Artists")
+                    .role(.title)
+                    .offset(y: -2)
+                    .foregroundStyle(Theme.text)
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.bottom, 19)
+                LazyVStack(spacing: 0) {
+                    ForEach(Person.all(in: controller.catalog.songs)) { person in
+                        PersonTile(person: person) { navigate(.artist(person.name)) }
+                    }
                 }
             }
         }
@@ -523,18 +539,35 @@ struct NameList: View {
 private struct PersonTile: View {
     let person: Person
     let open: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         let count = person.songs == 1 ? "1 song" : "\(person.songs) songs"
         Button(action: open) {
-            VStack(alignment: .leading, spacing: 8) {
-                // initials for everyone: a folder's painting belongs to the album, not the person
-                Artwork(key: nil, radius: Radius.small, outlined: true, title: person.name, initials: true)
-                TileCaption(title: person.name, detail: count)
+            HStack(spacing: 12) {
+                if let artwork = person.artwork {
+                    Artwork(key: artwork, size: 40, radius: 3, outlined: true)
+                        .accessibilityLabel("album artwork from \(person.name)'s songs")
+                } else {
+                    Color.clear.frame(width: 40, height: 40)
+                }
+                Text(person.name)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                Spacer(minLength: 12)
+                Text(count)
+                    .role(.small)
+                    .foregroundStyle(Theme.muted)
             }
+            .padding(.horizontal, 8)
+            .frame(height: 52)
+            .background(hovering ? Theme.hover : .clear, in: .rect(cornerRadius: Radius.small))
+            .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 0.5) }
             .contentShape(.rect)
         }
-        .buttonStyle(PressStyle(scale: 0.98))
+        .buttonStyle(PressStyle(scale: 0.995))
+        .onHover { hovering = $0 }
         .accessibilityLabel("\(person.name), \(count)")
     }
 }

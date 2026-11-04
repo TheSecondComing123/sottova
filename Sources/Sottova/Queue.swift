@@ -15,33 +15,62 @@ struct QueuePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
-                Text("Queue")
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Theme.text)
-                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Queue")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Theme.text)
+                        .accessibilityAddTraits(.isHeader)
+                    if !controller.upNext.isEmpty {
+                        Text("\(Format.count(controller.upNext.count, "song")), \(Format.length(queuedLength))")
+                            .role(.small)
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.muted)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 4)
                 if !controller.upNext.isEmpty {
-                    Text("\(controller.upNext.count), \(Format.length(queuedLength))")
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.faint)
-                    Spacer(minLength: 8)
-                    ThemeButton(title: "Clear") { withAnimation(Theme.quick) { controller.clearQueue() } }
+                    ThemeLink(text: "Clear queue", color: Theme.muted) { withAnimation(Theme.quick) { controller.clearQueue() } }
                         .help("empty the queue")
                 }
+                Button(action: close) {
+                    Ph.x.icon(.bold, size: 11)
+                        .foregroundStyle(Theme.muted)
+                        .frame(width: 24, height: 24)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle())
+                .accessibilityLabel("close queue")
             }
             .role(.body)
-            .frame(height: 24)
+            .frame(height: 36)
             .padding(.horizontal, 14)
             .padding(.bottom, 5)
             if controller.upNext.isEmpty {
                 Text("Drop songs here")
                     .role(.body)
-                    .foregroundStyle(Theme.faint)
+                    .foregroundStyle(Theme.muted)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)
                     .dropDestination(for: URL.self) { urls, _ in queue(urls, at: 0) }
             } else {
+                HStack(spacing: 8) {
+                    Text("\(selected.count) picked")
+                        .role(.small)
+                        .foregroundStyle(Theme.muted)
+                        .monospacedDigit()
+                    Spacer(minLength: 0)
+                    ThemeButton(title: "Play now", primary: true) {
+                        if let first = selected.first { controller.playQueued(first.id) }
+                    }
+                    .disabled(selected.isEmpty)
+                    ThemeLink(text: "Remove", color: Theme.muted) { remove(Set(selected.map(\.id))) }
+                        .disabled(selected.isEmpty)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 32)
                 List(selection: $picked) {
                     ForEach(controller.upNext) { entry in
                         QueueRow(entry: entry, picked: picked.contains(entry.id))
@@ -78,7 +107,7 @@ struct QueuePanel: View {
         .frame(width: 320)
         .background(Theme.popover, in: .rect(cornerRadius: Radius.large))
         .overlay(RoundedRectangle(cornerRadius: Radius.large).stroke(.black.opacity(0.5), lineWidth: 0.5).padding(-0.25))
-        .shadow(color: .black.opacity(0.5), radius: 20, y: 14)
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
     }
 
     private func remove(_ ids: Set<QueueEntry.ID>) {
@@ -104,6 +133,8 @@ struct QueuePanel: View {
     private var queuedLength: Double {
         controller.upNext.reduce(0) { $0 + (controller.catalog.songsByID[$1.path]?.duration ?? 0) }
     }
+
+    private var selected: [QueueEntry] { controller.upNext.filter { picked.contains($0.id) } }
 
     private func queue(_ urls: [URL], at index: Int) -> Bool {
         let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }

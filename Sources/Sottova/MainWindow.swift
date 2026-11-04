@@ -26,7 +26,17 @@ struct MainWindow: View {
                     // over the page: a ScrollView's backing view reaches up through this band and takes its clicks,
                     // refusing the one that brings an inactive window forward
                     .zIndex(1)
+                if let problem = controller.problem {
+                    ProblemNotice(message: problem) { controller.problem = nil }
+                    .padding(.horizontal, layout.list.margin)
+                    .padding(.vertical, 12)
+                    .background(Theme.raised)
+                    .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+                }
                 page.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        layout = PageLayout(windowWidth: layout.width + layout.sidebar, pageHeight: $0)
+                    }
                     // a scrolled page's rows would otherwise draw on up through the bar, which has no fill
                     .clipped()
             }
@@ -42,7 +52,7 @@ struct MainWindow: View {
             }
         }
         // inside the safe area's edge, so it's the whole window, full screen or not, less the bar
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { layout = PageLayout(windowWidth: $0.width, pageHeight: $0.height - 52) }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { layout = PageLayout(windowWidth: $0, pageHeight: layout.height) }
         .background(Theme.background)
         .ignoresSafeArea(.container, edges: .top)
         // in the toolbar, so the title bar is 52 pt with the traffic lights on this line, and clicks reach them
@@ -189,6 +199,24 @@ struct MainWindow: View {
             default: return event
             }
             return nil
+        }
+    }
+}
+
+struct ProblemNotice: View {
+    let message: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            Text(message)
+                .role(.body)
+                .foregroundStyle(Theme.text)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            ThemeButton(title: "Dismiss", action: dismiss)
+                .accessibilityLabel("dismiss message")
         }
     }
 }

@@ -7,6 +7,7 @@ struct Sidebar: View {
     @Environment(Router.self) private var router
     @Environment(Controller.self) private var controller
     @Environment(\.renaming) private var renaming
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,6 +45,12 @@ struct Sidebar: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .bottom)
             news
+            Button("Settings") { openSettings() }
+                .role(.body)
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .sidebarRow(selected: false)
+                .buttonStyle(.plain)
             SilenceFoot()
         }
         .padding(.horizontal, 10)
@@ -79,24 +86,9 @@ struct Sidebar: View {
         router.go(to: .playlist(id))
     }
 
-    /// Where it can be seen while working; a click puts it away.
     @ViewBuilder
     private var news: some View {
-        if let problem = controller.problem {
-            Button { controller.problem = nil } label: {
-                Text(problem)
-                    .role(.small)
-                    .foregroundStyle(Theme.text)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .help("\(problem)\n\nClick to dismiss.")
-            .padding(8)
-        } else if !controller.skippedFiles.isEmpty {
+        if controller.problem == nil, !controller.skippedFiles.isEmpty {
             Text(controller.libraryLine).role(.small).foregroundStyle(Theme.faint).lineLimit(2).padding(8)
         }
     }
@@ -142,7 +134,9 @@ private struct CollectionRow: View {
             HStack(spacing: 8) {
                 Text(playlist?.name ?? controller.catalog.albums.first { $0.id == source }?.title ?? "")
                     .role(.body).fontWeight(selected ? .medium : .regular).foregroundStyle(Theme.text).lineLimit(1).padding(.top, 1)
-                Spacer(minLength: 0)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(-1)
                 if let hours {
                     Text(hours).role(.small).monospacedDigit().foregroundStyle(Theme.faint).fixedSize().padding(.top, 1)
                 }
@@ -173,6 +167,11 @@ private struct CollectionRow: View {
             .padding(.vertical, 4)
             .background(Theme.popover, in: .rect(cornerRadius: Radius.small))
         })
+        .onDragSessionUpdated { session in
+            if case .ended = session.phase, router.draggingCollection == source {
+                router.draggingCollection = nil
+            }
+        }
         .sottovaMenu {
             if let playlist { return MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming) }
             return controller.catalog.albums.first { $0.id == source }.map { MenuEntry.album($0, controller: controller, router: router, navigate: navigate) } ?? []
@@ -188,19 +187,26 @@ private struct SilenceFoot: View {
 
     var body: some View {
         Button(action: open) {
-            HStack(spacing: 3) {
-                Text("Between songs").foregroundStyle(Theme.muted).padding(.top, 1)
-                Spacer(minLength: 8)
-                Text(controller.settings.name).foregroundStyle(Theme.text).lineLimit(1).padding(.top, 1)
-                Ph.caretUpDown.icon(.line, size: 11).foregroundStyle(Theme.muted)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Between songs").role(.small).foregroundStyle(Theme.muted)
+                HStack(spacing: 4) {
+                    Text(Format.range(controller.settings).replacingOccurrences(of: "–", with: " to "))
+                        .role(.body)
+                        .foregroundStyle(Theme.text)
+                    Spacer(minLength: 0)
+                    Ph.caretUpDown.icon(.line, size: 11).foregroundStyle(Theme.muted)
+                }
             }
-            .role(.body)
-            .sidebarRow(selected: false)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+            .hoverable(radius: Radius.small)
         }
         .buttonStyle(.plain)
         .background(AnchorView(view: anchor))
         .accessibilityLabel("Silence between songs")
-        .accessibilityValue(controller.settings.name)
+        .accessibilityValue("\(controller.settings.name), \(Format.range(controller.settings))")
     }
 
     private func open() {

@@ -173,7 +173,7 @@ final class Router {
         if destination == .songs { songFilter = "" }
         guard destination != route else { return }
         restore = nil
-        withAnimation(Theme.page) {
+        navigate {
             back.append((route, offset))
             forward.removeAll()
             route = destination
@@ -184,7 +184,7 @@ final class Router {
         guard let previous = back.popLast() else { return }
         selected = []
         restore = previous.offset
-        withAnimation(Theme.page) {
+        navigate {
             forward.append((route, offset))
             route = previous.route
         }
@@ -200,9 +200,17 @@ final class Router {
         guard let next = forward.popLast() else { return }
         selected = []
         restore = next.offset
-        withAnimation(Theme.page) {
+        navigate {
             back.append((route, offset))
             route = next.route
+        }
+    }
+
+    private func navigate(_ change: () -> Void) {
+        if NSApp.currentEvent?.type == .keyDown || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            change()
+        } else {
+            withAnimation(Theme.page, change)
         }
     }
 

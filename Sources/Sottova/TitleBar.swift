@@ -21,11 +21,9 @@ struct TitleBar: View {
                     .disabled(idle)
                 Spacer(minLength: 0)
                 SleepControl().disabled(idle)
-                BarButton(icon: .barQueue, on: router.showsQueue, help: router.showsQueue ? "hide the queue" : "show the queue", action: toggleQueue)
+                BarButton(icon: .barQueue, on: router.showsQueue, title: "Queue", help: router.showsQueue ? "hide the queue" : "show the queue", action: toggleQueue)
                     .disabled(controller.tracks.isEmpty)
-                if !narrow {
-                    BarVolume().padding(.leading, 14)
-                }
+                BarVolume().padding(.leading, 14)
             }
             .padding(.leading, 12)
             .padding(.trailing, 20)
@@ -51,7 +49,7 @@ struct TitleBar: View {
                     .accessibilityHint("show what's playing")
             }
             .padding(.leading, 96)
-            .padding(.trailing, narrow ? 110 : 190)
+            .padding(.trailing, controller.sleepTimer == nil ? 340 : 410)
         }
     }
 }
@@ -97,12 +95,22 @@ private struct BarButton: View {
     let icon: Ph
     var strong = false
     var on = false
+    var title: String?
     let help: String
     let action: () -> Void
+    @Environment(\.isEnabled) private var enabled
 
     var body: some View {
         BarControl(help: help, action: { _ in action() }) { hovering in
-            BarIcon(icon: icon, strong: strong, on: on, hovering: hovering)
+            HStack(spacing: 0) {
+                BarIcon(icon: icon, strong: strong, on: on, hovering: hovering)
+                if let title {
+                    Text(title)
+                        .role(.small)
+                        .foregroundStyle(enabled ? Theme.muted : Theme.disabled)
+                        .padding(.trailing, 7)
+                }
+            }
         } access: {
             Button(help, action: action)
         }
@@ -122,10 +130,12 @@ private struct BarControl<Label: View, Access: View>: View {
     @ViewBuilder let access: () -> Access
     @State private var pressed = false
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         label(hovering)
-            .scaleEffect(pressed ? pressScale : 1)
+            .scaleEffect(pressed && !reduceMotion ? pressScale : 1)
+            .opacity(reduceMotion && pressed ? 0.75 : 1)
             .overlay(BarHit(firstClick: firstClick, actsOnPress: actsOnPress, help: help, pressed: $pressed, hovering: $hovering, action: action))
             .accessibilityRepresentation(representation: access)
     }
@@ -191,6 +201,7 @@ private struct BarHit: NSViewRepresentable {
 /// Set, it says how long is left beside it.
 private struct SleepControl: View {
     @Environment(Controller.self) private var controller
+    @Environment(\.isEnabled) private var enabled
 
     var body: some View {
         let timer = controller.sleepTimer
@@ -198,13 +209,12 @@ private struct SleepControl: View {
         BarControl(actsOnPress: true, help: "stop the music after a while", action: open) { hovering in
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 HStack(spacing: 2) {
-                    if let timer {
-                        Text(Format.sleep(timer, resting: resting, at: context.date))
-                            .role(.small)
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.muted)
-                    }
                     BarIcon(icon: .timer, strong: timer != nil, hovering: hovering)
+                    Text(timer.map { "Stop \(Format.sleep($0, resting: resting, at: context.date, sentence: true))" } ?? "Stop music")
+                        .role(.small)
+                        .monospacedDigit()
+                        .foregroundStyle(enabled ? Theme.muted : Theme.disabled)
+                        .padding(.trailing, 7)
                 }
             }
         } access: {
@@ -228,17 +238,20 @@ private struct BarVolume: View {
 
     var body: some View {
         @Bindable var controller = controller
-        ZStack(alignment: .leading) {
-            Capsule().fill(Theme.hairline).frame(height: 3)
-            Capsule().fill(Theme.muted).frame(width: width * controller.volume, height: 3)
-            Circle()
-                .fill(Theme.knob)
-                .frame(width: 13, height: 13)
-                .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
-                .offset(x: width * controller.volume - 6)
-            Scrubber(changed: { controller.volume = $0 })
+        HStack(spacing: 8) {
+            Text("Volume").role(.small).foregroundStyle(Theme.muted)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.hairline).frame(height: 3)
+                Capsule().fill(Theme.muted).frame(width: width * controller.volume, height: 3)
+                Circle()
+                    .fill(Theme.knob)
+                    .frame(width: 13, height: 13)
+                    .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
+                    .offset(x: width * controller.volume - 6)
+                Scrubber(changed: { controller.volume = $0 })
+            }
+            .frame(width: width, height: 28)
         }
-        .frame(width: width, height: 28)
         .help("volume")
         .accessibilityRepresentation {
             Slider(value: $controller.volume, in: 0...1) { Text("Volume") }
