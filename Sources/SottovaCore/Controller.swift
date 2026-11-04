@@ -16,6 +16,8 @@ public final class Controller {
     public var problem: String?
     /// What was just done, for the window's toast; a new one replaces it.
     public var notice: Notice?
+    private final class NoticeUndoTarget: NSObject {}
+    @ObservationIgnored private var noticeUndo: NoticeUndoTarget?
     public private(set) var catalog = Catalog()
     public private(set) var current: Song?
     public private(set) var recent: [Song] = []
@@ -148,6 +150,7 @@ public final class Controller {
     /// What plays next, in order; once it's empty the shuffler picks from everything. Read it only where it's shown:
     /// playing from Songs puts the whole library in it.
     public private(set) var upNext: [QueueEntry] = []
+    @ObservationIgnored private var queueTaken = 0
     @ObservationIgnored private var lastCatalogBuild = Date.distantPast
     @ObservationIgnored private var catalogEntries: [String: Library.Entry] = [:]
     @ObservationIgnored private var catalogGeneration = 0
@@ -446,7 +449,13 @@ public final class Controller {
     /// Registered after the change, so an undo runs it first and a can't-undo said by the change itself wins.
     private func say(_ text: String, undoable: Bool, then other: String, action: String) {
         notice = Notice(text, undoable: undoable, action: action)
-        undo?.registerUndo(withTarget: self) { $0.say(other, undoable: !undoable, then: text, action: action) }
+        let target = NoticeUndoTarget()
+        noticeUndo = target
+        undo?.registerUndo(withTarget: target) { [weak self, target] _ in
+            withExtendedLifetime(target) {
+                self?.say(other, undoable: !undoable, then: text, action: action)
+            }
+        }
     }
 
     /// "Weep you no more", or "3 songs".
@@ -1537,7 +1546,7 @@ public final class Controller {
             let rows = gone.rows.isEmpty ? "" : ", so \(ListFormatter.localizedString(byJoining: gone.rows.map(\.1.name))) stay off your day"
             notice = Notice("couldn't get \(gone.playlist.name) back from the Trash\(rows): \(error.localizedDescription)", undoable: false)
             // its redo would only say it was trashed again
-            undo?.removeAllActions(withTarget: self)
+            if let noticeUndo { undo?.removeAllActions(withTarget: noticeUndo) }
             return
         }
         if let cover = gone.cover { try? FileManager.default.moveItem(at: cover, to: Self.coverURL(forPlaylist: id)) }
@@ -1702,8 +1711,10 @@ public final class Controller {
         let before = upNext
         guard queue != before else { return }
         upNext = queue
+        let taken = queueTaken
         undo?.registerUndo(withTarget: self) { controller in
-            guard controller.upNext == queue else {
+            guard controller.upNext == queue, controller.queueTaken == taken else {
+                if let target = controller.noticeUndo { controller.undo?.removeAllActions(withTarget: target) }
                 controller.notice = Notice("the queue has moved on since, so undo leaves it", undoable: false)
                 return
             }
@@ -1725,14 +1736,8 @@ public final class Controller {
     }
 
     public func clearQueue() {
-        let queued = upNext
-        upNext.removeAll()
-        undo?.registerUndo(withTarget: self) { controller in
-            controller.upNext = queued
-            controller.undo?.registerUndo(withTarget: controller) { $0.clearQueue() }
-        }
-        let count = queued.count == 1 ? "1 song" : "\(queued.count) songs"
-        did("Clear Queue", "Cleared the queue, \(count)", back: "Put back \(count)")
+        let count = upNext.count == 1 ? "1 song" : "\(upNext.count) songs"
+        setQueue([], "Clear Queue", "Cleared the queue, \(count)", back: "Put back \(count)")
     }
 
     /// Songs from one album play with that album's gaps, wherever they were queued from.
@@ -1760,6 +1765,7 @@ public final class Controller {
             return nil
         }
         let entry = upNext.removeFirst()
+        queueTaken += 1
         useAlbumSettings(for: entry.source)
         currentSource = entry.source
         shuffler.note(entry.path)
