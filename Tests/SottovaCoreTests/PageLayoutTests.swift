@@ -3,6 +3,28 @@ import Testing
 
 /// Every window the app can be, by the plan's steps: the rules hold over the whole range, not only the sizes looked at.
 struct PageLayoutTests {
+    @Test func aNarrowNowKeepsThePaintingAtItsCenter() {
+        let now = NowLayout(width: 724, height: 848)
+        #expect(now.stacked)
+        #expect(now.side >= 500)
+        #expect(now.left(now.side) >= now.margin)
+    }
+
+    @Test func aTallWindowDoesNotStretchTheDay() {
+        let short = DayLayout(width: 1024, height: 748).hourHeight(span: 8, others: 0, played: 0)
+        let tall = DayLayout(width: 1684, height: 1200).hourHeight(span: 8, others: 0, played: 0)
+        #expect((32...36).contains(short))
+        #expect(tall == short)
+    }
+
+    @Test func nowKeepsAReadingColumnAndQuietTitle() {
+        for width in [724.0, 1024, 1254, 1684] {
+            let now = NowLayout(width: width, height: 848)
+            #expect((280...360).contains(now.textWidth(now.side)))
+            #expect(now.titleSize("Waiting", shown: now.side) <= (width < 900 ? 32 : 40))
+        }
+    }
+
     private static let windows = stride(from: 855.0, through: 2560, by: 5).flatMap { width in
         stride(from: 640.0, through: 1440, by: 20).map { PageLayout(windowWidth: width, pageHeight: $0) }
     }
@@ -42,21 +64,6 @@ struct PageLayoutTests {
                 let side = NowLayout(width: width, height: height).side
                 #expect(side >= last)
                 last = side
-            }
-        }
-    }
-
-    @Test func theRailFillsThePageWithinItsLimits() {
-        for page in Self.windows {
-            for span in stride(from: 2.0, through: 24, by: 0.5) {
-                for (others, played) in [(0, 0), (3, 0), (2, 19)] {
-                    let day = page.day
-                    let scale = day.hourHeight(span: span, others: others, played: played)
-                    let room = day.railRoom(others: others, played: played)
-                    #expect(scale >= DayPlan.Rail.hourHeight && scale <= DayPlan.Rail.maxHourHeight)
-                    if scale > DayPlan.Rail.hourHeight { #expect(span * scale <= room + 0.001) }
-                    if scale < DayPlan.Rail.maxHourHeight { #expect(span * scale >= min(room, span * DayPlan.Rail.hourHeight) - 0.001) }
-                }
             }
         }
     }
@@ -115,13 +122,13 @@ struct PageLayoutTests {
         #expect(now.detailSize(title: 84) == 20)
     }
 
-    @Test func aShortTitleGrowsWithTheCoverAndALongOneStillFits() {
+    @Test func aTitleStaysQuietAndALongOneStillFits() {
         let now = NowLayout(width: 1000, height: 725)
         let side = now.side
-        #expect(now.titleSize("Waiting", shown: side) >= 64)
+        #expect(now.titleSize("Waiting", shown: side) <= 40)
         let long = "The road we use to travel when we were kids"
         let size = now.titleSize(long, shown: side)
-        #expect(size < now.titleSize("Waiting", shown: side))
+        #expect(size <= now.titleSize("Waiting", shown: side))
         #expect(size >= 32)
         #expect(size * 0.56 * Double(long.count) / now.textWidth(side) <= 4.01 || size == 32)
         #expect(NowLayout(width: 500, height: 900).titleSize("Waiting", shown: 400) == 32)

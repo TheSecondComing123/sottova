@@ -46,34 +46,96 @@ struct PageScroll<Content: View>: View {
     }
 }
 
-/// A list page with nothing in it yet: what will appear, and the one way to get it there.
-struct EmptyLibrary: View {
-    let what: String
+/// The first painting belongs to the app, before the listener has supplied their own music.
+struct MusicWelcome: View {
+    var title = "Start with your music"
+    var detail = ""
+    var reading = false
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
 
+    @MainActor private static let painting: NSImage? = Bundle.main.url(forResource: "Welcome", withExtension: "jpg", subdirectory: "Covers").flatMap(NSImage.init(contentsOf:))
+
     var body: some View {
-        VStack(spacing: 16) {
-            Group {
-                if controller.folders.isEmpty {
-                    Text("your \(what) show up here once you add a folder of music")
-                } else if controller.pendingAnalysis > 0 {
-                    Text("reading your folders; \(what) appear as each file is read")
-                } else {
-                    Text("nothing in your folders plays yet")
+        GeometryReader { geometry in
+            let wide = geometry.size.width >= 1000
+            let height = wide ? min(680, max(440, geometry.size.height - 128)) : min(480, max(360, geometry.size.height * 0.58))
+            ScrollView {
+                Group {
+                    if wide {
+                        HStack(alignment: .center, spacing: 48) {
+                            painting(height: height)
+                            words.frame(width: 340, alignment: .leading)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 24) {
+                            painting(height: height)
+                            words.frame(maxWidth: 360, alignment: .leading)
+                        }
+                    }
+                }
+                .padding(.horizontal, wide ? 40 : 24)
+                .padding(.vertical, wide ? 32 : 24)
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
+            }
+            .overlayScrollers()
+        }
+    }
+
+    private func painting(height: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let image = Self.painting {
+                Image(nsImage: image)
+                    .resizable().scaledToFit()
+                    .frame(width: height * image.size.width / image.size.height, height: height)
+                    .accessibilityLabel("The Music Room, a painting by Vilhelm Hammershøi")
+                Text("Vilhelm Hammershøi, The Music Room")
+                    .role(.small).foregroundStyle(Theme.muted)
+            }
+        }
+    }
+
+    private var words: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(reading ? "Reading your music" : title)
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            if reading {
+                let total = controller.tracks.count
+                let done = max(0, total - controller.pendingAnalysis)
+                Text("\(done) of \(total) songs")
+                    .role(.body).foregroundStyle(Theme.muted)
+                ProgressView(value: Double(done), total: Double(max(total, 1)))
+                    .tint(Theme.primary)
+            } else {
+                if !detail.isEmpty {
+                    Text(detail)
+                        .role(.body).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 16) {
+                    ThemeButton(title: "Add folder…", action: controller.chooseFolders)
+                    ThemeLink(text: "Get free music", color: Theme.muted) { router.go(to: .shelf) }
+                        .role(.body)
                 }
             }
-            .font(.system(size: 13))
-            .foregroundStyle(Theme.muted)
-            if controller.pendingAnalysis == 0 {
-                HStack(spacing: 12) {
-                    Button("Add folder…", action: controller.chooseFolders)
-                        .buttonStyle(PrimaryStyle())
-                    // no music yet: something to hear in a minute or two, legally
-                    Button("Get free music") { router.go(to: .shelf) }
-                        .buttonStyle(SecondaryStyle())
-                }
-            }
+        }
+    }
+}
+
+/// Empty list pages keep their identity while explaining where their content comes from.
+struct EmptyLibrary: View {
+    let what: String
+    @Environment(Controller.self) private var controller
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(what.capitalized).role(.title).foregroundStyle(Theme.text)
+                .padding(.horizontal, 40).padding(.top, 16)
+            MusicWelcome(title: what == "artists" ? "Artists from your music" : "Songs from your folders",
+                         reading: controller.pendingAnalysis > 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

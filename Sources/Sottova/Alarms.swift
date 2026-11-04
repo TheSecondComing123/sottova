@@ -24,6 +24,8 @@ struct AlarmSheet: View {
     let request: AlarmRequest
     @Environment(Controller.self) private var controller
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var source: String?
     @State private var kind: Kind
     @State private var time: Date
@@ -149,7 +151,7 @@ struct AlarmSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            let unnamed = "New row"
+            let unnamed = "Schedule music"
             Text(kind == .whileHere ? name.map { "Play \($0) while you're here" } ?? "Music while you're here"
                                     : name.map { "Start \($0)" } ?? unnamed)
                 .font(.system(size: 17, weight: .semibold))
@@ -183,8 +185,13 @@ struct AlarmSheet: View {
                 .menuIndicator(.hidden)
                 .buttonStyle(.plain)
             }
-            Strip(selection: $kind)
-                .help(kind == .whileHere ? "waits while you're away, on a call\(heedsCalendar ? ", playing something else, or your calendar is busy" : " or playing something else")" : "wakes the Mac and plays, wherever you are")
+            VStack(alignment: .leading, spacing: 6) {
+                Strip(selection: $kind)
+                Text(kind == .whileHere ? "Waits while you're away." : "Starts at its time.")
+                    .role(.small)
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             when
             Strip(selection: $repeats)
             settings
@@ -211,8 +218,7 @@ struct AlarmSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(SecondaryStyle())
-                let setting = "Set"
-                Button(editing ? "Save" : kind == .whileHere ? "Set hours" : setting, action: save)
+                Button(editing ? "Save" : "Schedule", action: save)
                 .buttonStyle(PrimaryStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(alarm == nil)
@@ -222,7 +228,7 @@ struct AlarmSheet: View {
         .frame(width: 440)
         .background(Theme.sidebar)
         .presentationBackground(Theme.sidebar)
-        .animation(Theme.quick, value: kind)
+        .animation(reduceMotion ? nil : Theme.quick, value: kind)
         .onChange(of: kind) { old, new in
             // a new one moves to what suits the other kind, except where you've already changed something
             guard !editing else { return }
@@ -307,6 +313,14 @@ struct AlarmSheet: View {
                     Toggle("Set the volume", isOn: Binding(get: { volume != nil }, set: { volume = $0 ? 0.15 : nil }))
                 }
             }
+            if heedsCalendar {
+                HStack(spacing: 8) {
+                    Text(kind == .whileHere ? "Waits during events." : "Doesn't start during events.")
+                        .foregroundStyle(Theme.muted)
+                    ThemeLink(text: "Calendars…") { openSettings() }
+                }
+                .role(.small)
+            }
             if rotates {
                 HStack(spacing: 12) {
                     // a collection with parts of its own uses those
@@ -321,6 +335,10 @@ struct AlarmSheet: View {
                     Spacer(minLength: 0)
                 }
                 .transition(.opacity)
+            }
+            if rotates {
+                Text(kind == .whileHere ? "This part fills these hours." : "Stops after this part.")
+                    .role(.small).foregroundStyle(Theme.muted)
             }
             if let level = volume {
                 HStack(spacing: 12) {
@@ -345,6 +363,7 @@ struct AlarmSheet: View {
 /// Once, Weekdays, Every day: the chosen one sits on a fill that slides between them, like the sidebar's.
 private struct Strip<Option: CaseIterable & Hashable & RawRepresentable>: View where Option.AllCases: RandomAccessCollection, Option.RawValue == String {
     @Binding var selection: Option
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var fill
 
     var body: some View {
@@ -376,7 +395,7 @@ private struct Strip<Option: CaseIterable & Hashable & RawRepresentable>: View w
         .padding(1)
         .background(Theme.raised, in: .rect(cornerRadius: Radius.small))
         .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.border))
-        .animation(Theme.settle, value: selection)
+        .animation(reduceMotion ? nil : Theme.settle, value: selection)
     }
 }
 

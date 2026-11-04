@@ -538,7 +538,7 @@ extension DayPlan {
         /// Above this a short day stops filling the page, as an hour can't usefully be taller than a painting.
         public static let maxHourHeight = 180.0
         /// A row's block: a name and its line, with room around them.
-        public static let rowHeight = 56.0
+        public static let rowHeight = 112.0
         /// Each line of words past the first.
         public static let lineHeight = 18.0
 
@@ -551,7 +551,7 @@ extension DayPlan {
             public let aside: Bool
             /// Turned off or off today.
             public let off: Bool
-            /// The block behind its words, from its bar's end or its lines' room, stopping short of the next.
+            /// Content stays compact, independently of the duration beside it.
             public fileprivate(set) var block: ClosedRange<Double>
             let bottom: Double
             public var id: Alarm.ID { alarm.id }
@@ -582,31 +582,73 @@ extension DayPlan {
         public let labels: [Label]
         public let now: Double?
         public let breaks: [Break]
+        fileprivate let positions: [(time: Double, drawn: Double)]
+
+        public func drawingLabels(adjustedBy transform: (Label) -> Label?, moving: Label?) -> [Label] {
+            var drawn = labels.map { transform($0) ?? $0 }
+            if let moving {
+                drawn.removeAll { $0.row == moving.row && $0.kind == moving.kind }
+                drawn.insert(moving, at: 0)
+            }
+            return Self.separatedLabels(drawn)
+        }
+
+        fileprivate static func separatedLabels(_ wanted: [Label]) -> [Label] {
+            var labels: [Label] = []
+            for label in wanted.enumerated().sorted(by: { ($0.element.kind.rawValue, $0.offset) < ($1.element.kind.rawValue, $1.offset) }).map(\.element)
+            where !labels.contains(where: { abs($0.y - label.y) < 15 }) {
+                labels.append(label)
+            }
+            return labels.sorted { $0.y < $1.y }
+        }
+
+        /// Compact content can need more room than its time. The same map drives the ink and its hit targets.
+        public func position(_ time: Double) -> Double { Self.map(time, through: positions) }
+        public func time(at drawn: Double) -> Double { Self.map(drawn, through: positions.map { ($0.drawn, $0.time) }) }
+        public func dropTime(at drawn: Double) -> Double {
+            time(at: marks.first { $0.block.contains(drawn) }?.bar.lowerBound ?? drawn)
+        }
+
+        fileprivate static func map(_ value: Double, through points: [(time: Double, drawn: Double)]) -> Double {
+            guard let first = points.first, let last = points.last else { return value }
+            if value <= first.time { return value + first.drawn - first.time }
+            for (a, b) in zip(points, points.dropFirst()) where value <= b.time {
+                return a.drawn + (value - a.time) * (b.drawn - a.drawn) / (b.time - a.time)
+            }
+            return value + last.drawn - last.time
+        }
     }
 
     public var rail: Rail { rail(hourHeight: Rail.hourHeight) }
 
-    /// `hourHeight`: a page with room to spare spends it on the scale. `lines`: rows whose words take more than one line.
+    /// One map keeps clock positions and hit targets together when content needs more room.
     public func rail(hourHeight: Double, lines: [Alarm.ID: Int] = [:]) -> Rail {
         let height = span * hourHeight
         let y = { (date: Date) in position(of: date) * height }
-        var marks: [Rail.Mark] = []
+        var positions: [(time: Double, drawn: Double)] = []
+        var content: [(top: Double, room: Double)] = []
+        var bottom = -32.0
         for row in rows {
             let room = Rail.rowHeight + Double((lines[row.id] ?? 1) - 1) * Rail.lineHeight
-            let top = max(y(row.start) - 11, marks.last?.bottom ?? -.infinity)
-            let bar = y(row.start)...max(y(row.end), y(row.start) + 3)
-            marks.append(Rail.Mark(alarm: row.alarm, top: top, bar: bar, aside: row.waits != nil, off: row.off,
-                                   block: top + 3...max(bar.upperBound, top + 3 + room - 4), bottom: top + room))
+            let time = y(row.start)
+            let shift = positions.last.map { $0.drawn - $0.time } ?? 0
+            let start = max(time + shift, bottom + 32 + 11)
+            if positions.last?.time != time { positions.append((time, start)) }
+            content.append((start - 11, room))
+            bottom = start - 11 + room
         }
-        for index in marks.indices.dropLast() {
-            let block = marks[index].block
-            marks[index].block = block.lowerBound...max(block.lowerBound, min(block.upperBound, marks[index + 1].block.lowerBound - 4))
+        let drawn = { (value: Double) in Rail.map(value, through: positions) }
+        let marks: [Rail.Mark] = zip(rows, content).map { row, content in
+            let bar = drawn(y(row.start))...max(drawn(y(row.end)), drawn(y(row.start)) + 3)
+            return Rail.Mark(alarm: row.alarm, top: content.top, bar: bar, aside: row.waits != nil, off: row.off,
+                             block: content.top + 3...content.top + 3 + content.room, bottom: content.top + content.room)
         }
         var wanted: [Rail.Label] = []
         for (mark, row) in zip(marks, rows) {
-            let clock = calendar.dateComponents([.hour, .minute], from: row.start)
-            wanted.append(Rail.Label(text: railTime(hour: clock.hour ?? 0, minute: clock.minute ?? 0, full: true), y: mark.top + 11,
-                                     kind: row.off ? .off : .row, row: row.alarm.id))
+            let fromLastNight = row.start < calendar.startOfDay(for: now)
+            let clock = calendar.dateComponents([.hour, .minute], from: fromLastNight ? calendar.startOfDay(for: now) : row.start)
+            wanted.append(Rail.Label(text: railTime(hour: clock.hour ?? 0, minute: clock.minute ?? 0, full: true), y: mark.bar.lowerBound,
+                                     kind: row.off ? .off : .row, row: fromLastNight ? nil : row.alarm.id))
             if row.end > row.start {
                 let end = calendar.dateComponents([.hour, .minute], from: row.end)
                 wanted.append(Rail.Label(text: railTime(hour: end.hour ?? 0, minute: end.minute ?? 0, full: end.minute == 0), y: mark.bar.upperBound,
@@ -614,25 +656,21 @@ extension DayPlan {
             }
         }
         let inDay = (firstHour..<lastHour).contains(calendar.component(.hour, from: now))
-        if inDay { wanted.append(Rail.Label(text: clockText(now), y: y(now), kind: .now, row: nil)) }
+        if inDay { wanted.append(Rail.Label(text: clockText(now), y: drawn(y(now)), kind: .now, row: nil)) }
         // with nothing on the rail the hours are all it has to say
         let bare = rows.isEmpty ? stride(from: firstHour + 3, to: lastHour, by: 3).map { $0 } : []
         for hour in [firstHour, lastHour] + (firstHour < 12 && lastHour > 12 && !breaks.contains { $0.contains(12) } ? [12] : []) + bare {
             let edge = hour == firstHour || hour == lastHour
-            wanted.append(Rail.Label(text: railTime(hour: hour, minute: 0, full: edge), y: self.y(hour: hour, hourHeight: hourHeight), kind: .frame, row: nil))
+            wanted.append(Rail.Label(text: railTime(hour: hour, minute: 0, full: edge), y: drawn(self.y(hour: hour, hourHeight: hourHeight)), kind: .frame, row: nil))
         }
-        var labels: [Rail.Label] = []
-        for label in wanted.enumerated().sorted(by: { ($0.element.kind.rawValue, $0.offset) < ($1.element.kind.rawValue, $1.offset) }).map(\.element)
-        where !labels.contains(where: { abs($0.y - label.y) < 15 }) {
-            labels.append(label)
-        }
+        let labels = Rail.separatedLabels(wanted)
         let foot = marks.last.map { max($0.bottom, $0.block.upperBound) } ?? Rail.rowHeight
-        return Rail(height: max(height, foot), marks: marks, labels: labels.sorted { $0.y < $1.y }, now: inDay ? y(now) : nil,
+        return Rail(height: max(drawn(height), foot), marks: marks, labels: labels, now: inDay ? drawn(y(now)) : nil,
                     breaks: breaks.map { gap in
-                        let at = marks.firstIndex { drawn(hour: gap.upperBound) * hourHeight <= $0.bar.lowerBound + 0.001 } ?? 0
+                        let at = marks.firstIndex { drawn(self.drawn(hour: gap.upperBound) * hourHeight) <= $0.bar.lowerBound + 0.001 } ?? 0
                         let above = at > 0 ? marks[at - 1].block.upperBound : 0
                         return Rail.Break(y: (above + (at < marks.count ? marks[at].block.lowerBound : height)) / 2, text: Self.length(gap.upperBound - gap.lowerBound))
-                    })
+                    }, positions: positions)
     }
 
     /// "6 h 49 min", "7 h"

@@ -45,6 +45,21 @@ struct NowPage: View {
     }
 
     var body: some View {
+        Group {
+            if controller.catalog.albums.isEmpty, controller.status == .idle {
+                MusicWelcome(reading: controller.pendingAnalysis > 0)
+            } else if controller.status == .idle, controller.dayPlan(now: clock).quietSource == nil {
+                PageScroll(insets: EdgeInsets(top: 32, leading: 40, bottom: 24, trailing: 40), maxWidth: 1100) {
+                    MusicChoices(title: "Choose a collection", showPlay: true)
+                }
+            } else {
+                stage
+            }
+        }
+        .task(id: key) { await follow() }
+    }
+
+    private var stage: some View {
         // for its proposal only: the cover and words run past a short page, and mustn't push the window's content
         GeometryReader { _ in
             let layout = page.now
@@ -52,7 +67,7 @@ struct NowPage: View {
             let bare = motion.bare
             let width = bare ? layout.bareTextWidth : layout.textWidth(shown)
             let under = layout.stacked && !bare
-            let titleSize = bare ? Role.title.size : layout.titleSize(motion.screen.title, shown: shown)
+            let titleSize = motion.screen.kind == .piece ? layout.titleSize(motion.screen.title, shown: shown) : 28
             let detail = bare ? Role.body.size : layout.detailSize(title: titleSize)
             let bottom = layout.coverBottom(shown)
             ZStack(alignment: .topLeading) {
@@ -71,7 +86,6 @@ struct NowPage: View {
                 .offset(x: bare ? (layout.width - width) / 2 : layout.textLeft(shown), y: under ? bottom + 16 : bare ? 0 : bottom - shown)
             }
         }
-        .task(id: key) { await follow() }
     }
 
     @ViewBuilder
@@ -100,10 +114,14 @@ struct NowPage: View {
                 } else {
                     PlayButton(songs: songs(of: route))
                 }
-                ThemeButton(title: "Open") { navigate(route) }
+                ThemeButton(title: "Open collection") { navigate(route) }
             }
             .controlSize(.large)
             .padding(.top, 4)
+        } else if let route = shownRoute {
+            ThemeLink(text: "Open collection") { navigate(route) }
+                .role(.body)
+                .padding(.top, 4)
         }
     }
 

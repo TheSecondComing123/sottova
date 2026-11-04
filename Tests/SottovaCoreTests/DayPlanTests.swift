@@ -3,6 +3,96 @@ import Testing
 @testable import SottovaCore
 
 struct DayPlanTests {
+    @Test func aMovedWindowEndDoesNotCollideWithTheNextRowsStart() {
+        let day = ownersDay
+        let rail = day.rail(hourHeight: 34)
+        let window = day.rows.first { $0.alarm.name == "Overworld" }!
+        let evening = day.rows.first { $0.alarm.name == "Compline" }!
+        let target = rail.marks.first { $0.id == evening.id }!.bar.lowerBound
+        let moving = DayPlan.Rail.Label(text: "4 PM", y: rail.position(day.y(minute: 16 * 60, hourHeight: 34)), kind: .row, row: window.id)
+        let labels = rail.drawingLabels(adjustedBy: { label in
+            label.row == window.id && label.kind == .end ? DayPlan.Rail.Label(text: "8 PM", y: target, kind: .end, row: window.id) : nil
+        }, moving: moving)
+        let atEight = labels.filter { abs($0.y - target) < 15 }
+        #expect(atEight.count == 1)
+        #expect(atEight.first?.row == evening.id)
+        #expect(atEight.first?.kind == .row)
+        let resized = rail.drawingLabels(adjustedBy: { _ in nil }, moving: DayPlan.Rail.Label(text: "8 PM", y: target, kind: .end, row: window.id))
+        let atResizedEnd = resized.filter { abs($0.y - target) < 15 }
+        #expect(atResizedEnd.count == 1)
+        #expect(atResizedEnd.first?.row == evening.id)
+        #expect(atResizedEnd.first?.kind == .row)
+    }
+
+    @Test func rowsStartingTogetherShareTheirRealClockPoint() {
+        var first = lauds
+        first.minute = 0
+        var second = first
+        second.id = UUID()
+        let day = plan([first, second], date(2, 8))
+        let rail = day.rail(hourHeight: 34)
+        let starts = rail.labels.filter { $0.kind == .row || $0.kind == .off }
+        #expect(starts.count == 1)
+        for label in starts {
+            #expect(day.minute(at: rail.time(at: label.y), hourHeight: 34, snap: 1) == 7 * 60)
+        }
+        for mark in rail.marks {
+            #expect(day.hour(at: rail.dropTime(at: (mark.block.lowerBound + mark.block.upperBound) / 2), hourHeight: 34) == 7)
+        }
+    }
+
+    @Test func windowsFromLastNightShareMidnightOnTheRail() {
+        var first = Alarm(source: "a", name: "First", hour: 22, minute: 0, weekdays: [2])
+        first.minutes = 240
+        var second = Alarm(source: "b", name: "Second", hour: 23, minute: 0, weekdays: [2])
+        second.minutes = 180
+        let day = plan([first, second], date(3, 0, 30))
+        let rail = day.rail(hourHeight: 34)
+        let starts = rail.labels.filter { $0.kind == .row || $0.kind == .off }
+        #expect(starts.count == 1)
+        for label in starts {
+            #expect(label.text == "midnight")
+            #expect(label.row == nil)
+            #expect(day.minute(at: rail.time(at: label.y), hourHeight: 34, snap: 1) == 0)
+        }
+        for mark in rail.marks {
+            #expect(day.hour(at: rail.dropTime(at: (mark.block.lowerBound + mark.block.upperBound) / 2), hourHeight: 34) == 0)
+        }
+    }
+
+    @Test func aLongWindowHasACompactContentRow() {
+        let rail = plan([overworld], date(2, 16)).rail(hourHeight: 34)
+        let mark = rail.marks[0]
+        #expect(mark.block.upperBound - mark.block.lowerBound <= 112)
+        #expect(abs(mark.bar.upperBound - mark.bar.lowerBound - 4 * 34) < 0.01)
+    }
+
+    @Test func contentRowsLeaveAQuietGapEvenWhenTimesAreClose() {
+        var later = compline
+        later.hour = 15
+        later.minute = 10
+        let rail = plan([overworld, later], date(2, 16)).rail(hourHeight: 34)
+        #expect(rail.marks[1].block.lowerBound - rail.marks[0].block.upperBound >= 28)
+    }
+
+    @Test func compactRailMappingKeepsStartsEndsAndDropsOnTheirTimes() {
+        let day = ownersDay
+        for scale in [24.0, 34, 50] {
+            let rail = day.rail(hourHeight: scale)
+            for minute in stride(from: 0, through: 24 * 60, by: 5) {
+                let before = day.y(minute: minute, hourHeight: scale)
+                #expect(abs(rail.time(at: rail.position(before)) - before) < 0.0001)
+            }
+            for start in [7 * 60 + 2, 15 * 60, 19 * 60, 20 * 60, 21 * 60] {
+                let before = day.y(minute: start, hourHeight: scale)
+                let target = rail.position(day.y(minute: start + 5, hourHeight: scale))
+                let distance = rail.time(at: target) - before
+                #expect(day.minute(start, draggedBy: distance, hourHeight: scale) == start + 5)
+                #expect(day.minute(at: rail.time(at: rail.position(before)), hourHeight: scale, snap: 1) == start)
+            }
+        }
+    }
+
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "America/New_York")!
@@ -133,7 +223,7 @@ struct DayPlanTests {
         #expect((day.firstHour, day.lastHour) == (0, 19))
         // midnight to 2, then a break to 3 PM drawn as two hours
         #expect(day.breaks == [2...15])
-        #expect(abs(day.rail.marks[0].bar.upperBound - 2 * DayPlan.Rail.hourHeight) < 0.01)
+        #expect(abs(day.rail.time(at: day.rail.marks[0].bar.upperBound) - 2 * DayPlan.Rail.hourHeight) < 0.01)
     }
 
     @Test func anEmptyDayAndADragGetTheWholeDay() {
@@ -439,21 +529,21 @@ struct DayPlanTests {
         let scale = DayPlan.Rail.hourHeight
         #expect(rail.height >= rail.marks[2].bottom)
         // the rail starts at 7: Lauds runs 7:02 to 8:11, the long gap draws two hours, Overworld 3 to 7, and it's 3:40
-        #expect(abs(rail.marks[0].bar.lowerBound - 2.0 / 60 * scale) < 0.01)
-        #expect(abs(rail.marks[0].bar.upperBound - 71.0 / 60 * scale) < 0.01)
+        #expect(abs(rail.time(at: rail.marks[0].bar.lowerBound) - 2.0 / 60 * scale) < 0.01)
+        #expect(abs(rail.time(at: rail.marks[0].bar.upperBound) - 71.0 / 60 * scale) < 0.01)
         let three = (71.0 / 60 + 2) * scale
-        #expect(abs(rail.marks[1].bar.lowerBound - three) < 0.01 && abs(rail.marks[1].bar.upperBound - (three + 4 * scale)) < 0.01)
+        #expect(abs(rail.time(at: rail.marks[1].bar.lowerBound) - three) < 0.01 && abs(rail.time(at: rail.marks[1].bar.upperBound) - (three + 4 * scale)) < 0.01)
         #expect(rail.marks[2].top >= rail.marks[1].bottom)
-        #expect(abs(rail.now! - (three + 40.0 / 60 * scale)) < 0.01)
+        #expect(abs(rail.time(at: rail.now!) - (three + 40.0 / 60 * scale)) < 0.01)
         #expect(rail.labels.map(\.text).contains("7:02 AM") && rail.labels.map(\.text).contains("3 PM") && rail.labels.map(\.text).contains("3:40"))
     }
 
-    @Test func wordsMakeRoomButBarsDont() {
+    @Test func wordsLeaveEachClockPointFindable() {
         var soon = lauds
         (soon.hour, soon.minute, soon.id) = (7, 30, UUID())
         let rail = plan([lauds, soon], date(2, 12)).rail
         #expect(rail.marks[1].top >= rail.marks[0].bottom)
-        #expect(rail.marks[1].bar.lowerBound == 12)
+        #expect(abs(rail.time(at: rail.marks[1].bar.lowerBound) - 12) < 0.001)
         // a time's label goes where its words went
         #expect(rail.labels.contains { $0.text == "7:30 AM" && abs($0.y - rail.marks[1].top - 11) < 0.01 })
     }
@@ -530,11 +620,11 @@ struct DayPlanTests {
         for scale in [24.0, 50, 76, 120] {
             let rail = ownersDay.rail(hourHeight: scale)
             let marks = rail.marks
-            #expect(abs(marks[0].bar.upperBound - marks[0].bar.lowerBound - 69.0 / 60 * scale) < 0.001)
-            #expect(abs(marks[1].bar.upperBound - marks[1].bar.lowerBound - 4 * scale) < 0.001)
+            #expect(abs(rail.time(at: marks[0].bar.upperBound) - rail.time(at: marks[0].bar.lowerBound) - 69.0 / 60 * scale) < 0.001)
+            #expect(abs(rail.time(at: marks[1].bar.upperBound) - rail.time(at: marks[1].bar.lowerBound) - 4 * scale) < 0.001)
             #expect(abs(marks[2].bar.upperBound - marks[2].bar.lowerBound - scale) < 0.001)
-            #expect(abs(marks[1].bar.lowerBound - marks[0].bar.upperBound - 2 * scale) < 0.001)
-            #expect(abs(marks[2].bar.lowerBound - marks[1].bar.upperBound - scale) < 0.001)
+            #expect(abs(rail.time(at: marks[1].bar.lowerBound) - rail.time(at: marks[0].bar.upperBound) - 2 * scale) < 0.001)
+            #expect(abs(rail.time(at: marks[2].bar.lowerBound) - rail.time(at: marks[1].bar.upperBound) - scale) < 0.001)
             #expect(abs(rail.height - ownersDay.span * scale) < 0.001 || rail.height > ownersDay.span * scale)
         }
     }
@@ -564,7 +654,7 @@ struct DayPlanTests {
         #expect(day.hour(at: -5, hourHeight: scale) == 7)
         #expect(day.hour(at: 99999, hourHeight: scale) == 19)
         // what it lands on draws where it says
-        #expect(abs(day.y(hour: 15, hourHeight: scale) - day.rail(hourHeight: scale).marks[1].bar.lowerBound) < 0.001)
+        #expect(abs(day.y(hour: 15, hourHeight: scale) - day.rail(hourHeight: scale).time(at: day.rail(hourHeight: scale).marks[1].bar.lowerBound)) < 0.001)
         for y in stride(from: 0.0, through: day.span * scale, by: 7) {
             let hour = day.hour(at: y, hourHeight: scale)
             #expect(hour >= 7 && hour <= 19)

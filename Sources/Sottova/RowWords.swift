@@ -84,7 +84,7 @@ struct DaysWord: PreferenceKey {
 }
 
 /// One clickable word of a row's line, opening a native menu. No underline: under the pointer a plate and a caret say
-/// it's a menu.
+/// it's a menu. Its caret stays visible at rest.
 struct WordMenu<Content: View>: View {
     let text: String
     let on: Bool
@@ -99,7 +99,7 @@ struct WordMenu<Content: View>: View {
             content
         } label: {
             HStack(spacing: 2) {
-                Text(text)
+                Text(text).underline(color: Theme.faint)
                 Ph.caretDown.icon(.bold, size: 8).opacity(hovering ? 1 : 0).animation(Theme.quick, value: hovering)
             }
                 .role(.body)
