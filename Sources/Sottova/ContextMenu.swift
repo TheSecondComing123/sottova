@@ -38,7 +38,7 @@ struct MenuEntry {
             guard NSApp.currentEvent?.type == .keyDown else { return action() }
             if let field = NSApp.keyWindow?.firstResponder as? NSTextView {
                 field.deleteToBeginningOfLine(nil)
-            } else if let window = NSApp.keyWindow, window.frameAutosaveName == "main", window.attachedSheet == nil {
+            } else if MainActor.assumeIsolated({ SelectionKeys.belongToPage(in: NSApp.keyWindow) }) {
                 action()
             }
         }

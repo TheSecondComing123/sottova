@@ -188,12 +188,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     /// Edit's Delete, as the Delete key does: a text field and the queue's list take it first.
     @objc func delete(_ sender: Any?) {
-        MainActor.assumeIsolated { Self.router?.removePick?() }
+        MainActor.assumeIsolated {
+            guard SelectionKeys.belongToPage(in: NSApp.keyWindow) else { return }
+            Self.router?.removePick?()
+        }
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         MainActor.assumeIsolated {
-            let page = NSApp.keyWindow?.frameAutosaveName == "main" ? Self.router : nil
+            let page = SelectionKeys.belongToPage(in: NSApp.keyWindow) ? Self.router : nil
             switch item.action {
             case #selector(selectAll(_:)): return page?.canSelectAll == true
             case #selector(delete(_:)): return page?.removePick != nil && page?.selected.isEmpty == false
