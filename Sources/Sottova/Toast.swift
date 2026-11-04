@@ -14,9 +14,6 @@ struct Toast: View {
         ZStack {
             if let notice = controller.notice {
                 bar(notice)
-                    .id(notice.id)
-                    .transition(.asymmetric(insertion: reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)),
-                                            removal: .opacity.animation(Theme.curve(0.15))))
                     // restarts on leaving, so it never goes while you're reaching for Undo
                     .task(id: hovering) {
                         guard !hovering else { return }
@@ -24,6 +21,10 @@ struct Toast: View {
                         guard !Task.isCancelled, controller.notice?.id == notice.id else { return }
                         controller.notice = nil
                     }
+                    // under the id, so a notice that replaces one still up gets its own timer
+                    .id(notice.id)
+                    .transition(.asymmetric(insertion: reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)),
+                                            removal: .opacity.animation(Theme.curve(0.15))))
             }
         }
         .animation(Theme.curve(0.2), value: controller.notice?.id)
