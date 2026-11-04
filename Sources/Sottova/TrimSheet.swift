@@ -37,9 +37,9 @@ struct TrimSheet: View {
                 .frame(height: 112)
 
             HStack(alignment: .top, spacing: 24) {
-                edge("Starts at", value: $start, range: 0...max(end - 1, 0), hear: { hear(from: start) })
+                edge("Starts at", value: $start, range: 0...max(end - 1, 0), previewTitle: "Preview start", hear: { hear(from: start) })
                 Spacer(minLength: 0)
-                edge("Ends at", value: $end, range: min(start + 1, length)...max(length, 1), hear: { hear(from: max(end - listen, start)) })
+                edge("Ends at", value: $end, range: min(start + 1, length)...max(length, 1), previewTitle: "Preview end", hear: { hear(from: max(end - listen, start)) })
             }
 
             HStack(spacing: 8) {
@@ -82,7 +82,7 @@ struct TrimSheet: View {
         }
     }
 
-    private func edge(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, hear: @escaping () -> Void) -> some View {
+    private func edge(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, previewTitle: String, hear: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.system(size: 11, weight: .medium))
@@ -106,7 +106,7 @@ struct TrimSheet: View {
                 .accessibilityAdjustableAction { direction in
                     value.wrappedValue = (value.wrappedValue + (direction == .increment ? 0.1 : -0.1)).clamped(to: range)
                 }
-                IconButton(icon: .play, help: "hear it from here", action: hear)
+                ThemeButton(title: previewTitle, icon: .play, action: hear)
             }
         }
     }

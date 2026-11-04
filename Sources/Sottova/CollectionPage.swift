@@ -42,6 +42,11 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     let cover: String?
     /// Picks the cover's ground when there's no painting.
     let title: String
+    let target: CoverTarget
+    let gaps: SottovaCore.Settings?
+    let chooseGaps: (SottovaCore.Settings?) -> Void
+    var canSchedule = true
+    var empty = false
     var dropTargeted = false
     /// The row it plays for, as words you can click.
     var row: Alarm?
@@ -52,37 +57,59 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
     @ViewBuilder let actions: Actions
     @ViewBuilder let songs: (_ narrow: Bool) -> Songs
     @Environment(\.listLayout) private var layout
+    @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
+    @State private var overCover = false
 
     var body: some View {
         PageScroll(insets: EdgeInsets(top: 16, leading: layout.margin, bottom: 24, trailing: layout.margin), maxWidth: 1240) {
-            HStack(alignment: .bottom, spacing: 24) {
+            HStack(alignment: .center, spacing: 32) {
                 art
                 words
             }
-            .padding(.bottom, 32)
+            .padding(.bottom, 24)
             songs(layout.narrow)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var art: some View {
-        Group {
-            if let cover {
-                CoverImage(key: cover, size: layout.cover)
-            } else {
-                // its ground only: the name is the title beside it
-                RoundedRectangle(cornerRadius: Radius.small)
-                    .fill(Theme.coverGround(for: title))
-                    .strokeBorder(Theme.border, lineWidth: 1)
-                    .frame(width: layout.cover, height: layout.cover)
+        VStack(alignment: .leading, spacing: 8) {
+            let side = empty ? 128 : layout.cover
+            Button { router.coverFor = target } label: {
+                Group {
+                    if let cover {
+                        CoverImage(key: cover, size: side)
+                    } else if empty {
+                        Ph.palette.icon(.duotone, size: 28)
+                            .foregroundStyle(Theme.faint)
+                            .frame(width: side, height: side)
+                            .background(Theme.raised.opacity(0.4), in: .rect(cornerRadius: Radius.small))
+                            .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.hairline))
+                    } else {
+                        Artwork(key: nil, size: layout.cover, radius: Radius.small, outlined: true, title: title)
+                    }
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: Radius.small)
+                        .fill(Theme.primary.opacity(0.1))
+                        .strokeBorder(Theme.primary, lineWidth: 1)
+                        .opacity(dropTargeted ? 1 : 0)
+                }
+                .overlay(alignment: .bottom) {
+                    Text("Choose cover…").role(.body).foregroundStyle(Theme.text)
+                        .frame(maxWidth: .infinity).frame(height: 28)
+                        .background(Theme.background.opacity(0.9))
+                        .opacity(coverHovered ? 1 : 0)
+                        .allowsHitTesting(false)
+                }
             }
+            .buttonStyle(PressStyle(scale: 0.99))
+            .onHover { overCover = $0 }
+            .accessibilityLabel("Choose cover for \(title)")
+            CoverCredit(url: credit.url, key: credit.key)
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: Radius.small)
-                .fill(Theme.primary.opacity(0.1))
-                .strokeBorder(Theme.primary, lineWidth: 1)
-                .opacity(dropTargeted ? 1 : 0)
-        }
+        .frame(width: empty ? 128 : layout.cover, alignment: .leading)
     }
 
     private var words: some View {
@@ -94,29 +121,64 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
                     .foregroundStyle(Theme.muted)
                     .padding(.top, 6)
             }
-            if let row { RowLine(row: row).padding(.top, 2) }
-            CoverCredit(url: credit.url, key: credit.key).padding(.top, 4)
-            actions.padding(.top, 14)
+            if !empty {
+                VStack(alignment: .leading, spacing: 6) {
+                    let setting = gaps?.gaps(over: controller.yourSettings) ?? controller.yourSettings
+                    let range = setting.crossfade ? "\(TypedDuration.format(setting.crossfadeSec)) overlap" : Format.range(setting).replacingOccurrences(of: "–", with: " to ")
+                    SilenceChoices(title: title, chosen: gaps, choose: chooseGaps, label: "Between songs: \(setting.name), \(range)", inline: true)
+                        .fixedSize()
+                        .foregroundStyle(Theme.muted)
+                        .accessibilityLabel("Between songs")
+                        .accessibilityValue("\(setting.name), \(range)")
+                    if let row {
+                        ThemeLink(text: summary(row), color: Theme.muted) { router.alarm = .edit(row) }
+                            .accessibilityHint("Edit schedule")
+                    } else {
+                        ThemeLink(text: "Schedule music…", color: Theme.muted) { router.alarm = .new(target) }.disabled(!canSchedule)
+                    }
+                }
+                .role(.body)
+                .padding(.top, 14)
+            }
+            actions.padding(.top, empty ? 12 : 18)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func summary(_ row: Alarm) -> String {
+        #if SHOT
+        let plan = controller.dayPlan(now: controller.shotNow ?? .now)
+        #else
+        let plan = controller.dayPlan()
+        #endif
+        return ([plan.when(row)] + plan.sentence(row, nextPart: nil).map(\.text)).joined(separator: ", ")
+    }
+
+    private var coverHovered: Bool {
+        #if SHOT
+        if UserDefaults.standard.bool(forKey: "shotCoverHover") { return true }
+        #endif
+        return overCover
     }
 }
 
-/// When a collection's row plays and how, in the words Your day uses. The time opens the row.
-private struct RowLine: View {
-    let row: Alarm
-    @Environment(Controller.self) private var controller
-    @Environment(Router.self) private var router
+private struct CollectionActions<Extras: View>: View {
+    let songs: [Song]
+    var source: String?
+    @ViewBuilder let extras: Extras
 
     var body: some View {
-        let plan = DayPlan(alarms: controller.alarms)
-        WordFlow {
-            // a word like the rest, with their caret's room so the gaps match
-            ThemeLink(text: plan.when(row), color: Theme.muted) { router.alarm = .edit(row) }.role(.body).padding(.trailing, WordMenu<EmptyView>.caret)
-            // a collection's own parts say "next" on their heading
-            let ownParts = controller.playlists.contains { $0.id == row.source && !$0.breaks.isEmpty }
-            ForEach(plan.sentence(row, nextPart: row.rotates && !ownParts ? controller.nextPartName(for: row) : nil), id: \.text) { RowWord(alarm: row, piece: $0) }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { playback; extras }.fixedSize()
+            VStack(alignment: .leading, spacing: 8) { playback; extras }
         }
-        .foregroundStyle(Theme.muted)
+    }
+
+    private var playback: some View {
+        HStack(spacing: 8) {
+            PlayButton(songs: songs, source: source)
+            ShuffleButton(songs: songs, source: source)
+        }
     }
 }
 
@@ -177,18 +239,38 @@ struct SilenceChoices: View {
     let title: String
     let chosen: SottovaCore.Settings?
     let choose: (SottovaCore.Settings?) -> Void
+    var label = "Silence between songs"
+    var inline = false
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
 
     var body: some View {
-        Menu("Silence between songs") {
-            Toggle("Your setting", isOn: Binding(get: { chosen == nil }, set: { _ in choose(nil) }))
-            ForEach(controller.allPresets, id: \.name) { preset in
-                Toggle(preset.name, isOn: Binding(get: { chosen?.name == preset.name }, set: { _ in choose(preset) }))
+        if inline {
+            Menu {
+                entries
+            } label: {
+                HStack(spacing: 4) {
+                    Text(label)
+                    Ph.caretDown.icon(.bold, size: 8)
+                }
+                .role(.body)
+                .foregroundStyle(Theme.muted)
             }
-            Divider()
-            Toggle("Custom…", isOn: Binding(get: { chosen?.name == "Custom" }, set: { _ in custom() }))
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+        } else {
+            Menu(label) { entries }
         }
+    }
+
+    @ViewBuilder private var entries: some View {
+        Toggle("Your setting", isOn: Binding(get: { chosen == nil }, set: { _ in choose(nil) }))
+        ForEach(controller.allPresets, id: \.name) { preset in
+            Toggle(preset.name, isOn: Binding(get: { chosen?.name == preset.name }, set: { _ in choose(preset) }))
+        }
+        Divider()
+        Toggle("Custom…", isOn: Binding(get: { chosen?.name == "Custom" }, set: { _ in custom() }))
     }
 
     private func custom() {
@@ -216,15 +298,6 @@ private struct AddToCollection: View {
     }
 }
 
-/// Only when it isn't yours: what this collection's silence is and how long it makes it.
-@MainActor
-private func ownSilence(_ gaps: SottovaCore.Settings?, songs: [Song], controller: Controller) -> [String] {
-    guard let gaps else { return [] }
-    let music = songs.reduce(0) { $0 + $1.duration }
-    let paced = gaps.gaps(over: controller.yourSettings).lengthWithGaps(count: songs.count, music: music)
-    return ["\(gaps.name) silence" + (paced > music ? ", about \(Format.length(paced))" : "")]
-}
-
 private func songCount(_ songs: [Song]) -> String {
     "\(Format.count(songs.count, "song")), \(Format.length(songs.reduce(0) { $0 + $1.duration }))"
 }
@@ -238,9 +311,9 @@ struct AlbumCollection: View {
 
     var body: some View {
         if let album = controller.catalog.albumsByID[id] {
-            CollectionFrame(cover: album.artwork, title: album.title, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
-                            lines: [songCount(album.songs)]
-                                + ownSilence(controller.albumSettings[id], songs: album.songs, controller: controller),
+            CollectionFrame(cover: album.artwork, title: album.title, target: .album(id), gaps: controller.albumSettings[id],
+                            chooseGaps: { controller.albumSettings[id] = $0 }, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
+                            lines: ["From folder", songCount(album.songs)],
                             credit: (album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") }, album.artwork)) {
                 Text(album.title)
                     .role(.title)
@@ -249,12 +322,10 @@ struct AlbumCollection: View {
                     .lineLimit(4)
                     .accessibilityAddTraits(.isHeader)
             } actions: {
-                HStack(spacing: 6) {
-                    PlayButton(songs: album.songs)
-                    ShuffleButton(songs: album.songs)
-                    ThemeButton(title: "Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
-                        .help("a copy you can add to, reorder and split")
+                CollectionActions(songs: album.songs) {
                     CollectionMenu {
+                        Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
+                        Divider()
                         Button("Play next") { controller.playNext(album.songs) }
                         AddToCollection(songs: album.songs, name: album.title)
                         Divider()
@@ -317,36 +388,46 @@ struct YourCollection: View {
             let cover = controller.playlistCovers[pid] ?? songs.first?.artwork
             let isEmpty = playlist.paths.isEmpty
             let missing = playlist.paths.count - songs.count
-            CollectionFrame(cover: cover, title: playlist.name, dropTargeted: isEmpty && target == 0, row: isEmpty ? nil : DayPlan(alarms: controller.alarms).firstRow(of: pid),
-                            lines: isEmpty ? [] : [songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")]
-                                + ownSilence(isEmpty ? nil : playlist.gaps, songs: songs, controller: controller),
+            CollectionFrame(cover: cover, title: playlist.name, target: .playlist(pid), gaps: playlist.gaps,
+                            chooseGaps: { controller.setGaps($0, for: pid) }, canSchedule: !songs.isEmpty, empty: isEmpty, dropTargeted: isEmpty && target == 0,
+                            row: DayPlan(alarms: controller.alarms).firstRow(of: pid),
+                            lines: isEmpty ? [] : ["Yours", songCount(songs) + (missing > 0 ? ", \(missing) missing" : "")],
                             credit: (Controller.coverURL(forPlaylist: pid), controller.playlistCovers[pid])) {
                 title(playlist)
             } actions: {
-                HStack(spacing: 6) {
-                    if !isEmpty {
-                        PlayButton(songs: songs, source: pid)
-                        ShuffleButton(songs: songs, source: pid)
+                if !isEmpty {
+                    CollectionActions(songs: songs, source: pid) {
+                        HStack(spacing: 8) {
+                            ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
+                            menu(playlist, songs: songs)
+                        }
                     }
-                    // empty, the field under the header is already there
-                    if !isEmpty {
-                        ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(controller.catalog.songs.isEmpty ? "Add music to your library first." : "Choose songs from your library.")
+                            .role(.body).foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 12) {
+                            if controller.catalog.songs.isEmpty {
+                                ThemeButton(title: "Add folder…", action: controller.chooseFolders)
+                                ThemeLink(text: "Get free music", color: Theme.muted) { navigate(.shelf) }.role(.body)
+                            } else {
+                                ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
+                            }
+                            menu(playlist, songs: songs)
+                        }
                     }
-                    menu(playlist, songs: songs)
                 }
             } songs: { narrow in
                 if isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        addField(who: nil, alone: true)
-                        Text("or drag songs or a folder here")
-                            .role(.body)
-                            .foregroundStyle(Theme.faint)
-                            .padding(.leading, 22)
+                    if !controller.catalog.songs.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            addField(who: nil, alone: true)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
+                        .contentShape(.rect)
+                        .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
                     }
-                    .padding(.leading, -22)
-                    .frame(maxWidth: .infinity, minHeight: 400, alignment: .topLeading)
-                    .contentShape(.rect)
-                    .dropDestination(for: URL.self) { urls, _ in drop(urls, at: 0, in: playlist) } isTargeted: { target = $0 ? 0 : nil }
                 } else {
                     rows(playlist, songs: songs, narrow: narrow)
                 }
@@ -381,6 +462,17 @@ struct YourCollection: View {
         let next = Dictionary(grouping: controller.alarms.filter { $0.source == pid && $0.rotates }) { controller.partChoices(for: $0).next }.mapValues { $0.map(\.name) }
         let keys = playlist.paths.indices.filter { controller.catalog.songsByID[playlist.paths[$0]] != nil }.map { Playlist.rowKey($0, playlist.paths[$0]) }
         return VStack(alignment: .leading, spacing: 0) {
+            let selected = playlist.rows(router.selected).compactMap { index in controller.catalog.songsByID[playlist.paths[index]] }
+            HStack(spacing: 12) {
+                Text("\(selected.count) selected").role(.body).foregroundStyle(Theme.muted)
+                ThemeLink(text: "New part", color: Theme.muted) { newPartFromPick(playlist) }.role(.body)
+            }
+            .frame(height: 24)
+            .padding(.leading, 22).padding(.bottom, 12)
+            .opacity(selected.count > 1 ? 1 : 0)
+            .allowsHitTesting(selected.count > 1)
+            .disabled(selected.count <= 1)
+            .accessibilityHidden(selected.count <= 1)
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(playlist.identifiedPaths, id: \.id) { _, index, path in
                     if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
@@ -580,8 +672,10 @@ struct YourCollection: View {
     private func menu(_ playlist: Playlist, songs: [Song]) -> some View {
         CollectionMenu {
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
-            SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
-            Button("Start at…") { router.alarm = .new(.playlist(pid)) }
+            if !songs.isEmpty {
+                SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
+                Button("Start at…") { router.alarm = .new(.playlist(pid)) }
+            }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
             Divider()
             Button("Move to Trash") {
@@ -649,14 +743,14 @@ private struct AddSongs: View {
         ScrollViewReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 0) {
-                    TextField("Add songs", text: $query, prompt: Text(""))
+                    TextField("Find songs in your library", text: $query, prompt: Text(""))
                         .textFieldStyle(.plain)
                         .focusEffectDisabled()
                         .role(.body)
                         .foregroundStyle(Theme.text)
                         // AppKit draws a prompt in its own gray, whatever color it's given
                         .overlay(alignment: .leading) {
-                            if query.isEmpty { Text("Add songs").role(.body).foregroundStyle(focused ? Theme.muted : Theme.faint).allowsHitTesting(false) }
+                            if query.isEmpty { Text("Find songs in your library").role(.body).foregroundStyle(focused ? Theme.muted : Theme.faint).allowsHitTesting(false) }
                         }
                         .focused($focused)
                         .onSubmit {
@@ -686,6 +780,11 @@ private struct AddSongs: View {
                 .onHover { hovering = $0 }
                 .onTapGesture { focused = true }
                 .id("add")
+                if !needle.isEmpty && hits.isEmpty {
+                    Text("No songs match “\(query)”")
+                        .role(.body).foregroundStyle(Theme.muted)
+                        .padding(.leading, 22).padding(.vertical, 8)
+                }
                 ForEach(Array(hits.enumerated()), id: \.element.id) { index, song in
                     AddHit(song: song, top: index == 0 && !have.contains(song.id), here: have.contains(song.id), who: who) {
                         add(song)
@@ -727,37 +826,31 @@ private struct AddHit: View {
             Text(song.title)
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .truncationMode(.tail)
             Spacer(minLength: 16)
-            if here {
-                Text("already here").foregroundStyle(Theme.faint).padding(.trailing, 16)
-            }
             Text(Format.time(song.duration))
                 .monospacedDigit()
                 .foregroundStyle(Theme.faint)
                 .frame(width: 40, alignment: .trailing)
+            Group {
+                if here {
+                    Text("already here").role(.small).foregroundStyle(Theme.faint)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Button("Add", action: add)
+                        .buttonStyle(SecondaryStyle())
+                        .accessibilityLabel("Add \(song.title)")
+                }
+            }
+            .frame(width: 56)
+            .padding(.leading, 8)
         }
         .role(.body)
         .padding(.leading, 22)
         .padding(.trailing, 12)
-        .frame(height: 28)
+        .frame(minHeight: 32)
         .background {
-            RoundedRectangle(cornerRadius: Radius.small).fill(Theme.selection.opacity(hovering ? 1 : top ? 0.5 : 0)).padding(.trailing, here ? 0 : -18)
-        }
-        // past the time, where a row's × sits
-        .overlay(alignment: .trailing) {
-            if !here {
-                Button(action: add) {
-                    Ph.plus.icon(.bold, size: 10)
-                        .foregroundStyle(hovering ? Theme.text : Theme.muted)
-                        .frame(width: 20, height: 20)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(PressStyle())
-                .help(top ? "add it (Return)" : "add it")
-                .accessibilityLabel("Add \(song.title)")
-                .offset(x: 14)
-            }
+            RoundedRectangle(cornerRadius: Radius.small).fill(Theme.hover.opacity(hovering ? 1 : top ? 0.5 : 0))
         }
         .contentShape(.rect)
         .onHover { hovering = $0 }
@@ -1022,26 +1115,32 @@ struct CollectionGrid: View {
         let ordered = order.compactMap { id in collections.first { $0.id == id } }
         let yours = ordered.filter { if case .yours = $0 { true } else { false } }
         let folders = ordered.filter { if case .album = $0 { true } else { false } }
-        PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
-            HStack(alignment: .center) {
-                Text("Collections")
-                    .role(.title)
-                    .offset(y: -2)
-                    .foregroundStyle(Theme.text)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 16)
-                ThemeButton(title: "New", icon: .plus, iconWeight: .line) {
-                    guard let id = controller.newPlaylist() else { return }
-                    renaming.wrappedValue = id
-                    navigate(.playlist(id))
+        if collections.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                heading.padding(.horizontal, 40).padding(.top, 16)
+                MusicWelcome(title: "Make a collection")
+            }
+        } else {
+            PageScroll(insets: EdgeInsets(top: 16, leading: 40, bottom: 24, trailing: 40)) {
+                heading.padding(.bottom, 27)
+                // one kind alone needs no heading
+                let headed = !yours.isEmpty && !folders.isEmpty
+                VStack(alignment: .leading, spacing: 40) {
+                    section(headed ? "Yours" : nil, yours, plan: plan)
+                    section(headed ? "From folders" : nil, folders, plan: plan)
                 }
             }
-            .padding(.bottom, 27)
-            // one kind alone needs no heading
-            let headed = !yours.isEmpty && !folders.isEmpty
-            VStack(alignment: .leading, spacing: 40) {
-                section(headed ? "Yours" : nil, yours, plan: plan)
-                section(headed ? "Folders" : nil, folders, plan: plan)
+        }
+    }
+
+    private var heading: some View {
+        HStack(alignment: .center) {
+            Text("Collections").role(.title).offset(y: -2).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 16)
+            ThemeButton(title: "New", icon: .plus, iconWeight: .line) {
+                guard let id = controller.newPlaylist() else { return }
+                renaming.wrappedValue = id
+                navigate(.playlist(id))
             }
         }
     }

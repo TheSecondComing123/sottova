@@ -37,6 +37,13 @@ struct CoverPicker: View {
         }
     }
 
+    private var currentCover: String? {
+        switch target {
+        case .album(let id): controller.catalog.albumsByID[id]?.artwork
+        case .playlist(let id): controller.playlistCovers[id] ?? controller.playlists.first { $0.id == id }.flatMap { controller.songs(of: $0).first?.artwork }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             Text("Choose a cover for \(name)")
@@ -47,6 +54,10 @@ struct CoverPicker: View {
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
                     preview
+                    if picked != nil || file != nil || currentCover != nil {
+                        Text(picked == nil && file == nil ? "Current cover" : "New cover")
+                            .role(.small).foregroundStyle(Theme.muted)
+                    }
                     LinkText(text: "choose a file…", action: chooseFile)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.text)
@@ -60,17 +71,15 @@ struct CoverPicker: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 12) {
+                    Text("Search museum paintings").role(.body).foregroundStyle(Theme.text)
                     searchField
                     if searched.isEmpty && !searching {
-                        HStack(spacing: 4) {
-                            Text("try a painter or a mood:")
-                            ForEach(["hammershøi", "nocturne", "moonlight"], id: \.self) { word in
-                                LinkText(text: word) { query = word; search() }
-                                    .foregroundStyle(Theme.text)
+                        HStack(spacing: 8) {
+                            Text("Try").role(.small).foregroundStyle(Theme.muted)
+                            ForEach(["Hammershøi", "Nocturne", "Moonlight"], id: \.self) { word in
+                                ThemeButton(title: word) { query = word; search() }
                             }
                         }
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.faint)
                     } else {
                         Text(status)
                             .font(.system(size: 11, weight: .medium))
@@ -91,9 +100,7 @@ struct CoverPicker: View {
             }
 
             HStack(spacing: 12) {
-                Text(failure ?? "searching only happens while this is open")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(failure == nil ? Theme.faint : Theme.text)
+                if let failure { Text(failure).role(.small).foregroundStyle(Theme.text) }
                 Spacer()
                 Button("Cancel") {
                     saveTask?.cancel()
@@ -112,6 +119,22 @@ struct CoverPicker: View {
         .frame(width: 712)
         .background(Theme.sidebar)
         .presentationBackground(Theme.sidebar)
+        #if SHOT
+        .onAppear {
+            let defaults = UserDefaults.standard
+            switch defaults.string(forKey: "shotCoverState") {
+            case "searching": query = "moonlight"; searched = query; searching = true
+            case "failed":
+                query = "moonlight"; searched = query
+                silent = PaintingSearch.Museum.allCases.map(\.rawValue)
+            case "selected":
+                if let folder = defaults.string(forKey: "shotCovers"), let data = try? Data(contentsOf: URL(filePath: folder).appending(path: "compline.jpg")), let image = NSImage(data: data) {
+                    file = (data, image)
+                }
+            default: break
+            }
+        }
+        #endif
     }
 
     /// The square that will be written, which is also where a file can be dropped.
@@ -122,6 +145,8 @@ struct CoverPicker: View {
                 Image(nsImage: file.image).resizable().scaledToFill()
             } else if let picked {
                 AsyncImage(url: picked.thumbnail) { $0.resizable().scaledToFill() } placeholder: { ProgressView().controlSize(.small) }
+            } else if let currentCover {
+                Artwork(key: currentCover, size: 200, radius: Radius.small)
             } else {
                 Text("drop an image here")
                     .font(.system(size: 13))
@@ -143,13 +168,17 @@ struct CoverPicker: View {
         HStack(spacing: 8) {
             Ph.magnifyingGlass.icon(size: 14)
                 .foregroundStyle(Theme.faint)
-            TextField("search paintings, then return", text: $query)
+            TextField("Artist, title or mood", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text)
                 .focused($typing)
                 .onSubmit(search)
                 .onChange(of: typing) { _, focused in router.typing = focused }
+                .accessibilityLabel("Search paintings")
+            Button("Search", action: search)
+                .buttonStyle(SecondaryStyle())
+                .disabled(searching || query.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.horizontal, 12)
         .frame(height: 32)

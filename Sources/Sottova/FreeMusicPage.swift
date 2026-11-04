@@ -7,6 +7,12 @@ struct FreeMusicPage: View {
     @Environment(Controller.self) private var controller
     private let shelf = ShelfDownload.shelf
     @Environment(\.listLayout) private var layout
+    @Environment(\.pageLayout) private var page
+
+    private var columns: [GridItem] {
+        let count = page.width < 1000 ? 2 : page.width < 1500 ? 3 : 4
+        return Array(repeating: GridItem(.flexible(minimum: 240, maximum: 320), spacing: 28, alignment: .top), count: count)
+    }
     var body: some View {
         let margin = layout.margin
         PageScroll(insets: EdgeInsets(top: 16, leading: margin, bottom: 24, trailing: margin)) {
@@ -23,8 +29,8 @@ struct FreeMusicPage: View {
             ForEach(ShelfSet.Kind.allCases, id: \.self) { kind in
                 GroupHead(title: kind.rawValue)
                     .padding(.bottom, 14)
-                LazyVGrid(columns: TileGrid.columns, alignment: .leading, spacing: TileGrid.rowGap) {
-                    ForEach(Shelf.sets.filter { $0.kind == kind }) { tile($0) }
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
+                    ForEach(Shelf.sets.filter { $0.kind == kind }) { tile($0).id($0.id) }
                 }
                 .padding(.bottom, 32)
             }
@@ -48,9 +54,10 @@ struct FreeMusicPage: View {
             .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Color(white: 0.5, opacity: 0.28), lineWidth: 1))
             .accessibilityHidden(true)
             .padding(.bottom, 8)
-            TileCaption(title: set.title, detail: set.creator)
-                .help(set.title)
-            HStack(spacing: 4) {
+            Text(set.title).role(.item).fontWeight(.medium).foregroundStyle(Theme.text)
+                .lineLimit(2).frame(height: 40, alignment: .topLeading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(set.creator).role(.small).foregroundStyle(Theme.muted).lineLimit(1)
                 // a failure takes the line, whole
                 Group {
                     if let failure = shelf.failed[set.id], !running {
@@ -58,33 +65,29 @@ struct FreeMusicPage: View {
                     } else if running {
                         Text("\(Int(progress * Double(set.megabytes))) MB of \(Self.size(set.megabytes))").monospacedDigit().lineLimit(1)
                     } else {
-                        // one line, so every tile's download icon sits at the same height; the license gives way, the size doesn't
-                        HStack(spacing: 0) {
-                            Text(set.license).lineLimit(1)
-                            Text(", \(Self.size(set.megabytes))").monospacedDigit().fixedSize()
-                        }
-                        .help(set.license.hasPrefix("CC BY") ? "\(set.license). CC BY sets credit the artist." : set.license)
+                        Text("\(set.license), \(Self.size(set.megabytes))")
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .role(.body)
+                .role(.small)
                 .foregroundStyle(Theme.muted)
-                Spacer(minLength: 0)
+            }
+            .frame(minHeight: 36, alignment: .topLeading)
+            Group {
                 if running {
                     // what's already downloaded stays on disk, so this isn't a Cancel
                     ThemeButton(title: "Stop") { ShelfDownload.tasks[set.id]?.cancel() }
                 } else if shelf.failed[set.id] != nil {
                     ThemeButton(title: "Try again") { start(set) }
                 } else if ShelfDownload.isDone(set) {
-                    Ph.check.icon(.bold, size: 12)
-                        .foregroundStyle(Theme.muted)
-                        .frame(width: 28, height: 28)
-                        .help("in your library")
-                        .accessibilityLabel("in your library")
+                    Text("In your library").role(.body).foregroundStyle(Theme.muted)
+                        .frame(height: 24)
                 } else {
-                    IconButton(icon: .trayArrowDown, help: "download \(set.title)", size: 28) { start(set) }
+                    ThemeButton(title: "Download", icon: .trayArrowDown, iconWeight: .duotone) { start(set) }
                 }
             }
-            .frame(minHeight: 28)
+            .frame(height: 24, alignment: .leading)
+            .padding(.top, 4)
             // always there, so the rows below don't move when a download starts or ends
             Rectangle().fill(Theme.hairline).frame(height: 2)
                 .padding(.top, 4)
