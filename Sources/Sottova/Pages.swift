@@ -157,7 +157,7 @@ struct Missing: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 13))
+            .font(Role.body.font)
             .foregroundStyle(Theme.muted)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

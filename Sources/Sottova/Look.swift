@@ -53,6 +53,8 @@ extension Theme {
     static let buttonHover = text.opacity(0.24)
     static let stroke = text.opacity(0.12)
     static let frame = text.opacity(0.20)
+    /// The outline that keeps a painting's edge on any ground.
+    static let artEdge = Color(white: 0.5, opacity: 0.28)
     static let knob = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(text) : .white
     })
@@ -161,22 +163,6 @@ struct ThemeButton: View {
         }
         .buttonStyle(PressStyle(scale: 0.98))
         .onHover { hovering = $0 }
-    }
-}
-
-/// `.h` in the mock: a sidebar or page section's name, with room for an action at its right.
-struct SectionHead<Trailing: View>: View {
-    let title: String
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Text(title).role(.label).foregroundStyle(Theme.faint).accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
-            trailing
-        }
-        .frame(height: 14)
-        .padding(.horizontal, 8)
     }
 }
 
@@ -341,8 +327,8 @@ struct ValueStepper: View {
             step(.plus, by: step)
         }
         .frame(height: 32)
-        .background(Theme.raised, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+        .background(Theme.raised, in: .rect(cornerRadius: Radius.medium))
+        .overlay(RoundedRectangle(cornerRadius: Radius.medium).strokeBorder(Theme.border))
         .accessibilityRepresentation {
             Stepper("\(label ?? "") \(Int(value)) \(unit)", value: $value, in: range, step: step)
         }
@@ -355,7 +341,7 @@ struct ValueStepper: View {
             icon.icon(.bold, size: 12)
                 .foregroundStyle(Theme.muted)
                 .frame(width: 32, height: 32)
-                .hoverable(radius: 8)
+                .hoverable(radius: Radius.medium)
         }
         .buttonRepeatBehavior(.enabled)
         .buttonStyle(PressStyle())

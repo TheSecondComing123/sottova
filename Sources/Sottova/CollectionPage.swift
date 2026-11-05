@@ -33,7 +33,7 @@ struct CoverImage: View {
 
     var body: some View {
         Artwork(key: key, size: size, radius: Radius.small)
-            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Color(white: 0.5, opacity: 0.28), lineWidth: 1) }
+            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.artEdge, lineWidth: 1) }
     }
 }
 

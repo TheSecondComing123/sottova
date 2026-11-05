@@ -159,7 +159,7 @@ extension EnvironmentValues {
 
 /// A row or tile that lights up under the pointer, instantly, as in Finder and Music.
 struct Hoverable: ViewModifier {
-    var radius: CGFloat = 8
+    var radius: CGFloat = Radius.medium
     @State private var hovering = false
 
     func body(content: Content) -> some View {
@@ -170,7 +170,7 @@ struct Hoverable: ViewModifier {
 }
 
 extension View {
-    func hoverable(radius: CGFloat = 8) -> some View {
+    func hoverable(radius: CGFloat = Radius.medium) -> some View {
         modifier(Hoverable(radius: radius))
     }
 

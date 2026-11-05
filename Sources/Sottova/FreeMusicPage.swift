@@ -51,7 +51,7 @@ struct FreeMusicPage: View {
             }
             .aspectRatio(1, contentMode: .fit)
             .clipShape(.rect(cornerRadius: Radius.small))
-            .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Color(white: 0.5, opacity: 0.28), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.artEdge, lineWidth: 1))
             .accessibilityHidden(true)
             .padding(.bottom, 8)
             Text(set.title).role(.item).fontWeight(.medium).foregroundStyle(Theme.text)

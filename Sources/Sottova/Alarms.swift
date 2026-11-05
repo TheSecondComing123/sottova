@@ -332,7 +332,7 @@ struct AlarmSheet: View {
                     }
                     if let partsLine {
                         Text(partsLine)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(Role.column.font)
                             .foregroundStyle(Theme.faint)
                     }
                     Spacer(minLength: 0)

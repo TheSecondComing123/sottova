@@ -176,7 +176,7 @@ private struct QueueRow: View {
                 .help("\(song.title), \(song.artist)")
             } else {
                 Text(URL(filePath: entry.path).deletingPathExtension().lastPathComponent)
-                    .font(.system(size: 13))
+                    .font(Role.body.font)
                     .foregroundStyle(Theme.faint)
                     .lineLimit(1)
             }

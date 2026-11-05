@@ -63,7 +63,7 @@ struct CoverPicker: View {
                         .foregroundStyle(Theme.text)
                     if let picked {
                         Text(picked.credit)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(Role.column.font)
                             .foregroundStyle(Theme.muted)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
@@ -82,7 +82,7 @@ struct CoverPicker: View {
                         }
                     } else {
                         Text(status)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(Role.column.font)
                             .foregroundStyle(Theme.faint)
                     }
                     if !results.isEmpty {
@@ -140,7 +140,7 @@ struct CoverPicker: View {
     /// The square that will be written, which is also where a file can be dropped.
     private var preview: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12).fill(Theme.raised)
+            RoundedRectangle(cornerRadius: Radius.window).fill(Theme.raised)
             if let file {
                 Image(nsImage: file.image).resizable().scaledToFill()
             } else if let picked {
@@ -149,13 +149,13 @@ struct CoverPicker: View {
                 Artwork(key: currentCover, size: 200, radius: Radius.small)
             } else {
                 Text("drop an image here")
-                    .font(.system(size: 13))
+                    .font(Role.body.font)
                     .foregroundStyle(Theme.faint)
             }
         }
         .frame(width: 200, height: 200)
-        .clipShape(.rect(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(targeted ? Theme.text : Theme.border, lineWidth: targeted ? 2 : 1))
+        .clipShape(.rect(cornerRadius: Radius.window))
+        .overlay(RoundedRectangle(cornerRadius: Radius.window).strokeBorder(targeted ? Theme.text : Theme.border, lineWidth: targeted ? 2 : 1))
         .scaleEffect(targeted ? 1.02 : 1)
         .animation(Theme.settle, value: targeted)
         .dropDestination(for: URL.self) { urls, _ in
@@ -170,7 +170,7 @@ struct CoverPicker: View {
                 .foregroundStyle(Theme.faint)
             TextField("Artist, title or mood", text: $query)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .font(Role.body.font)
                 .foregroundStyle(Theme.text)
                 .focused($typing)
                 .onSubmit(search)
@@ -182,8 +182,8 @@ struct CoverPicker: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 32)
-        .background(Theme.raised, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(typing ? Theme.muted : Theme.border))
+        .background(Theme.raised, in: .rect(cornerRadius: Radius.medium))
+        .overlay(RoundedRectangle(cornerRadius: Radius.medium).strokeBorder(typing ? Theme.muted : Theme.border))
     }
 
     private var status: String {
@@ -206,14 +206,14 @@ struct CoverPicker: View {
                     Theme.raised
                 }
                 .frame(width: 136, height: 136)
-                .clipShape(.rect(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(picked == painting ? Theme.text : .clear, lineWidth: 2))
+                .clipShape(.rect(cornerRadius: Radius.medium))
+                .overlay(RoundedRectangle(cornerRadius: Radius.medium).strokeBorder(picked == painting ? Theme.text : .clear, lineWidth: 2))
                 .accessibilityHidden(true)
                 Text(painting.title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Role.label.font)
                     .foregroundStyle(Theme.text)
                 Text([painting.artist, painting.year].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Role.column.font)
                     .foregroundStyle(Theme.muted)
             }
             .lineLimit(1)
