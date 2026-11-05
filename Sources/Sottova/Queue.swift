@@ -116,7 +116,7 @@ struct QueuePanel: View {
         guard entries.count == 1, let song = controller.catalog.songsByID[first.path] else {
             return [.item("Play now") { controller.playQueued(first.id) }, .divider, remove]
         }
-        return MenuEntry.song(song, picked: [song], play: { controller.playQueued(first.id) }, remove: nil, part: nil,
+        return MenuEntry.song(song, picked: [song], source: first.source, play: { controller.playQueued(first.id) }, remove: nil, part: nil,
                               controller: controller, router: router, navigate: navigate) + [.divider, remove]
     }
 
