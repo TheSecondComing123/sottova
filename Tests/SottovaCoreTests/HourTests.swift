@@ -319,6 +319,17 @@ struct HourTests {
         #expect(screen.sub.hasSuffix("next song in under a minute"))
     }
 
+    @Test func aLongSilenceInTheHourSaysItsLengthAsLengthsDo() async throws {
+        let (c, album) = try await controller()
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: .now - 60)
+        c.addAlarm(hour(from: parts.hour!, parts.minute!, minutes: 240, source: album.id))
+        (c.settings.gapMin, c.settings.gapMax) = (5400, 5400)
+        c.checkHours()
+        for _ in 0..<400 where c.status == .resting { c.advance(0.5) }
+        for _ in 0..<400 where c.status != .resting { c.advance(0.5) }
+        #expect(c.nowScreen().sub.hasSuffix("next song in 1 h 30 min"))
+    }
+
     @Test func anHourInOrderPlaysInOrder() async throws {
         let (c, album) = try await controller(songs: 3)
         var alarm = open(c, album)
