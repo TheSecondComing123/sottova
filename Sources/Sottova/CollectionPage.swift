@@ -410,9 +410,11 @@ struct YourCollection: View {
         let columns = CollectionColumns(songs: songs, narrow: narrow)
         // which rows play each part next, by name
         let next = Dictionary(grouping: controller.alarms.filter { $0.source == pid && $0.rotates }) { controller.partChoices(for: $0).next }.mapValues { $0.map(\.name) }
-        let keys = playlist.paths.indices.filter { controller.catalog.songsByID[playlist.paths[$0]] != nil }.map { Playlist.rowKey($0, playlist.paths[$0]) }
+        // a missing file's row too, to pick and remove; SongListRun leaves it out of what plays
+        let keys = playlist.paths.indices.map { Playlist.rowKey($0, playlist.paths[$0]) }
         return VStack(alignment: .leading, spacing: 0) {
-            let picked = keys.indices.filter { router.selected.contains(keys[$0]) }
+            let playable = keys.filter { controller.catalog.songsByID[Playlist.path(ofRow: $0)] != nil }
+            let picked = playable.indices.filter { router.selected.contains(playable[$0]) }
             CollectionPick(picked: picked, list: songs, source: pid) {
                 ThemeLink(text: "New part", color: Theme.muted) { newPartFromPick(playlist) }
                     .role(.body)
@@ -442,7 +444,7 @@ struct YourCollection: View {
                             if on { target = index } else if target == index { target = nil }
                         }
                     }
-                    row(path, at: index, in: playlist, songs: songs, columns: columns)
+                    row(path, at: index, in: playlist, songs: songs, columns: columns, order: keys)
                         .modifier(SplitTarget(index: index, on: index > 0 && !playlist.breaks.contains(index)) {
                             withAnimation(Theme.quick) { controller.setBreak(true, at: index, in: pid) }
                             naming = index
@@ -479,7 +481,7 @@ struct YourCollection: View {
     }
 
     @ViewBuilder
-    private func row(_ path: String, at index: Int, in playlist: Playlist, songs: [Song], columns: CollectionColumns) -> some View {
+    private func row(_ path: String, at index: Int, in playlist: Playlist, songs: [Song], columns: CollectionColumns, order: [String]) -> some View {
         if let song = controller.catalog.songsByID[path] {
             let playable = playlist.paths[..<index].count { controller.catalog.songsByID[$0] != nil }
             let key = Playlist.rowKey(index, path)
@@ -509,9 +511,12 @@ struct YourCollection: View {
             .padding(.leading, 22)
             .padding(.trailing, 12)
             .frame(height: 28)
+            .background(router.selected.contains(Playlist.rowKey(index, path)) ? Theme.picked : .clear, in: .rect(cornerRadius: Radius.small))
+            .contentShape(.rect)
+            .onTapGesture { router.select(Playlist.rowKey(index, path), in: order) }
             .help(path)
             .sottovaMenu {
-                [.item("Remove from this collection") { remove([index]) }]
+                [.item("Remove from this collection", shortcut: KeyboardShortcut(.delete), action: MenuEntry.unlessTyping { remove([index]) })]
             }
         }
     }
