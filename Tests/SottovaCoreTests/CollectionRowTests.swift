@@ -139,6 +139,37 @@ struct CollectionRowTests {
         c.pause()
     }
 
+    @Test func aPausedRowStillComesBackAfterAnEarlierRowGoes() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Compline", songs: Array(songs[0..<3])))
+        c.playPick([1], of: Array(songs[0..<3]), source: id)
+        c.advance(1)
+        c.pause()
+        c.removeFromPlaylist(id, at: [0])
+        let list = c.songs(of: try #require(c.playlists.first { $0.id == id }))
+        #expect(c.pickState([0], of: list, source: id)?.paused == true)
+        let skips = c.skips
+        c.playPick([0], of: list, source: id)
+        #expect(c.skips == skips)
+    }
+
+    @Test func aPartPlayingTheSecondOfASongsRowsIsThatRow() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let list = [songs[0], songs[1], songs[0], songs[2]]
+        let id = try #require(c.newPlaylist(named: "Parts", songs: list))
+        c.setBreak(true, at: 2, in: id)
+        let row = rotatingRow(id, next: 1)
+        c.addAlarm(row)
+        c.fire(row.id, due: .now)
+        c.advance(1.5)
+        #expect(c.upNext.map(\.path) == [songs[2].id])
+        #expect(c.pickState([0], of: list, source: id) == nil)
+        #expect(c.pickState([2], of: list, source: id) != nil)
+        c.pause()
+    }
+
     @Test func theSamePickFromTwoCollectionsIsTwoPicksAndARenameKeepsIt() async throws {
         let dir = try root(), c = try controller(dir)
         let songs = try await seed(c, in: dir)

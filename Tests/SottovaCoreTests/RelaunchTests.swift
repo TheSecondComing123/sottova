@@ -142,6 +142,33 @@ struct RelaunchTests {
         #expect(d.status != .paused)
     }
 
+    @Test func aPausedRowsPlayAfterARelaunchPicksItBackUp() async throws {
+        let storage = try temp()
+        let (first, album) = try await controller(storage: storage)
+        first.playPick([0], of: album.songs)
+        first.advance(1)
+        first.pause()
+        let c = try relaunch(first, storage: storage)
+        try await buildCatalog(c, from: first)
+        #expect(c.pickState([0], of: album.songs)?.paused == true)
+        let skips = c.skips
+        c.playPick([0], of: album.songs)
+        #expect(c.skips == skips)
+        #expect(c.status == .playing)
+    }
+
+    @Test func aRowsPlayDuringItsHourPicksItBackUpAndKeepsTheHour() async throws {
+        let (c, album) = try await hourPlaying(storage: try temp())
+        c.pause()
+        let row = try #require(album.songs.firstIndex { $0.id == c.current?.id })
+        #expect(c.pickState([row], of: album.songs)?.paused == true)
+        let (skips, origin) = (c.skips, c.origin)
+        c.playPick([row], of: album.songs)
+        #expect(c.skips == skips)
+        #expect(c.origin == origin)
+        #expect(c.status == .playing)
+    }
+
     @Test func otherMusicStillComesBackPaused() async throws {
         let storage = try temp()
         let (first, album) = try await controller(storage: storage)
