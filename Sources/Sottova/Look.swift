@@ -338,13 +338,15 @@ struct SecondaryStyle: ButtonStyle {
     }
 }
 
-/// − value + in one bordered strip, for whole numbers.
+/// − value + in one bordered strip; `format` writes the value, for the eye and for VoiceOver.
 struct ValueStepper: View {
     var label: String?
     @Binding var value: Double
     let range: ClosedRange<Double>
-    let unit: String
     var step: Double = 1
+    let format: (Double) -> String
+    /// The tooltips on − and +.
+    var help = (less: "", more: "")
 
     var body: some View {
         HStack(spacing: 0) {
@@ -356,25 +358,28 @@ struct ValueStepper: View {
                     .padding(.trailing, 8)
             }
             step(.minus, by: -step)
-            Text("\(Int(value)) \(unit)")
+            Text(format(value))
                 .font(.system(size: 13, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(Theme.text)
                 .frame(minWidth: 64)
                 .contentTransition(.numericText(value: value))
+                // only the number: a held + on a trim would leave the waveform's handles trailing behind
+                .animation(Theme.quick, value: value)
             step(.plus, by: step)
         }
         .frame(height: 32)
         .background(Theme.raised, in: .rect(cornerRadius: Radius.medium))
         .overlay(RoundedRectangle(cornerRadius: Radius.medium).strokeBorder(Theme.border))
         .accessibilityRepresentation {
-            Stepper("\(label ?? "") \(Int(value)) \(unit)", value: $value, in: range, step: step)
+            Stepper(value: $value, in: range, step: step) { Text(label ?? "") }
+                .accessibilityValue(format(value))
         }
     }
 
     private func step(_ icon: Ph, by delta: Double) -> some View {
         Button {
-            withAnimation(Theme.quick) { value = min(max(value + delta, range.lowerBound), range.upperBound) }
+            value = min(max(value + delta, range.lowerBound), range.upperBound)
         } label: {
             icon.icon(.bold, size: 12)
                 .foregroundStyle(Theme.muted)
@@ -384,5 +389,6 @@ struct ValueStepper: View {
         .buttonRepeatBehavior(.enabled)
         .buttonStyle(PressStyle())
         .disabled(delta < 0 ? value <= range.lowerBound : value >= range.upperBound)
+        .help(delta < 0 ? help.less : help.more)
     }
 }

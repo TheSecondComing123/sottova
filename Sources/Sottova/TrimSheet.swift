@@ -29,7 +29,7 @@ struct TrimSheet: View {
                     .accessibilityAddTraits(.isHeader)
                     .lineLimit(1)
                 Text(song.artist)
-                    .font(.system(size: 13))
+                    .font(Role.body.font)
                     .foregroundStyle(Theme.muted)
             }
 
@@ -52,7 +52,7 @@ struct TrimSheet: View {
                     .lineLimit(1)
                 }
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(Role.column.font)
 
             HStack(spacing: 12) {
                 Spacer()
@@ -85,42 +85,15 @@ struct TrimSheet: View {
     private func edge(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, previewTitle: String, hear: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.muted)
             HStack(spacing: 8) {
-                HStack(spacing: 0) {
-                    nudge(.minus, value: value, by: -0.1, range: range)
-                    Text(Self.clock(value.wrappedValue, tenths: true))
-                        .font(.system(size: 15, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.text)
-                        .frame(minWidth: 64)
-                    nudge(.plus, value: value, by: 0.1, range: range)
-                }
-                .frame(height: 32)
-                .background(Theme.raised, in: .rect(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(label)
-                .accessibilityValue(Self.clock(value.wrappedValue, tenths: true))
-                .accessibilityAdjustableAction { direction in
-                    value.wrappedValue = (value.wrappedValue + (direction == .increment ? 0.1 : -0.1)).clamped(to: range)
-                }
+                ValueStepper(value: value, range: range, step: 0.1, format: { Self.clock($0, tenths: true) },
+                             help: ("a tenth of a second earlier", "a tenth of a second later"))
+                    .accessibilityLabel(label)
                 ThemeButton(title: previewTitle, icon: .play, action: hear)
             }
         }
-    }
-
-    private func nudge(_ icon: Ph, value: Binding<Double>, by step: Double, range: ClosedRange<Double>) -> some View {
-        Button { value.wrappedValue = (value.wrappedValue + step).clamped(to: range) } label: {
-            icon.icon(.bold, size: 12)
-                .foregroundStyle(Theme.muted)
-                .frame(width: 32, height: 32)
-                .hoverable(radius: 8)
-        }
-        .buttonStyle(PressStyle())
-        .buttonRepeatBehavior(.enabled)
-        .help(step < 0 ? "a tenth of a second earlier" : "a tenth of a second later")
     }
 
     /// A few seconds from a handle, on a player of its own; the queue is paused so the two don't play at once.
@@ -221,7 +194,7 @@ private struct Waveform: View {
                 }
                 if peaks.isEmpty {
                     Text(unreadable ? "can't read this file" : "reading the file…")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(Role.column.font)
                         .foregroundStyle(unreadable ? Theme.text : Theme.faint)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -237,8 +210,8 @@ private struct Waveform: View {
             .coordinateSpace(.named("wave"))
         }
         .padding(.horizontal, 6)
-        .background(Theme.raised, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
+        .background(Theme.raised, in: .rect(cornerRadius: Radius.medium))
+        .overlay(RoundedRectangle(cornerRadius: Radius.medium).strokeBorder(Theme.border))
         .accessibilityHidden(true)
     }
 
@@ -257,11 +230,5 @@ private struct Waveform: View {
         .gesture(DragGesture(coordinateSpace: .named("wave")).onChanged { drag($0.location.x) })
         .pointerStyle(.columnResize)
         .help("drag to move this end")
-    }
-}
-
-private extension Double {
-    func clamped(to range: ClosedRange<Double>) -> Double {
-        Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
     }
 }

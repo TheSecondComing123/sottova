@@ -328,7 +328,7 @@ struct AlarmSheet: View {
                 HStack(spacing: 12) {
                     // a collection with parts of its own uses those
                     if controller.playlists.first(where: { $0.id == source })?.breaks.isEmpty != false {
-                        ValueStepper(value: Binding(get: { Double(partCount) }, set: { partCount = Int($0) }), range: 2...12, unit: "parts")
+                        ValueStepper(value: Binding(get: { Double(partCount) }, set: { partCount = Int($0) }), range: 2...12) { "\(Int($0)) parts" }
                     }
                     if let partsLine {
                         Text(partsLine)

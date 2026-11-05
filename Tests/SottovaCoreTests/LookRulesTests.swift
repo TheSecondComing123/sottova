@@ -62,10 +62,6 @@ struct LookRulesTests {
     static let exceptions: [Exception] = [
         // the row-edit × sits inside the hover cross, with its offset and the cross's plate: its own role
         Exception("CollectionPage.swift", .icon, "Ph.x.icon(.bold, size: 9)"),
-        // the trim sheet's steppers and buttons
-        Exception("TrimSheet.swift", .font, ".system(size: 11, weight: .medium)", 3),
-        Exception("TrimSheet.swift", .font, ".system(size: 13)", 1),
-        Exception("TrimSheet.swift", .radius, "cornerRadius: 8", 4),
     ]
 
     @Test func everyRoleUsesItsComponentAndEveryValueItsToken() throws {
