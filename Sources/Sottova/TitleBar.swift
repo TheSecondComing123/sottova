@@ -87,7 +87,13 @@ private struct BarIcon: View {
         icon.icon(.line, size: 18)
             .foregroundStyle(!enabled ? Theme.disabled : active && (strong || on) ? Theme.text : Theme.muted)
             .frame(width: 32, height: 28)
-            .background(on ? Theme.selection : enabled && hovering ? Theme.hover : .clear, in: .rect(cornerRadius: Radius.small))
+    }
+}
+
+extension View {
+    /// Behind the whole control, its words too, so a hover lights what the click hits.
+    fileprivate func barPlate(on: Bool = false, hovering: Bool, enabled: Bool) -> some View {
+        background(on ? Theme.selection : enabled && hovering ? Theme.hover : .clear, in: .rect(cornerRadius: Radius.small))
     }
 }
 
@@ -111,6 +117,7 @@ private struct BarButton: View {
                         .padding(.trailing, 7)
                 }
             }
+            .barPlate(on: on, hovering: hovering, enabled: enabled)
         } access: {
             Button(help, action: action)
         }
@@ -216,6 +223,7 @@ private struct SleepControl: View {
                         .foregroundStyle(enabled ? Theme.muted : Theme.disabled)
                         .padding(.trailing, 7)
                 }
+                .barPlate(hovering: hovering, enabled: enabled)
             }
         } access: {
             // a Menu here would list its choices as buttons beside it, even closed
