@@ -347,9 +347,7 @@ struct AlbumCollection: View {
                     }
                     .environment(\.songOrder, album.songs.map(\.id))
                 }
-                .modifier(SongListRun(order: album.songs.map(\.id)) { id in
-                    if let index = album.songs.firstIndex(where: { $0.id == id }) { controller.play(album.songs, from: index) }
-                })
+                .modifier(SongListRun(order: album.songs.map(\.id)))
                 .padding(.leading, -22)
                 .padding(.trailing, -12)
             }
@@ -519,9 +517,7 @@ struct YourCollection: View {
                     if on { target = playlist.paths.count } else if target == playlist.paths.count { target = nil }
                 }
         }
-        .modifier(SongListRun(order: keys, play: { key in
-            if let index = keys.firstIndex(of: key) { controller.play(songs, from: index, source: pid) }
-        }, remove: { keys in
+        .modifier(SongListRun(order: keys, source: pid, remove: { keys in
             guard let current = controller.playlists.first(where: { $0.id == pid }) else { return }
             remove(current.rows(keys))
         }))

@@ -147,8 +147,10 @@ private struct RowDrag: ViewModifier {
 /// Around a list of `LibraryLine`s: what a drag of several picked rows carries, and what the keys act on.
 struct SongListRun: ViewModifier {
     let order: [String]
-    let play: (String) -> Void
+    /// The collection whose silence they play with.
+    var source: String?
     var remove: ((Set<String>) -> Void)?
+    @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @Namespace private var drag
     @State private var lifted: Set<String> = []
@@ -163,7 +165,10 @@ struct SongListRun: ViewModifier {
             .dragContainer(for: URL.self, itemID: \.path, in: drag) { (ids: [String]) in ids.map { URL(filePath: Playlist.path(ofRow: $0)) } }
             .dragContainerSelection(order.filter(router.selected.contains), containerNamespace: drag)
             .onChange(of: order, initial: true) {
-                router.run = SongRun(route: router.route, order: order, play: play, remove: remove)
+                // what was picked, as the pick's Play button plays it
+                router.run = SongRun(route: router.route, order: order, play: { [controller, source] keys in
+                    controller.playCollection(keys.compactMap { controller.catalog.songsByID[Playlist.path(ofRow: $0)] }, source: source)
+                }, remove: remove)
             }
     }
 }
@@ -306,9 +311,7 @@ struct SongList: View {
                             }
                             .environment(\.songOrder, songs.map(\.id))
                         }
-                        .modifier(SongListRun(order: songs.map(\.id)) { id in
-                            if let index = songs.firstIndex(where: { $0.id == id }) { controller.play(songs, from: index) }
-                        })
+                        .modifier(SongListRun(order: songs.map(\.id)))
                         .padding(.leading, -22)
                         .padding(.trailing, -12)
                     }

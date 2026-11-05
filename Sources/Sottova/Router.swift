@@ -162,10 +162,11 @@ final class Router {
         currentRun.map { $0.order.filter(selected.contains).map(Playlist.path(ofRow:)) } ?? []
     }
 
-    /// From the first picked, as Return does.
+    /// Return, and Play in the pick's right-click and the Song menu.
     func playPick() {
-        guard let run = currentRun, let first = run.order.first(where: selected.contains) else { return }
-        run.play(first)
+        guard let run = currentRun else { return }
+        let picked = run.order.filter(selected.contains)
+        if !picked.isEmpty { run.play(picked) }
     }
 
     func go(to destination: Route) {
@@ -231,7 +232,8 @@ final class Router {
 struct SongRun {
     let route: Route
     let order: [String]
-    let play: (String) -> Void
+    /// The picked, in the list's order.
+    let play: ([String]) -> Void
     var remove: ((Set<String>) -> Void)?
 }
 

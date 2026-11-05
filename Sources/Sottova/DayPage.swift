@@ -89,8 +89,8 @@ struct DayPage: View {
     private func pickable(_ order: [String]) {
         // a block that left today, by an edit or an undo, takes its pick with it
         router.selected.formIntersection(order)
-        router.run = SongRun(route: .alarms, order: order, play: { id in
-            if let alarm = controller.alarms.first(where: { $0.id.uuidString == id }) { router.alarm = .edit(alarm) }
+        router.run = SongRun(route: .alarms, order: order, play: { ids in
+            if let alarm = controller.alarms.first(where: { $0.id.uuidString == ids.first }) { router.alarm = .edit(alarm) }
         }, remove: { ids in
             for alarm in controller.alarms where ids.contains(alarm.id.uuidString) { controller.removeAlarm(alarm.id) }
         })
