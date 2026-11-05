@@ -303,6 +303,8 @@ struct SongList: View {
                         }
                         .role(.body)
                         .padding(.top, 8)
+                        // the keys and the Song menu act on what's shown, so on nothing here
+                        .modifier(SongListRun(order: []))
                     } else {
                         headings(columns)
                         LazyVStack(spacing: 0) {
