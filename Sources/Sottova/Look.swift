@@ -196,14 +196,25 @@ struct ThemeLink: View {
     var underlined = false
     var color: Color?
     let action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
+        // a button rather than a tap gesture, so VoiceOver can follow the link
         Button(action: action) {
             Text(text)
-                .underline(underlined, color: Theme.faint)
+                .linkUnderline(inline: underlined, hovering: hovering)
                 .foregroundStyle(color ?? (underlined ? Theme.text : Theme.primary))
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .pointerStyle(.link)
+    }
+}
+
+extension Text {
+    /// How text says it's clickable: in running text, always and faintly; on its own, under the pointer.
+    func linkUnderline(inline: Bool = false, hovering: Bool = false) -> Text {
+        inline ? underline(color: Theme.faint) : underline(hovering)
     }
 }
 

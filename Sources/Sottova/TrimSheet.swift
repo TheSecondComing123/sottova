@@ -46,10 +46,10 @@ struct TrimSheet: View {
                 Text("plays \(Self.clock(end - start)) of \(Self.clock(length)), from the next time it starts")
                     .foregroundStyle(Theme.faint)
                 if start > 0 || end < length {
-                    LinkText(text: "keep all of it") {
+                    ThemeLink(text: "keep all of it", color: Theme.text) {
                         withAnimation(Theme.quick) { (start, end) = (0, length) }
                     }
-                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
                 }
             }
             .font(.system(size: 11, weight: .medium))

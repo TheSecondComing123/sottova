@@ -58,9 +58,9 @@ struct CoverPicker: View {
                         Text(picked == nil && file == nil ? "Current cover" : "New cover")
                             .role(.small).foregroundStyle(Theme.muted)
                     }
-                    LinkText(text: "choose a file…", action: chooseFile)
+                    ThemeLink(text: "choose a file…", color: Theme.text, action: chooseFile)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
                     if let picked {
                         Text(picked.credit)
                             .font(Role.column.font)

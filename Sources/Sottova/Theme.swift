@@ -197,25 +197,6 @@ struct PressStyle: ButtonStyle {
     }
 }
 
-/// Text that navigates, underlined under the pointer.
-struct LinkText: View {
-    let text: String
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        // a button rather than a tap gesture, so VoiceOver can follow the link
-        Button(action: action) {
-            Text(text)
-                .underline(hovering)
-                .lineLimit(1)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .pointerStyle(.link)
-    }
-}
-
 struct IconButton: View {
     let icon: Ph
     var weight: Ph.IconWeight = .duotone

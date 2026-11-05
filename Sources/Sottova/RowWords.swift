@@ -99,7 +99,7 @@ struct WordMenu<Content: View>: View {
             content
         } label: {
             HStack(spacing: 2) {
-                Text(text).underline(color: Theme.faint)
+                Text(text).linkUnderline(inline: true)
                 Ph.caretDown.icon(.bold, size: 8).opacity(hovering ? 1 : 0).animation(Theme.quick, value: hovering)
             }
                 .role(.body)
