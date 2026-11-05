@@ -121,6 +121,24 @@ struct CollectionRowTests {
         c.pause()
     }
 
+    @Test func aRowPausedWithSomethingQueuedAfterItComesBackWithTheQueueKept() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Compline", songs: Array(songs[0..<3])))
+        let list = Array(songs[0..<3])
+        c.playPick([0], of: list, source: id)
+        c.advance(1)
+        c.playNext([songs[5]])
+        c.pause()
+        #expect(c.pickState([0], of: list, source: id)?.paused == true)
+        let skips = c.skips
+        c.playPick([0], of: list, source: id)
+        #expect(c.status == .playing)
+        #expect(c.skips == skips)
+        #expect(c.upNext.map(\.path) == [songs[5], songs[1], songs[2]].map(\.id))
+        c.pause()
+    }
+
     @Test func theSamePickFromTwoCollectionsIsTwoPicksAndARenameKeepsIt() async throws {
         let dir = try root(), c = try controller(dir)
         let songs = try await seed(c, in: dir)

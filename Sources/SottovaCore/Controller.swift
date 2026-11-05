@@ -400,6 +400,7 @@ public final class Controller {
         origin = Origin(key: key ?? Origin.key(of: songs, source: source), shuffled: shuffled)
         let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
+        listRows = Dictionary(uniqueKeysWithValues: upNext.enumerated().map { ($1.id, index + $0) })
         if retrying != nil {
             // nothing's playing to skip, and the piece it was waiting to start is no longer wanted
             retrying = nil
@@ -915,6 +916,11 @@ public final class Controller {
     @ObservationIgnored private var partDue: (id: Alarm.ID, time: Date)?
     @ObservationIgnored private var lastHourCheck = Date.distantPast
     @ObservationIgnored private var currentSource: String?
+    /// Where the last `play` put each of its songs in its list, by queue entry: so a song queued since, or the same
+    /// song further on, isn't taken for the row playing.
+    @ObservationIgnored private var listRows: [QueueEntry.ID: Int] = [:]
+    /// That place for the piece sounding; nil for one that wasn't in the list.
+    @ObservationIgnored private var listRowSounding: Int?
     /// The row in charge when this piece started, for the play log: it's written at the end, after a press may have changed that.
     @ObservationIgnored private var pieceRow: Alarm.ID?
     /// The stop after this piece is the hour's, not yours, so whatever you play next isn't cut short by it.
@@ -1559,7 +1565,12 @@ public final class Controller {
         playlists[index].name = name
         save(playlists[index])
         repointAlarms(from: id, to: url.path)
-        upNext = upNext.map { $0.source == id ? QueueEntry(path: $0.path, source: url.path) : $0 }
+        upNext = upNext.map { entry in
+            guard entry.source == id else { return entry }
+            let moved = QueueEntry(path: entry.path, source: url.path)
+            listRows[moved.id] = listRows[entry.id]
+            return moved
+        }
         if currentSource == id { currentSource = url.path }
         if playingAlbum == id {
             playingAlbum = url.path
@@ -1838,9 +1849,11 @@ public final class Controller {
             useAlbumSettings(for: nil)
             origin = nil
             currentSource = nil
+            listRowSounding = nil
             return nil
         }
         let entry = upNext.removeFirst()
+        listRowSounding = listRows[entry.id]
         queueTaken += 1
         useAlbumSettings(for: entry.source)
         currentSource = entry.source
@@ -1978,13 +1991,15 @@ public final class Controller {
     }
 
     /// Whether a pick is what's going, as `playPick` plays it: for the pick bar's Play. One row is while its list
-    /// goes, its song is sounding and what's queued is the rest of the list after it.
+    /// goes and it's the row sounding.
     public func pickState(_ picked: [Int], of list: [Song], source: String? = nil) -> (paused: Bool, shuffled: Bool)? {
         let rows = picked.filter(list.indices.contains)
         guard rows.count == 1, let row = rows.first else { return state(of: pickKey(rows.map { list[$0] }, source: source)) }
-        // the row and not only its song: a collection can hold a song twice, each going on to something else
-        guard current?.id == list[row].id, upNext.map(\.path) == list[(row + 1)...].map(\.id) else { return nil }
-        return collectionState(list, source: source)
+        // shuffled, the places are in the shuffled order
+        guard current?.id == list[row].id, listRowSounding == row, let state = collectionState(list, source: source), !state.shuffled else {
+            return nil
+        }
+        return state
     }
 
     /// Several are known by their songs and the collection they're picked in: a collection alone is known by its id,
