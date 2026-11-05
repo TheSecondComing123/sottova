@@ -190,10 +190,13 @@ struct MoreMenu<Content: View>: View {
     }
 }
 
-/// `.lnk` in the mock, the accent on the one thing to do next; with `underlined`, `.u`: running text you can click.
+/// Clickable text. `.action`, `.lnk` in the mock: a verb on its own, such as the accent on the one thing to do next.
+/// `.inline`, `.u`: running text you can click.
 struct ThemeLink: View {
+    enum Style { case action, inline }
+
     let text: String
-    var underlined = false
+    var style = Style.action
     var color: Color?
     let action: () -> Void
     @State private var hovering = false
@@ -202,8 +205,8 @@ struct ThemeLink: View {
         // a button rather than a tap gesture, so VoiceOver can follow the link
         Button(action: action) {
             Text(text)
-                .linkUnderline(inline: underlined, hovering: hovering)
-                .foregroundStyle(color ?? (underlined ? Theme.text : Theme.primary))
+                .linkUnderline(inline: style == .inline, hovering: hovering)
+                .foregroundStyle(color ?? (style == .inline ? Theme.text : Theme.primary))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

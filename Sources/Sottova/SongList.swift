@@ -307,7 +307,7 @@ struct SongList: View {
                     if songs.isEmpty {
                         HStack(spacing: 4) {
                             Text("Nothing matches “\(router.songFilter)”.").foregroundStyle(Theme.muted)
-                            ThemeLink(text: "Clear the filter", underlined: true) { router.songFilter = "" }
+                            ThemeLink(text: "Clear the filter", style: .inline) { router.songFilter = "" }
                         }
                         .role(.body)
                         .padding(.top, 8)

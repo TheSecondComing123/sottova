@@ -91,7 +91,7 @@ struct NowPage: View {
     @ViewBuilder
     private func foot(_ size: CGFloat) -> some View {
         if let next = motion.foot?.next {
-            ThemeLink(text: next, underlined: true, color: Theme.muted) { navigate(.alarms) }.detail(size)
+            ThemeLink(text: next, style: .inline, color: Theme.muted) { navigate(.alarms) }.detail(size)
         }
         if let line = motion.foot?.note, line != router.dismissedFoot {
             HStack(spacing: 8) {
@@ -353,9 +353,9 @@ private struct NowText: View {
                         if !dragging {
                             HStack(spacing: 0) {
                                 Text("or ")
-                                ThemeLink(text: "choose a folder", underlined: true, action: choose)
+                                ThemeLink(text: "choose a folder", style: .inline, action: choose)
                                 Text(", or ")
-                                ThemeLink(text: "get free music", underlined: true, action: freeMusic)
+                                ThemeLink(text: "get free music", style: .inline, action: freeMusic)
                             }
                         }
                     } else {
@@ -372,7 +372,7 @@ private struct NowText: View {
             if screen.action != nil || screen.third != nil {
                 ZStack(alignment: .topLeading) {
                     if let action = screen.action, let label = screen.actionTitle {
-                        ThemeLink(text: label, underlined: true) { act(action) }
+                        ThemeLink(text: label, style: .inline) { act(action) }
                     } else if let third = screen.third {
                         Text(third).monospacedDigit().foregroundStyle(Theme.faint)
                     }

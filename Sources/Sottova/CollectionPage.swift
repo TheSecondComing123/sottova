@@ -131,7 +131,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
                         .accessibilityLabel("Between songs")
                         .accessibilityValue("\(setting.name), \(range)")
                     if let row {
-                        ThemeLink(text: summary(row), color: Theme.muted) { router.alarm = .edit(row) }
+                        ThemeLink(text: summary(row), style: .inline, color: Theme.muted) { router.alarm = .edit(row) }
                             .accessibilityHint("Edit schedule")
                     } else {
                         ThemeLink(text: "Schedule music…", color: Theme.muted) { router.alarm = .new(target) }.disabled(!canSchedule)

@@ -239,7 +239,7 @@ struct DayPage: View {
                     if controller.catalog.albums.isEmpty {
                         HStack(spacing: 4) {
                             Text("Nothing on your day.")
-                            ThemeLink(text: "Add some music", underlined: true) { router.go(to: .home) }
+                            ThemeLink(text: "Add some music", style: .inline) { router.go(to: .home) }
                         }
                     } else {
                         Text("Drag a collection onto an hour")
@@ -445,7 +445,7 @@ struct DayPage: View {
                 Text("\(played.count)").role(.body).monospacedDigit().foregroundStyle(Theme.muted)
                 Spacer(minLength: 16)
                 if played.count > cap {
-                    ThemeLink(text: "All \(played.count)", underlined: true) { allPlayed = true }
+                    ThemeLink(text: "All \(played.count)", style: .inline) { allPlayed = true }
                         .role(.body)
                         .popover(isPresented: $allPlayed, arrowEdge: .trailing) { allPlayedList(plan) }
                 }
