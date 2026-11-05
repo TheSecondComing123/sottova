@@ -67,9 +67,9 @@ extension MenuEntry {
 
     @MainActor static func album(_ album: Album, controller: Controller, router: Router, navigate: Navigate) -> [MenuEntry] {
         let gaps = controller.albumSettings[album.id]?.name
-        var choices: [MenuEntry] = [.item("Your setting", checked: gaps == nil) { controller.albumSettings[album.id] = nil }]
+        var choices: [MenuEntry] = [.item("Your setting", checked: gaps == nil) { controller.setAlbumGaps(nil, for: album) }]
         choices += controller.allPresets.map { preset in
-            .item(preset.name, checked: gaps == preset.name) { controller.albumSettings[album.id] = preset }
+            .item(preset.name, checked: gaps == preset.name) { controller.setAlbumGaps(preset, for: album) }
         }
         // Custom is edited on the album page; here it only shows that it's the one in use
         if gaps == "Custom" {

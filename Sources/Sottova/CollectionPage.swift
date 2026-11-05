@@ -312,7 +312,7 @@ struct AlbumCollection: View {
     var body: some View {
         if let album = controller.catalog.albumsByID[id] {
             CollectionFrame(cover: album.artwork, title: album.title, target: .album(id), gaps: controller.albumSettings[id],
-                            chooseGaps: { controller.albumSettings[id] = $0 }, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
+                            chooseGaps: { controller.setAlbumGaps($0, for: album) }, row: DayPlan(alarms: controller.alarms).firstRow(of: id),
                             lines: ["From folder", songCount(album.songs)],
                             credit: (album.songs.first.map { URL(filePath: $0.id).deletingLastPathComponent().appending(path: "cover.jpg") }, album.artwork)) {
                 Text(album.title)
@@ -330,7 +330,7 @@ struct AlbumCollection: View {
                         AddToCollection(songs: album.songs, name: album.title)
                         Divider()
                         Button("Start at…") { router.alarm = .new(.album(id)) }
-                        SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.albumSettings[id] = $0 }
+                        SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.setAlbumGaps($0, for: album) }
                         Divider()
                         Button("Choose cover…") { router.coverFor = .album(id) }
                         if album.artist != "Various Artists" {

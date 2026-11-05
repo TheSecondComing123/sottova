@@ -465,6 +465,22 @@ struct UndoTests {
         #expect(c.upNext.map(\.path) == ["/2", "/3", "/1"])
     }
 
+    @Test func anAlbumsSilenceUndoesAsOneOfYoursDoes() {
+        let c = Controller(storage: nil)
+        let album = Album(id: "lauds\u{1f}/m/Lauds", title: "Lauds", artist: "Various Artists", year: nil, artwork: nil, songs: [song("/m/Lauds/1.flac")])
+        let minecraft = Settings.presets.first { $0.name == "Minecraft" }!
+        let undo = undoing(c) { c.setAlbumGaps(minecraft, for: album) }
+        #expect(c.albumSettings[album.id] == minecraft)
+        #expect(undo.undoActionName == "Change Silence")
+        #expect(c.notice?.text == "Changed the silence in Lauds")
+        #expect(c.notice?.undoable == true)
+        undo.undo()
+        #expect(c.albumSettings[album.id] == nil)
+        #expect(c.notice?.text == "Put back Lauds's silence")
+        undo.redo()
+        #expect(c.albumSettings[album.id] == minecraft)
+    }
+
     @Test func aQueueEditDoesntUndoOverWhatChangedSince() {
         let c = Controller(storage: nil)
         c.playNext(["/1", "/2", "/3"].map(song))

@@ -1501,6 +1501,13 @@ public final class Controller {
         }
     }
 
+    public func setAlbumGaps(_ gaps: Settings?, for album: Album) {
+        let before = albumSettings[album.id]
+        undo?.registerUndo(withTarget: self) { $0.setAlbumGaps(before, for: album) }
+        did("Change Silence", "Changed the silence in \(album.title)", back: "Put back \(album.title)'s silence")
+        albumSettings[album.id] = gaps
+    }
+
     /// Renames the file too, so the playlist's id changes; queued songs and a playing playlist follow it.
     @discardableResult
     public func rename(_ id: String, to name: String) -> String? {
