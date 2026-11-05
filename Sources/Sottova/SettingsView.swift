@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var showsSkipped = false
     /// A folder about to be removed, asked about first: its songs go with it.
     @State private var removing: URL?
+    @Environment(\.undoManager) private var undoManager
+    @Environment(\.controlActiveState) private var activeState
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,12 +53,15 @@ struct SettingsView: View {
             .scrollIndicatorsFlash(onAppear: true)
             .overlayScrollers()
         }
+        .overlay(alignment: .bottom) { Toast().environment(controller).padding(.bottom, 16).padding(.horizontal, 16) }
         .frame(width: 620)
         // with the title bar this stretches up under; every row one line, more folders scroll
         .frame(minHeight: 460, idealHeight: 460, maxHeight: .infinity)
         .background(Theme.background)
         .ignoresSafeArea()
         .onAppear { opensAtLogin = SMAppService.mainApp.status == .enabled }
+        // changes made here undo here, with ⌘Z and the toast
+        .onChange(of: activeState, initial: true) { if activeState == .key { controller.undo = undoManager } }
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

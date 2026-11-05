@@ -501,7 +501,7 @@ public final class Controller {
     // MARK: Alarms
 
     public private(set) var alarms: [Alarm] = []
-    /// The main window's, so Edit › Undo brings back what was removed.
+    /// The main window's, or Settings' while it's in front, so Edit › Undo brings back what was removed.
     @ObservationIgnored public weak var undo: UndoManager?
     @ObservationIgnored private var alarmTimer: DispatchSourceTimer?
     /// What that timer is for.

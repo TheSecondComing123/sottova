@@ -10,6 +10,7 @@ struct MainWindow: View {
     @MainActor private static var watching = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.controlActiveState) private var activeState
     @State private var layout = PageLayout(windowWidth: 1240, pageHeight: 748)
     private var narrow: Bool { layout.narrowWindow }
 
@@ -78,6 +79,8 @@ struct MainWindow: View {
         .onAppear(perform: watchMouseButtons)
         .onAppear { controller.undo = undoManager }
         .onChange(of: undoManager) { controller.undo = undoManager }
+        // back from Settings, which takes it while it's in front
+        .onChange(of: activeState) { if activeState == .key { controller.undo = undoManager } }
         .confirmationDialog(trashQuestion, isPresented: Binding(get: { router.trashing != nil }, set: { if !$0 { router.trashing = nil } })) {
             Button("Move to Trash", role: .destructive) {
                 guard let id = router.trashing else { return }
