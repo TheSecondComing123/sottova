@@ -81,6 +81,42 @@ struct CollectionRowTests {
         c.pause()
     }
 
+    @Test func oneRowsPlayBringsItBackWhenItsTheOneSoundingAndPlaysAnotherOnFromThere() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Compline", songs: songs))
+        c.playPick([2], of: songs, source: id)
+        c.advance(1)
+        c.pause()
+        #expect(c.pickState([2], of: songs, source: id)?.paused == true)
+        // another row of the same list isn't what's going
+        #expect(c.pickState([4], of: songs, source: id) == nil)
+        let skips = c.skips
+        c.playPick([2], of: songs, source: id)
+        #expect(c.status == .playing)
+        #expect(c.skips == skips)
+        #expect(c.current?.id == songs[2].id)
+
+        c.playPick([4], of: songs, source: id)
+        c.advance(1.5)
+        #expect(c.current?.id == songs[4].id)
+        c.pause()
+    }
+
+    @Test func theSamePickFromTwoCollectionsIsTwoPicksAndARenameKeepsIt() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let a = try #require(c.newPlaylist(named: "Lauds", songs: songs))
+        let b = try #require(c.newPlaylist(named: "Vespers", songs: songs))
+        c.playPick([0, 1], of: songs, source: a)
+        #expect(c.pickState([0, 1], of: songs, source: b) == nil)
+        c.playPick([0, 1], of: songs, source: b)
+        #expect(c.upNext.allSatisfy { $0.source == b })
+        let renamed = try #require(c.rename(b, to: "Compline"))
+        #expect(c.pickState([0, 1], of: songs, source: renamed) != nil)
+        c.pause()
+    }
+
     @Test func renameUpdatesSavedQueueBeforeCrash() async throws {
         let dir = try root(), c = try controller(dir)
         let songs = try await seed(c, in: dir)

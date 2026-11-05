@@ -1558,8 +1558,11 @@ public final class Controller {
         if playingAlbum == id {
             playingAlbum = url.path
         }
-        // what's playing is still this collection, so its Play and Shuffle still know it, and a relaunch finds it
-        if let origin, origin.key == id { self.origin = Origin(key: url.path, shuffled: origin.shuffled) }
+        // what's playing is still this collection, or a pick in it, so its Play and Shuffle still know it, and a
+        // relaunch finds it
+        if let origin, origin.key == id || origin.key.hasSuffix("\u{0}" + id) {
+            self.origin = Origin(key: origin.key.dropLast(id.count) + url.path, shuffled: origin.shuffled)
+        }
         if status != .idle { saveResume() }
         playlists.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         loadPlaylistCovers()
@@ -1944,6 +1947,11 @@ public final class Controller {
             play(songs, source: source, key: key)
             return
         }
+        bringBack()
+    }
+
+    /// What's going already: out of a silence, or out of a pause.
+    private func bringBack() {
         if inSilence {
             skip()
         } else if status == .paused {
@@ -1954,24 +1962,27 @@ public final class Controller {
     /// Return and Play on a pick, by place in `list`: one plays on from there, as a double-click does; several play
     /// just themselves.
     public func playPick(_ picked: [Int], of list: [Song], source: String? = nil) {
-        if picked.count == 1, let index = picked.first {
-            play(list, from: index, source: source)
+        let songs = picked.filter(list.indices.contains).map { list[$0] }
+        guard songs.count == 1 else {
+            playKnown(songs, source: source, as: pickKey(songs, source: source))
             return
         }
-        let songs = picked.filter(list.indices.contains).map { list[$0] }
-        playKnown(songs, source: source, as: pickKey(picked, of: list, source: source))
+        if pickState(picked, of: list, source: source) == nil { play(list, from: picked[0], source: source) } else { bringBack() }
     }
 
-    /// Whether a pick is what's going, as `playPick` plays it: for the pick bar's Play.
+    /// Whether a pick is what's going, as `playPick` plays it: for the pick bar's Play. One row is while its list
+    /// goes and it's the song sounding.
     public func pickState(_ picked: [Int], of list: [Song], source: String? = nil) -> (paused: Bool, shuffled: Bool)? {
-        state(of: pickKey(picked, of: list, source: source))
+        let songs = picked.filter(list.indices.contains).map { list[$0] }
+        guard songs.count == 1 else { return state(of: pickKey(songs, source: source)) }
+        // ponytail: a collection holding the song twice counts either row as sounding
+        return current?.id == songs[0].id ? collectionState(list, source: source) : nil
     }
 
-    /// One row plays the list on, so it's known as the list. Several are known by their songs: a collection is known
-    /// by its id, and a pick from the one that's going isn't all of it.
-    private func pickKey(_ picked: [Int], of list: [Song], source: String?) -> String {
-        guard picked.count != 1 else { return Origin.key(of: list, source: source) }
-        return Origin.key(of: picked.filter(list.indices.contains).map { list[$0] }, source: nil)
+    /// Several are known by their songs and the collection they're picked in: a collection alone is known by its id,
+    /// and a pick from the one that's going isn't all of it. The id goes last, for a rename to swap.
+    private func pickKey(_ songs: [Song], source: String?) -> String {
+        Origin.key(of: songs, source: nil) + (source.map { "\u{0}" + $0 } ?? "")
     }
 
     public func pause() {
