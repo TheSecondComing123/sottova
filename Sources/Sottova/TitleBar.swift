@@ -46,7 +46,7 @@ struct TitleBar: View {
                 .lineLimit(1)
             } access: {
                 Button("\(song.title), \(song.artist)") { router.go(to: .home) }
-                    .accessibilityHint("show what's playing")
+                    .accessibilityHint("Show what's playing")
             }
             .padding(.leading, 96)
             .padding(.trailing, controller.sleepTimer == nil ? 340 : 410)
