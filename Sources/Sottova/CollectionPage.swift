@@ -124,12 +124,11 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
             if !empty {
                 VStack(alignment: .leading, spacing: 6) {
                     let setting = gaps?.gaps(over: controller.yourSettings) ?? controller.yourSettings
-                    let range = setting.crossfade ? "\(TypedDuration.format(setting.crossfadeSec)) crossfade" : Format.range(setting).replacingOccurrences(of: "–", with: " to ")
-                    SilenceChoices(title: title, chosen: gaps, choose: chooseGaps, label: "Between songs: \(setting.name), \(range)")
+                    SilenceChoices(title: title, chosen: gaps, choose: chooseGaps, label: "Silence between songs: \(Format.silence(setting))")
                         .fixedSize()
                         .foregroundStyle(Theme.muted)
-                        .accessibilityLabel("Between songs")
-                        .accessibilityValue("\(setting.name), \(range)")
+                        .accessibilityLabel("Silence between songs")
+                        .accessibilityValue(Format.silence(setting))
                     if let row {
                         ThemeLink(text: summary(row), style: .inline, color: Theme.muted) { router.alarm = .edit(row) }
                             .accessibilityHint("Edit schedule")

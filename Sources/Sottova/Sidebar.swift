@@ -188,10 +188,11 @@ private struct SilenceFoot: View {
     var body: some View {
         Button(action: open) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Between songs").role(.small).foregroundStyle(Theme.muted)
+                Text("Silence between songs").role(.small).foregroundStyle(Theme.muted)
                 HStack(spacing: 4) {
-                    Text(Format.range(controller.settings).replacingOccurrences(of: "–", with: " to "))
+                    Text(Format.silence(controller.settings))
                         .role(.body)
+                        .lineLimit(1)
                         .foregroundStyle(Theme.text)
                     Spacer(minLength: 0)
                     Ph.caretUpDown.icon(.line, size: 11).foregroundStyle(Theme.muted)
@@ -206,7 +207,7 @@ private struct SilenceFoot: View {
         .buttonStyle(.plain)
         .background(AnchorView(view: anchor))
         .accessibilityLabel("Silence between songs")
-        .accessibilityValue("\(controller.settings.name), \(Format.range(controller.settings))")
+        .accessibilityValue(Format.silence(controller.settings))
     }
 
     private func open() {

@@ -262,14 +262,17 @@ enum Format {
         "\(n.formatted()) \(noun)\(n == 1 ? "" : "s")"
     }
 
-    /// The gap range alone, with the unit written once: "10–20 min".
+    /// The gap range alone, with the unit written once: "10 to 20 min", or "6 s crossfade".
     static func range(_ s: SottovaCore.Settings) -> String {
-        if s.crossfade { return "crossfade" }
+        if s.crossfade { return "\(TypedDuration.format(s.crossfadeSec)) crossfade" }
         let low = s.gapRange.lowerBound, high = s.gapRange.upperBound
-        if high < 60 { return "\(Int(low))–\(Int(high)) s" }
-        if low >= 60 { return "\(String(format: "%g", low / 60))–\(String(format: "%g", high / 60)) min" }
-        return "\(Int(low)) s–\(String(format: "%g", high / 60)) min"
+        if high < 60 { return "\(Int(low)) to \(Int(high)) s" }
+        if low >= 60 { return "\(String(format: "%g", low / 60)) to \(String(format: "%g", high / 60)) min" }
+        return "\(Int(low)) s to \(String(format: "%g", high / 60)) min"
     }
+
+    /// Silence between songs, wherever it's summed up: "Sparse, 3 to 8 min".
+    static func silence(_ s: SottovaCore.Settings) -> String { "\(s.name), \(range(s))" }
 }
 
 /// With a mouse plugged in, AppKit gives every scroll view a wide gray scroller that never goes away; on these

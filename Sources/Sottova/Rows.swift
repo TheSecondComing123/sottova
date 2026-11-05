@@ -83,7 +83,7 @@ extension MenuEntry {
     /// preset, and a preset of yours in use can be edited.
     @MainActor static func silence(_ chosen: SottovaCore.Settings?, for collection: (title: String, choose: (SottovaCore.Settings?) -> Void)? = nil,
                                    controller: Controller, router: Router) -> [MenuEntry] {
-        let lengths = { (setting: SottovaCore.Settings) in Format.range(setting).replacingOccurrences(of: "–", with: " to ") }
+        let lengths = Format.range
         let current = collection == nil ? controller.settings : chosen
         var entries: [MenuEntry] = []
         if let collection {
