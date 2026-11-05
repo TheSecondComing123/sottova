@@ -448,9 +448,9 @@ public final class Controller {
         queue.insert(contentsOf: songs.map { QueueEntry(path: $0.id, source: source) }, at: at)
         let what = called(songs.map(\.id)), back = "Took \(what) out of the queue"
         if at == 0 {
-            setQueue(queue, songs.count == 1 ? "Play Next" : "Play \(Self.songsTitle(songs.count)) Next", "Playing \(what) next", back: back)
+            setQueue(queue, songs.count == 1 ? "Play next" : "Play \(Self.songsTitle(songs.count)) next", "Playing \(what) next", back: back)
         } else {
-            setQueue(queue, "Add \(Self.songsTitle(songs.count)) to Queue", "Added \(what) to the queue", back: back)
+            setQueue(queue, "Add \(Self.songsTitle(songs.count)) to queue", "Added \(what) to the queue", back: back)
         }
     }
 
@@ -493,9 +493,9 @@ public final class Controller {
         return catalog.songsByID[path]?.title ?? URL(filePath: path).deletingPathExtension().lastPathComponent
     }
 
-    /// "Song" or "3 Songs", for Edit › Undo.
+    /// "song" or "3 songs", for Edit › Undo.
     private static func songsTitle(_ n: Int) -> String {
-        n == 1 ? "Song" : "\(n) Songs"
+        n == 1 ? "song" : "\(n) songs"
     }
 
     // MARK: Alarms
@@ -1346,7 +1346,7 @@ public final class Controller {
     public func newPlaylist(named name: String = "New collection", songs: [Song] = []) -> String? {
         guard let id = makePlaylist(named: name, songs: songs), let made = playlists.first(where: { $0.id == id })?.name else { return nil }
         undo?.registerUndo(withTarget: self) { $0.unmake(id) }
-        did("New Collection", "Made \(made)", back: "Moved \(made) to the Trash")
+        did("New collection", "Made \(made)", back: "Moved \(made) to the Trash")
         return id
     }
 
@@ -1407,7 +1407,7 @@ public final class Controller {
     /// songs: the parts after a split move up one, and a joined part's rows go to the part it joined.
     public func setBreak(_ on: Bool, at index: Int, in id: String) {
         let name = playlists.first { $0.id == id }?.name ?? ""
-        editParts(id, on ? "New Part" : "Join Parts", on ? "Made a new part in \(name)" : "Joined two parts in \(name)", back: "Put \(name)'s parts back") {
+        editParts(id, on ? "New part" : "Join parts", on ? "Made a new part in \(name)" : "Joined two parts in \(name)", back: "Put \(name)'s parts back") {
             var split: Int?, joined: Int?, parts = 0
             let saved = update(id) { playlist in
                 guard index > 0, index < playlist.paths.count, playlist.breaks.contains(index) != on else { return }
@@ -1438,20 +1438,20 @@ public final class Controller {
         movePlaylistSongs(id, fromOffsets: rows, toOffset: first)
         setBreak(true, at: first, in: id)
         setBreak(true, at: first + rows.count, in: id)
-        undo?.setActionName("New Part")
+        undo?.setActionName("New part")
     }
 
     /// Calls the part starting at this song `name`; an empty name puts its number back.
     public func namePart(_ name: String, at index: Int, in id: String) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let collection = playlists.first { $0.id == id }?.name ?? ""
-        editParts(id, "Rename Part", name.isEmpty ? "Numbered the part again" : "Named the part \(name)", back: "Put \(collection)'s parts back") { update(id) { $0.partNames[index] = name.isEmpty ? nil : name } }
+        editParts(id, "Rename part", name.isEmpty ? "Numbered the part again" : "Named the part \(name)", back: "Put \(collection)'s parts back") { update(id) { $0.partNames[index] = name.isEmpty ? nil : name } }
     }
 
     /// The part keeps being the one its rows play next.
     public func movePart(_ part: Int, to destination: Int, in id: String) {
         let name = playlists.first { $0.id == id }?.name ?? ""
-        editParts(id, "Move Part", "Moved a part of \(name)", back: "Put \(name)'s parts back") {
+        editParts(id, "Move part", "Moved a part of \(name)", back: "Put \(name)'s parts back") {
             var moved: [Int] = []
             guard update(id, { moved = $0.movePart(part, to: destination) }) else { return }
             for i in alarms.indices where alarms[i].source == id && moved.indices.contains(alarms[i].nextPart) {
@@ -1513,7 +1513,7 @@ public final class Controller {
             // a line it couldn't read comes back as it was written
             controller.update(id) { $0.unreadGaps = before.unreadGaps }
         }
-        did("Change Silence", "Changed the silence in \(before.name)", back: "Put back \(before.name)'s silence")
+        did("Change silence", "Changed the silence in \(before.name)", back: "Put back \(before.name)'s silence")
         update(id) {
             $0.gaps = gaps
             $0.unreadGaps = nil
@@ -1526,7 +1526,7 @@ public final class Controller {
     public func setAlbumGaps(_ gaps: Settings?, for album: Album) {
         let before = albumSettings[album.id]
         undo?.registerUndo(withTarget: self) { $0.setAlbumGaps(before, for: album) }
-        did("Change Silence", "Changed the silence in \(album.title)", back: "Put back \(album.title)'s silence")
+        did("Change silence", "Changed the silence in \(album.title)", back: "Put back \(album.title)'s silence")
         albumSettings[album.id] = gaps
     }
 
@@ -1676,7 +1676,7 @@ public final class Controller {
         }
         repointAlarms(from: album.id, to: id)
         undo?.registerUndo(withTarget: self) { $0.unmake(id) }
-        did("Make \(album.title) Yours", "Made \(album.title) yours", back: "\(album.title) is an album again")
+        did("Make \(album.title) yours", "Made \(album.title) yours", back: "\(album.title) is an album again")
         return id
     }
 
@@ -1764,13 +1764,13 @@ public final class Controller {
         var rest = upNext.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
         rest.insert(contentsOf: moving, at: destination - offsets.count { $0 < destination })
         let what = called(moving.map(\.path))
-        setQueue(rest, "Move in Queue", "Moved \(what) in the queue", back: "Put the queue back in its order")
+        setQueue(rest, "Move in queue", "Moved \(what) in the queue", back: "Put the queue back in its order")
     }
 
     public func removeQueued(_ ids: Set<QueueEntry.ID>) {
         let gone = upNext.filter { ids.contains($0.id) }
         let what = called(gone.map(\.path))
-        setQueue(upNext.filter { !ids.contains($0.id) }, "Remove \(Self.songsTitle(gone.count)) from Queue", "Removed \(what) from the queue", back: "Put back \(what)")
+        setQueue(upNext.filter { !ids.contains($0.id) }, "Remove \(Self.songsTitle(gone.count)) from queue", "Removed \(what) from the queue", back: "Put back \(what)")
     }
 
     /// Undo puts back the whole queue as it was, so only while nothing has played from it or joined it since.
@@ -1804,7 +1804,7 @@ public final class Controller {
 
     public func clearQueue() {
         let count = upNext.count == 1 ? "1 song" : "\(upNext.count) songs"
-        setQueue([], "Clear Queue", "Cleared the queue, \(count)", back: "Put back \(count)")
+        setQueue([], "Clear queue", "Cleared the queue, \(count)", back: "Put back \(count)")
     }
 
     /// Songs from one album play with that album's gaps, wherever they were queued from.

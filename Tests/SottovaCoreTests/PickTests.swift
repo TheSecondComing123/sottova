@@ -20,7 +20,7 @@ struct PickTests {
         undo.beginUndoGrouping()
         let id = try #require(c.newPlaylist(named: "Vespers", songs: ["/1", "/2"].map(song)))
         undo.endUndoGrouping()
-        #expect(undo.undoActionName == "New Collection")
+        #expect(undo.undoActionName == "New collection")
         undo.undo()
         #expect(c.playlists.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: id))

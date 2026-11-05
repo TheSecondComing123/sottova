@@ -348,7 +348,7 @@ struct DayPage: View {
                 endMove()
                 if end {
                     guard let length = alarm.length(endingAt: moved.minute), length != alarm.minutes else { return }
-                    controller.changeAlarm(alarm.id, action: "Change End of \(alarm.name)") { $0.minutes = length }
+                    controller.changeAlarm(alarm.id, action: "Change end of \(alarm.name)") { $0.minutes = length }
                 } else {
                     guard moved.minute != start else { return }
                     controller.changeAlarm(alarm.id, action: "Move \(alarm.name)") { $0.move(to: moved.minute) }
@@ -965,7 +965,7 @@ private struct DaysOffField: View {
 
     private func apply(_ daysOff: Set<String>) {
         guard let alarm, daysOff != alarm.daysOff else { return }
-        controller.changeAlarm(id, action: "Days Off") { $0.daysOff = daysOff }
+        controller.changeAlarm(id, action: "Days off") { $0.daysOff = daysOff }
         SystemWake.shared.renew(for: controller.alarms)
     }
 }

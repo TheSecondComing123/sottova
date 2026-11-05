@@ -41,7 +41,7 @@ struct UndoTests {
         let c = Controller(storage: nil, playlistFolder: dir)
         let id = try #require(c.newPlaylist(named: "Compline", songs: ["/m/Weep you no more.flac", "/2", "/3", "/4"].map(song)))
         var undo = undoing(c) { c.removeFromPlaylist(id, at: [0]) }
-        #expect(undo.undoActionName == "Remove Song")
+        #expect(undo.undoActionName == "Remove song")
         #expect(c.notice?.text == "Removed Weep you no more")
         #expect(c.notice?.undoable == true)
         undo.undo()
@@ -51,7 +51,7 @@ struct UndoTests {
         #expect(c.notice?.text == "Removed Weep you no more")
 
         undo = undoing(c) { c.removeFromPlaylist(id, at: [0, 1, 2]) }
-        #expect(undo.undoActionName == "Remove 3 Songs")
+        #expect(undo.undoActionName == "Remove 3 songs")
         #expect(c.notice?.text == "Removed 3 songs from Compline")
         let shown = c.notice?.id
         undo.undo()
@@ -82,7 +82,7 @@ struct UndoTests {
         c.undo = nil
         c.playNext((1...12).map { song("/\($0)") })
         undo = undoing(c) { c.clearQueue() }
-        #expect(undo.undoActionName == "Clear Queue")
+        #expect(undo.undoActionName == "Clear queue")
         #expect(c.notice?.text == "Cleared the queue, 12 songs")
     }
 
@@ -148,7 +148,7 @@ struct UndoTests {
         var id: String?
         let undo = undoing(c) { id = c.makeYours(album) }
         let copy = try #require(id)
-        #expect(undo.undoActionName == "Make Lauds Yours")
+        #expect(undo.undoActionName == "Make Lauds yours")
         #expect(c.alarms.map(\.source) == [copy])
         undo.undo()
         #expect(c.playlists.isEmpty)
@@ -163,12 +163,12 @@ struct UndoTests {
         c.playNext(["/1", "/2"].map(song))
         let queued = c.upNext
         var undo = undoing(c) { c.playNext([song("/m/Ave verum corpus.flac")]) }
-        #expect(undo.undoActionName == "Play Next")
+        #expect(undo.undoActionName == "Play next")
         #expect(c.notice?.text == "Playing Ave verum corpus next")
         undo.undo()
         #expect(c.upNext == queued)
         undo = undoing(c) { c.playNext(["/3", "/4"].map(song), at: c.upNext.count) }
-        #expect(undo.undoActionName == "Add 2 Songs to Queue")
+        #expect(undo.undoActionName == "Add 2 songs to queue")
         #expect(c.notice?.text == "Added 2 songs to the queue")
         _ = c.dequeue()
         let now = c.upNext
@@ -267,7 +267,7 @@ struct UndoTests {
         var next: Int { c.alarms[0].nextPart }
 
         var undo = undoing(c) { c.setBreak(true, at: 2, in: id) }
-        #expect(undo.undoActionName == "New Part")
+        #expect(undo.undoActionName == "New part")
         #expect(p.partPaths == [["/1", "/2"], ["/3", "/4"]])
         undo.undo()
         #expect(p.breaks.isEmpty)
@@ -275,7 +275,7 @@ struct UndoTests {
         #expect(p.breaks == [2])
 
         undo = undoing(c) { c.namePart("Dusk", at: 2, in: id) }
-        #expect(undo.undoActionName == "Rename Part")
+        #expect(undo.undoActionName == "Rename part")
         undo.undo()
         #expect(p.partNames.isEmpty)
         undo.redo()
@@ -283,7 +283,7 @@ struct UndoTests {
 
         // the row plays Dusk next, wherever Dusk goes
         undo = undoing(c) { c.movePart(1, to: 0, in: id) }
-        #expect(undo.undoActionName == "Move Part")
+        #expect(undo.undoActionName == "Move part")
         #expect(p.paths == ["/3", "/4", "/1", "/2"])
         #expect(p.partNames == [0: "Dusk"])
         #expect(next == 0)
@@ -295,7 +295,7 @@ struct UndoTests {
         #expect(next == 0)
 
         undo = undoing(c) { c.setBreak(false, at: 2, in: id) }
-        #expect(undo.undoActionName == "Join Parts")
+        #expect(undo.undoActionName == "Join parts")
         #expect(p.breaks.isEmpty)
         undo.undo()
         #expect(p.breaks == [2])
@@ -378,7 +378,7 @@ struct UndoTests {
         var p: Playlist { c.playlists[0] }
 
         var undo = undoing(c) { c.add([song("/3")], to: first, at: 1) }
-        #expect(undo.undoActionName == "Add Song")
+        #expect(undo.undoActionName == "Add song")
         #expect(p.paths == ["/1", "/3", "/2"])
         undo.undo()
         #expect(p.paths == ["/1", "/2"])
@@ -387,7 +387,7 @@ struct UndoTests {
         #expect(p.paths == ["/1", "/3", "/2"])
 
         undo = undoing(c) { c.movePlaylistSongs(first, fromOffsets: [0], toOffset: 3) }
-        #expect(undo.undoActionName == "Move Song")
+        #expect(undo.undoActionName == "Move song")
         #expect(p.paths == ["/3", "/2", "/1"])
         undo.undo()
         #expect(p.paths == ["/1", "/3", "/2"])
@@ -396,7 +396,7 @@ struct UndoTests {
 
         let minecraft = Settings.presets.first { $0.name == "Minecraft" }!
         undo = undoing(c) { c.setGaps(minecraft, for: first) }
-        #expect(undo.undoActionName == "Change Silence")
+        #expect(undo.undoActionName == "Change silence")
         undo.undo()
         #expect(p.gaps == nil)
         undo.redo()
@@ -420,7 +420,7 @@ struct UndoTests {
         let id = try #require(c.newPlaylist(songs: ["/1", "/2", "/3", "/4", "/5"].map(song)))
         var p: Playlist { c.playlists[0] }
         let undo = undoing(c) { c.newPart(from: [1, 3], in: id) }
-        #expect(undo.undoActionName == "New Part")
+        #expect(undo.undoActionName == "New part")
         #expect(p.partPaths == [["/1"], ["/2", "/4"], ["/3", "/5"]])
         undo.undo()
         #expect(p.paths == ["/1", "/2", "/3", "/4", "/5"])
@@ -445,7 +445,7 @@ struct UndoTests {
         let queued = c.upNext
         let undo = undoing(c) { c.removeQueued([queued[1].id, queued[3].id]) }
         #expect(c.upNext.map(\.path) == ["/1", "/3"])
-        #expect(undo.undoActionName == "Remove 2 Songs from Queue")
+        #expect(undo.undoActionName == "Remove 2 songs from queue")
         undo.undo()
         #expect(c.upNext == queued)
         undo.redo()
@@ -458,7 +458,7 @@ struct UndoTests {
         let queued = c.upNext
         let undo = undoing(c) { c.moveQueued(fromOffsets: [0], toOffset: 3) }
         #expect(c.upNext.map(\.path) == ["/2", "/3", "/1"])
-        #expect(undo.undoActionName == "Move in Queue")
+        #expect(undo.undoActionName == "Move in queue")
         undo.undo()
         #expect(c.upNext == queued)
         undo.redo()
@@ -471,7 +471,7 @@ struct UndoTests {
         let minecraft = Settings.presets.first { $0.name == "Minecraft" }!
         let undo = undoing(c) { c.setAlbumGaps(minecraft, for: album) }
         #expect(c.albumSettings[album.id] == minecraft)
-        #expect(undo.undoActionName == "Change Silence")
+        #expect(undo.undoActionName == "Change silence")
         #expect(c.notice?.text == "Changed the silence in Lauds")
         #expect(c.notice?.undoable == true)
         undo.undo()
