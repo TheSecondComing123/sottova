@@ -62,7 +62,7 @@ extension Controller {
             if let hold, status != .paused { return .waiting(hold) }
             // a row's gap: its name and when it's done, not just the silence
             if let row = soundingRow, let till = dayPlan(now: now).label(of: row.source), till.hasPrefix("till ") {
-                let next = machine.restRemaining.map { $0 < 60 ? "next song in under a minute" : "next song in \(Int(($0 / 60).rounded(.up))) min" }
+                let next = machine.restRemaining.map { $0 < 60 ? "next song in under a minute" : "next song in \(DayPlan.length(minutes: Int(($0 / 60).rounded(.up))))" }
                 return NowScreen(kind: .silence, title: row.name, sub: "\(till), \(status == .paused ? "next song waits for Play" : next ?? "")")
             }
             guard status == .paused else { return NowScreen(kind: .silence, title: "Silence") }
@@ -101,8 +101,7 @@ extension Controller {
         }
         if status != .paused, easing {
             guard case .at(let date)? = sleepTimer else { return "Easing down" }
-            let clock = Calendar.current.dateComponents([.hour, .minute], from: date)
-            return String(format: "Easing down, stops at %d:%02d", ((clock.hour ?? 0) + 11) % 12 + 1, clock.minute ?? 0)
+            return "Easing down, stops at \(DayPlan.fullTime(date))"
         }
         guard let track else { return nil }
         let left = max(0, Int((track.duration - track.elapsed).rounded(.up)))

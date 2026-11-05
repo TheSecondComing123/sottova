@@ -153,13 +153,13 @@ struct DayPlanTests {
         #expect(says(quiet.line, "till 9 PM", "not playing"))
         // what comes after it still shows, and whether the Mac will wake for that
         let after = plan([lauds, compline], date(2, 20, 30)).quiet(wakeScheduled: true)
-        #expect(after.next == "Lauds at 7:02 tomorrow")
+        #expect(after.next == "Lauds at 7:02 AM tomorrow")
         #expect(after.foot == "The Mac will wake for it.")
         // a row starting inside the open hour comes before one after it
-        #expect(plan([overworld, compline, lauds], date(2, 15, 30)).quiet().next == "Compline at 8")
+        #expect(plan([overworld, compline, lauds], date(2, 15, 30)).quiet().next == "Compline at 8 PM")
         var inside = compline
         inside.hour = 17
-        #expect(plan([overworld, inside], date(2, 15, 30)).quiet().next == "Compline at 5")
+        #expect(plan([overworld, inside], date(2, 15, 30)).quiet().next == "Compline at 5 PM")
         // an hour that's off is no window, and past it the next row has the page
         var off = compline
         off.on = false
@@ -263,27 +263,58 @@ struct DayPlanTests {
     }
 
     @Test func whatSoundingLeadsTo() {
-        #expect(plan([lauds, overworld, compline], date(2, 15, 40)).next(sounding: overworld) == "Compline at 8")
-        #expect(plan([lauds, overworld, compline], date(2, 20, 5)).next(sounding: compline) == "Lauds at 7:02 tomorrow")
-        #expect(plan([lauds, overworld, compline], date(2, 7, 5)).next(sounding: lauds) == "Overworld at 3")
-        #expect(plan([overworld], date(2, 15, 40)).next(sounding: overworld) == "Overworld at 3 tomorrow")
+        #expect(plan([lauds, overworld, compline], date(2, 15, 40)).next(sounding: overworld) == "Compline at 8 PM")
+        #expect(plan([lauds, overworld, compline], date(2, 20, 5)).next(sounding: compline) == "Lauds at 7:02 AM tomorrow")
+        #expect(plan([lauds, overworld, compline], date(2, 7, 5)).next(sounding: lauds) == "Overworld at 3 PM")
+        #expect(plan([overworld], date(2, 15, 40)).next(sounding: overworld) == "Overworld at 3 PM tomorrow")
         let once = Alarm(source: "x", name: "Once", hour: 9, minute: 5, day: date(2, 0))
         #expect(plan([once], date(2, 9, 6)).next(sounding: once) == nil)
     }
 
     @Test func aFarDayIsNamed() {
-        #expect(plan([lauds, compline], date(6, 20, 5)).next(sounding: compline) == "Compline at 8 tomorrow")
-        #expect(plan([lauds], date(6, 7, 5)).next(sounding: lauds) == "Lauds at 7:02 Monday")
+        #expect(plan([lauds, compline], date(6, 20, 5)).next(sounding: compline) == "Compline at 8 PM tomorrow")
+        #expect(plan([lauds], date(6, 7, 5)).next(sounding: lauds) == "Lauds at 7:02 AM Monday")
+    }
+
+    @Test func aTimeAloneSaysItsHalfAndNoonIsNoon() {
+        var midday = overworld
+        midday.hour = 12
+        let day = plan([midday], date(2, 9))
+        #expect(day.quiet().line == "noon today")
+        #expect(day.shortHours(of: "overworld") == "noon to 4 PM")
+        #expect(day.firstRow(of: "overworld").map(day.when) == "noon to 4 PM")
+        var once = lauds
+        (once.hour, once.minute) = (12, 0)
+        let single = plan([once], date(2, 9))
+        #expect(single.shortHours(of: "lauds") == "noon weekdays")
+        #expect(single.firstRow(of: "lauds").map(single.when) == "noon")
+        #expect(DayPlan.startText(once, twelveHour: true) == "noon")
+        #expect(DayPlan.startText(lauds, twelveHour: false) == "7:02")
+        var late = compline
+        (late.hour, late.minutes) = (22, 120)
+        let night = plan([late], date(2, 9))
+        #expect(night.firstRow(of: "compline").map(night.when) == "10 PM to midnight")
+        let evening = date(2, 20, 40)
+        #expect(DayPlan.fullTime(evening, calendar: calendar, twelveHour: true) == "8:40 PM")
+        #expect(DayPlan.fullTime(evening, calendar: calendar, twelveHour: false) == "20:40")
+        #expect(plan([lauds, compline], date(2, 20, 5), twelveHour: false).next(sounding: compline) == "Lauds at 7:02 tomorrow")
+    }
+
+    @Test func lengthsHaveOneShape() {
+        #expect(DayPlan.length(minutes: 45) == "45 min")
+        #expect(DayPlan.length(minutes: 60) == "1 h")
+        #expect(DayPlan.length(minutes: 90) == "1 h 30 min")
+        #expect(DayPlan.length(minutes: 0) == "0 min")
     }
 
     @Test func whatNowSaysInSilenceOfTheDay() {
         #expect(plan([], date(2, 12)).quiet() == .init(headline: "Nothing on your day", line: "", foot: nil))
         #expect(plan([lauds, overworld, compline], date(2, 12)).quiet() == .init(headline: "Overworld", line: "3 PM today", foot: nil))
-        #expect(plan([lauds, overworld, compline], date(2, 22)).quiet(wakeScheduled: true) == .init(headline: "Lauds", line: "7:02 tomorrow", foot: "The Mac will wake for it."))
+        #expect(plan([lauds, overworld, compline], date(2, 22)).quiet(wakeScheduled: true) == .init(headline: "Lauds", line: "7:02 AM tomorrow", foot: "The Mac will wake for it."))
         #expect(plan([lauds], date(2, 22)).quiet().foot == nil)
         #expect(plan([overworld], date(2, 22)).quiet(wakeScheduled: true).foot == nil)
-        #expect(plan([lauds], date(8, 12)).quiet(wakeScheduled: true) == .init(headline: "Lauds", line: "7:02 tomorrow", foot: "The Mac will wake for it."))
-        #expect(plan([lauds], date(7, 12)).quiet().line == "7:02 Monday")
+        #expect(plan([lauds], date(8, 12)).quiet(wakeScheduled: true) == .init(headline: "Lauds", line: "7:02 AM tomorrow", foot: "The Mac will wake for it."))
+        #expect(plan([lauds], date(7, 12)).quiet().line == "7:02 AM Monday")
     }
 
     @Test func nothingSoundingHasThePaintingOfTheRowItNames() {
@@ -314,8 +345,8 @@ struct DayPlanTests {
         var row = lauds
         row.missed = Alarm.Missed(at: date(2, 7, 2), why: .off)
         let today = plan([row, overworld], date(2, 12))
-        #expect(today.missedToday(row) == "Missed at 7:02. The Mac was off.")
-        #expect(today.quiet().foot == "Missed Lauds at 7:02. The Mac was off.")
+        #expect(today.missedToday(row) == "Missed at 7:02 AM. The Mac was off.")
+        #expect(today.quiet().foot == "Missed Lauds at 7:02 AM. The Mac was off.")
         #expect(today.quiet().line == "3 PM today")
         let tomorrow = plan([row, overworld], date(3, 12))
         #expect(tomorrow.missedToday(row) == nil)
@@ -325,7 +356,7 @@ struct DayPlanTests {
     @Test func backToBackRowsFollowEachOther() {
         var next = compline
         next.hour = 19
-        #expect(plan([overworld, next], date(2, 15, 40)).next(sounding: overworld) == "Compline at 7")
+        #expect(plan([overworld, next], date(2, 15, 40)).next(sounding: overworld) == "Compline at 7 PM")
     }
 
     @Test func twoRowsStartingTogetherDontBothClaimTheTime() {
@@ -347,7 +378,7 @@ struct DayPlanTests {
         var off = Alarm(source: "off", name: "Off", hour: 9, minute: 0, weekdays: Set(1...7))
         off.on = false
         let day = plan([lauds, overworld, compline, noon, off])
-        #expect(day.shortHours(of: "lauds") == "7:02 weekdays")
+        #expect(day.shortHours(of: "lauds") == "7:02 AM weekdays")
         #expect(says(day.shortHours(of: "overworld"), "3", "7 PM"))
         #expect(day.firstRow(of: "compline").map(day.when) == "8 to 9 PM")
         #expect(says(day.firstRow(of: "lauds").map(day.when), "7:02"))
@@ -481,7 +512,7 @@ struct DayPlanTests {
         #expect(plan([off(lauds, ["2026-11-03"])], date(2, 12)).label(of: "lauds") == "7:02 AM Wed")
         #expect(plan([off(lauds, (3...30).map { "2026-11-\(String(format: "%02d", $0))" })], date(2, 12)).label(of: "lauds") == "7:02 AM Dec 1")
         #expect(plan([off(lauds, ["2026-11-04"])], date(2, 12)).label(of: "lauds") == "7:02 AM")
-        #expect(plan([off(lauds, ["2026-11-03"])], date(2, 22)).quiet().line == "7:02 Wednesday")
+        #expect(plan([off(lauds, ["2026-11-03"])], date(2, 22)).quiet().line == "7:02 AM Wednesday")
     }
 
     @Test func whatsHappeningTakesTheLine() {
@@ -490,13 +521,13 @@ struct DayPlanTests {
         morning.missed = Alarm.Missed(at: date(2, 7, 2), why: .off)
         let day = plan([morning, overworld], date(2, 12))
         let row = day.rows[0]
-        #expect(text(day.line(for: row, nextPart: nil)) == "Missed at 7:02. The Mac was off. · Play it now")
+        #expect(text(day.line(for: row, nextPart: nil)) == "Missed at 7:02 AM. The Mac was off. · Play it now")
         #expect(day.line(for: row, nextPart: nil).last?.word == .playNow)
         #expect(says(text(day.line(for: row, nextPart: nil, rising: true)), "Rising", "25%", "shuffled"))
         #expect(says(text(day.line(for: day.rows[1], nextPart: nil, waiting: .call)), "Waiting", "call"))
         #expect(text(day.line(for: day.rows[1], nextPart: nil, cantWake: true)) == "The Mac won't wake for this. · Wake it")
         // a miss today mustn't hide that the next one can't wake either
-        #expect(text(day.line(for: row, nextPart: nil, cantWake: true)) == "Missed at 7:02. The Mac was off. · Play it now · The Mac won't wake for the next one. · Wake it")
+        #expect(text(day.line(for: row, nextPart: nil, cantWake: true)) == "Missed at 7:02 AM. The Mac was off. · Play it now · The Mac won't wake for the next one. · Wake it")
         #expect(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: true)) == "The Mac won't wake for this. · Wake it")
         #expect(says(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: false)), "While you're at the Mac", "in order"))
     }

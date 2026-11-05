@@ -733,9 +733,9 @@ public final class Controller {
         let alarm = alarms[index]
         var played = false
         if late {
-            problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(due.formatted(date: .omitted, time: .shortened))"
+            problem = "the \(alarm.name) alarm didn't play: the mac was asleep at \(DayPlan.fullTime(due))"
         } else if alarm.heedsCalendar, calendarBusy() {
-            problem = "\(alarm.name) didn't play at \(due.formatted(date: .omitted, time: .shortened)): your calendar had something on"
+            problem = "\(alarm.name) didn't play at \(DayPlan.fullTime(due)): your calendar had something on"
         } else if case let songs = rowSongs(alarm), !songs.isEmpty {
             played = true
             let playlist = playlists.contains { $0.id == alarm.source } ? alarm.source : nil
@@ -755,7 +755,7 @@ public final class Controller {
         }
         // one player: any other due now doesn't play, and says so
         for (other, at) in played ? dueAlarms(now: now) : [] {
-            problem = "\(other.name) didn't play at \(at.formatted(date: .omitted, time: .shortened)): \(alarm.name) was starting"
+            problem = "\(other.name) didn't play at \(DayPlan.fullTime(at)): \(alarm.name) was starting"
             if let i = alarms.firstIndex(where: { $0.id == other.id }) { alarms[i].lastFired = at }
         }
         alarms.removeAll { $0.weekdays.isEmpty && !$0.whileHere && $0.lastFired != nil }

@@ -237,8 +237,7 @@ enum Format {
 
     /// Whole minutes, rounded up: "45 min", "1 h", "1 h 30 min".
     static func minutes(_ seconds: Double) -> String {
-        let m = max(1, Int((seconds / 60).rounded(.up)))
-        return m < 60 ? "\(m) min" : m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) min"
+        DayPlan.length(minutes: max(1, Int((seconds / 60).rounded(.up))))
     }
 
     /// What the sleep timer has left, for the moon's label, or after "stops" in a sentence.
@@ -253,10 +252,7 @@ enum Format {
         return sentence ? "in \(minutes(left))" : minutes(left)
     }
 
-    static func length(_ seconds: Double) -> String {
-        let minutes = Int((seconds / 60).rounded())
-        return minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
-    }
+    static func length(_ seconds: Double) -> String { DayPlan.length(minutes: Int((seconds / 60).rounded())) }
 
     static func count(_ n: Int, _ noun: String) -> String {
         "\(n.formatted()) \(noun)\(n == 1 ? "" : "s")"

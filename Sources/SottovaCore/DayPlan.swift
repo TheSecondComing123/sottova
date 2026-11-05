@@ -40,7 +40,7 @@ public struct DayPlan: Sendable {
     private static let breakHours = 2.0
 
     public init(alarms: [Alarm], now: Date = .now, lengths: [Alarm.ID: TimeInterval] = [:], calendar: Calendar = .current,
-                twelveHour: Bool = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? true, wholeDay: Bool = false) {
+                twelveHour: Bool = DayPlan.systemTwelveHour, wholeDay: Bool = false) {
         (self.alarms, self.now, self.calendar, self.twelveHour) = (alarms, now, calendar, twelveHour)
         let spans: [(alarm: Alarm, start: Date, end: Date)] = alarms.compactMap { alarm in
             let weekday = calendar.component(.weekday, from: now)
@@ -127,21 +127,21 @@ public struct DayPlan: Sendable {
         following(after: (row.window(containing: now, calendar: calendar)?.end ?? now) - 1).map(nextLine)
     }
 
-    /// "Compline at 8", "Lauds at 7:02 tomorrow"
+    /// "Compline at 8 PM", "Lauds at 7:02 AM tomorrow"
     private func nextLine(_ next: (alarm: Alarm, at: Date)) -> String {
-        "\(next.alarm.name) at \(time(next.at))\(calendar.isDate(next.at, inSameDayAs: now) ? "" : dayName(next.at))"
+        "\(next.alarm.name) at \(fullTime(next.at))\(calendar.isDate(next.at, inSameDayAs: now) ? "" : dayName(next.at))"
     }
 
-    /// On its row: "Missed at 7:02. The Mac was off."
+    /// On its row: "Missed at 7:02 AM. The Mac was off."
     public func missedToday(_ row: Alarm) -> String? {
         guard let missed = row.missed, calendar.isDate(missed.at, inSameDayAs: now) else { return nil }
-        return "Missed at \(time(missed.at)). \(missed.reason)"
+        return "Missed at \(fullTime(missed.at)). \(missed.reason)"
     }
 
     private var missedLine: String? {
         rows.compactMap { row in row.alarm.missed.flatMap { calendar.isDate($0.at, inSameDayAs: now) ? ($0, row.alarm.name) : nil } }
             .max { $0.0.at < $1.0.at }
-            .map { "Missed \($0.1) at \(time($0.0.at)). \($0.0.reason)" }
+            .map { "Missed \($0.1) at \(fullTime($0.0.at)). \($0.0.reason)" }
     }
 
     /// Nothing sounding. `wakeScheduled` is whether the Mac will wake for the next one: only then can it say so. A miss
@@ -164,13 +164,9 @@ public struct DayPlan: Sendable {
         return Quiet(headline: next.alarm.name, line: when(next.at), foot: foot(next))
     }
 
-    /// "3 PM today", "7:02 tomorrow", "7:02 Monday"
+    /// "3 PM today", "7:02 AM tomorrow", "7:02 AM Monday"
     private func when(_ date: Date) -> String {
-        let clock = calendar.dateComponents([.hour, .minute], from: date)
-        let bare = time(date)
-        // as the sidebar has it: 7:02 alone reads as morning
-        let halved = clock.minute == 0 && twelveHour ? "\(bare) \((clock.hour ?? 0) < 12 ? "AM" : "PM")" : bare
-        return halved + (calendar.isDate(date, inSameDayAs: now) ? " today" : dayName(date))
+        fullTime(date) + (calendar.isDate(date, inSameDayAs: now) ? " today" : dayName(date))
     }
 
     /// The collection Now's words name when nothing's sounding, for its painting.
@@ -342,18 +338,14 @@ public struct DayPlan: Sendable {
         Date.FormatStyle(locale: Locale(identifier: "en_US"), timeZone: calendar.timeZone)
     }
 
-    /// Under a collection in the grid: "7:02 weekdays", "3 to 7 PM". Nil if it has no row on.
+    /// Under a collection in the grid: "7:02 AM weekdays", "3 to 7 PM". Nil if it has no row on.
     public func shortHours(of source: String) -> String? {
-        firstRow(of: source).map { row in
-            // 7:02 alone reads as morning; anything else says which
-            let noon = twelveHour && (row.hour >= 12 || row.minute == 0) ? row.hour < 12 ? " AM" : " PM" : ""
-            return row.minutes == nil ? "\(clockTime(row))\(noon) \(days(row).lowercased())" : span(row)
-        }
+        firstRow(of: source).map { row in row.minutes == nil ? "\(when(row)) \(days(row).lowercased())" : span(row) }
     }
 
     /// On a collection's page, before the row's words: "7:02 AM" or "8 to 9 PM".
     public func when(_ row: Alarm) -> String {
-        row.minutes == nil ? "\(clockTime(row))\(twelveHour ? row.hour < 12 ? " AM" : " PM" : "")" : span(row)
+        row.minutes == nil ? railTime(hour: row.hour, minute: row.minute, full: true) : span(row)
     }
 
     /// The row a collection's page speaks for. Nil if it has no row on.
@@ -361,17 +353,12 @@ public struct DayPlan: Sendable {
         alarms.filter { $0.on && $0.source == source }.min { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
     }
 
-    private func clockTime(_ row: Alarm) -> String {
-        Self.time(hour: row.hour, minute: row.minute, twelveHour: twelveHour)
-    }
-
-    /// "8 to 9 PM", "11 AM to 1 PM"; "15:00 to 19:00" on a 24-hour clock.
+    /// "8 to 9 PM", "11 AM to 1 PM", "noon to 4 PM"; "15:00 to 19:00" on a 24-hour clock.
     private func span(_ row: Alarm) -> String {
         let end = (row.hour * 60 + row.minute + (row.minutes ?? 0)) % (24 * 60)
-        let last = Self.time(hour: end / 60, minute: end % 60, twelveHour: twelveHour)
-        guard twelveHour else { return "\(clockTime(row)) to \(last)" }
-        let noon = { (hour: Int) in hour < 12 ? "AM" : "PM" }
-        return noon(row.hour) == noon(end / 60) ? "\(clockTime(row)) to \(last) \(noon(end / 60))" : "\(clockTime(row)) \(noon(row.hour)) to \(last) \(noon(end / 60))"
+        // one half of the day is said once, at the end
+        let sameHalf = (row.hour < 12) == (end / 60 < 12)
+        return "\(railTime(hour: row.hour, minute: row.minute, full: !sameHalf)) to \(railTime(hour: end / 60, minute: end % 60, full: true))"
     }
 
     fileprivate func days(_ row: Alarm) -> String {
@@ -399,15 +386,16 @@ public struct DayPlan: Sendable {
     }
 
     /// "7 PM", where `time` would say "7": alone on a line, a time says which half of the day.
-    private func fullTime(_ date: Date) -> String {
+    private func fullTime(_ date: Date) -> String { Self.fullTime(date, calendar: calendar, twelveHour: twelveHour) }
+
+    /// A time alone, as everywhere else says it: "8:40 PM", "noon", or "20:40" on a 24-hour clock.
+    public static func fullTime(_ date: Date, calendar: Calendar = .current, twelveHour: Bool = systemTwelveHour) -> String {
         let clock = calendar.dateComponents([.hour, .minute], from: date)
-        return railTime(hour: clock.hour ?? 0, minute: clock.minute ?? 0, full: true)
+        return railTime(hour: clock.hour ?? 0, minute: clock.minute ?? 0, full: true, twelveHour: twelveHour)
     }
 
-    private func time(_ date: Date) -> String {
-        let clock = calendar.dateComponents([.hour, .minute], from: date)
-        return Self.time(hour: clock.hour ?? 0, minute: clock.minute ?? 0, twelveHour: twelveHour)
-    }
+    /// The system's 12- or 24-hour setting.
+    public static var systemTwelveHour: Bool { DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? true }
 
     /// "3", "7:02"; "15:00" on a 24-hour clock.
     fileprivate static func time(hour: Int, minute: Int, twelveHour: Bool) -> String {
@@ -489,9 +477,8 @@ extension DayPlan {
     private static func percent(_ level: Double) -> String { "\(Int((level * 100).rounded()))%" }
 
     /// "7:02 AM" for a row with no place on today's rail.
-    public static func startText(_ alarm: Alarm, twelveHour: Bool = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? true) -> String {
-        let bare = time(hour: alarm.hour, minute: alarm.minute, twelveHour: twelveHour)
-        return twelveHour ? "\(bare) \(alarm.hour < 12 ? "AM" : "PM")" : bare
+    public static func startText(_ alarm: Alarm, twelveHour: Bool = systemTwelveHour) -> String {
+        railTime(hour: alarm.hour, minute: alarm.minute, full: true, twelveHour: twelveHour)
     }
 
     /// "7:02" in What played, where 3 alone would look like a count.
@@ -673,17 +660,20 @@ extension DayPlan {
                     }, positions: positions)
     }
 
-    /// "6 h 49 min", "7 h"
-    private static func length(_ hours: Double) -> String {
-        let minutes = Int((hours * 60).rounded())
-        return minutes % 60 == 0 ? "\(minutes / 60) h" : "\(minutes / 60) h \(minutes % 60) min"
+    private static func length(_ hours: Double) -> String { length(minutes: Int((hours * 60).rounded())) }
+
+    /// Every length the app shows: "45 min", "7 h", "6 h 49 min".
+    public static func length(minutes: Int) -> String {
+        minutes < 60 ? "\(minutes) min" : minutes % 60 == 0 ? "\(minutes / 60) h" : "\(minutes / 60) h \(minutes % 60) min"
     }
 
+    private func railTime(hour: Int, minute: Int, full: Bool) -> String { Self.railTime(hour: hour, minute: minute, full: full, twelveHour: twelveHour) }
+
     /// "7:02 AM", "noon"; `full` says which half of the day, otherwise "8:11" or "3". A 24-hour clock has no halves.
-    private func railTime(hour: Int, minute: Int, full: Bool) -> String {
+    private static func railTime(hour: Int, minute: Int, full: Bool, twelveHour: Bool) -> String {
         if twelveHour, minute == 0, hour % 24 == 12 { return "noon" }
         if twelveHour, minute == 0, hour % 24 == 0 { return "midnight" }
-        let bare = Self.time(hour: hour % 24, minute: minute, twelveHour: twelveHour)
+        let bare = time(hour: hour % 24, minute: minute, twelveHour: twelveHour)
         return twelveHour && full ? "\(bare) \(hour % 24 < 12 ? "AM" : "PM")" : bare
     }
 }

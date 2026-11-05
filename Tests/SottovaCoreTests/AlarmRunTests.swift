@@ -528,7 +528,7 @@ struct AlarmRunTests {
         c.addAlarm(row)
         c.addAlarm(other)
         c.fire(row.id, due: due)
-        #expect(c.problem?.contains("Compline didn't play") == true)
+        #expect(c.problem?.contains("Compline didn't play at \(DayPlan.fullTime(due)):") == true)
         #expect(c.alarms.allSatisfy { $0.lastFired == due })
     }
 

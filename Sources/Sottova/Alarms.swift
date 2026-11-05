@@ -299,8 +299,7 @@ struct AlarmSheet: View {
             return "its own \(cut.count) parts, \(next)"
         }
         let total: Double = cut.joined().reduce(0) { $0 + $1.duration }
-        let minutes = Int((total / Double(cut.count) / 60).rounded())
-        return "about \(minutes) min each, \(next)"
+        return "about \(Format.length(total / Double(cut.count))) each, \(next)"
     }
 
     /// The order, the calendar, the parts, and the volume it plays at.

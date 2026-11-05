@@ -43,7 +43,7 @@ struct TrimSheet: View {
             }
 
             HStack(spacing: 8) {
-                Text("plays \(Self.clock(end - start)) of \(Self.clock(length)), from the next time it starts")
+                Text("plays \(Format.time(end - start)) of \(Format.time(length)), from the next time it starts")
                     .foregroundStyle(Theme.faint)
                 if start > 0 || end < length {
                     ThemeLink(text: "keep all of it", color: Theme.text) {

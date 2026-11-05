@@ -68,6 +68,16 @@ struct NowScreenTests {
         #expect(c.nowScreen().third?.hasSuffix("left") == true)
     }
 
+    @Test func easingSaysWhenItStopsAsTheClockDoes() async throws {
+        let (c, _) = try await playing()
+        c.advance(20)
+        c.sleep(minutes: 1)
+        c.advance(55)
+        #expect(c.easing)
+        guard case .at(let date)? = c.sleepTimer else { Issue.record("no time to stop at"); return }
+        #expect(c.nowScreen().third == "Easing down, stops at \(DayPlan.fullTime(date))")
+    }
+
     @Test func silenceLeavesSkipToTheTitleBar() async throws {
         let (c, _) = try await playing()
         while c.status != .resting { c.advance(0.5) }

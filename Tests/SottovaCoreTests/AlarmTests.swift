@@ -68,6 +68,7 @@ struct AlarmTests {
         let due = Date.now.addingTimeInterval(-11 * 60)
         c.fire(alarm.id, due: due)
         #expect(c.problem?.hasPrefix("the A alarm didn't play") == true)
+        #expect(c.problem?.hasSuffix("asleep at \(DayPlan.fullTime(due))") == true)
         #expect(c.status == .idle)
     }
 
