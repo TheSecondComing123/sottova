@@ -53,6 +53,8 @@ extension Theme {
     static let buttonHover = text.opacity(0.24)
     static let stroke = text.opacity(0.12)
     static let frame = text.opacity(0.20)
+    /// The ring on a field that has the keys, from `.focus` in the mock.
+    static let focus = primary.opacity(0.55)
     /// The outline that keeps a painting's edge on any ground.
     static let artEdge = Color(white: 0.5, opacity: 0.28)
     static let knob = Color(nsColor: NSColor(name: nil) { appearance in
@@ -261,7 +263,20 @@ struct FieldLook: ViewModifier {
             .background(.black.opacity(scheme == .dark ? 0.18 : 0.05), in: .rect(cornerRadius: Radius.small))
             .overlay {
                 RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.frame, lineWidth: 0.5)
-                if focused { RoundedRectangle(cornerRadius: Radius.small).stroke(Theme.primary.opacity(0.55), lineWidth: 2.5).padding(-1.25) }
+                if focused { RoundedRectangle(cornerRadius: Radius.small).stroke(Theme.focus, lineWidth: 2.5).padding(-1.25) }
+            }
+    }
+}
+
+extension View {
+    /// The ground of a search field: the Songs filter, the cover search and Add songs. `shown` is false for a field
+    /// that shows itself only under the pointer; `focused` rings it, for a field that doesn't draw its own ring.
+    func fieldGround(focused: Bool = false, shown: Bool = true) -> some View {
+        frame(height: 28)
+            .background(Theme.raised.opacity(shown ? 1 : 0), in: .rect(cornerRadius: Radius.small))
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.frame, lineWidth: 0.5).opacity(shown ? 1 : 0)
+                RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.focus, lineWidth: 1).opacity(focused ? 1 : 0)
             }
     }
 }

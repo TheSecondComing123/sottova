@@ -181,9 +181,7 @@ struct CoverPicker: View {
                 .disabled(searching || query.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.horizontal, 12)
-        .frame(height: 32)
-        .background(Theme.raised, in: .rect(cornerRadius: Radius.medium))
-        .overlay(RoundedRectangle(cornerRadius: Radius.medium).strokeBorder(typing ? Theme.muted : Theme.border))
+        .fieldGround(focused: typing)
     }
 
     private var status: String {

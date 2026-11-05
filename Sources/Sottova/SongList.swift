@@ -294,9 +294,7 @@ struct SongList: View {
                         Spacer(minLength: 0)
                         SearchField(text: $router.songFilter, prompt: "Filter songs", focusAsks: focusAsks) { router.typing = $0 }
                             .padding(.horizontal, 6)
-                            .frame(height: 26)
-                            .background(Theme.raised, in: .rect(cornerRadius: Radius.small))
-                            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.frame, lineWidth: 0.5) }
+                            .fieldGround()
                             .frame(width: narrow ? 180 : 220)
                     }
                     .padding(.bottom, 19)

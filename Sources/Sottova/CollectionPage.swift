@@ -741,13 +741,9 @@ private struct AddSongs: View {
                 // on the rows' text column, the glass in the gutter before it, as the Songs filter has
                 .padding(.leading, 22)
                 .padding(.trailing, 12)
-                .frame(height: 28)
+                .fieldGround(focused: focused, shown: focused || hovering || alone)
                 .overlay(alignment: .leading) {
                     Ph.magnifyingGlass.icon(size: 12).foregroundStyle(Theme.faint).padding(.leading, 5).allowsHitTesting(false)
-                }
-                .background(Theme.selection.opacity(focused || hovering ? 1 : alone ? 0.5 : 0), in: .rect(cornerRadius: Radius.small))
-                .overlay {
-                    RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.muted, lineWidth: 1).opacity(focused ? 1 : 0)
                 }
                 .contentShape(.rect)
                 .onHover { hovering = $0 }
