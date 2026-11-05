@@ -18,7 +18,7 @@ enum AlarmRequest: Identifiable {
     }
 }
 
-/// "Start at…": a time, once or on repeat, for a collection to start by itself; or a stretch of the day when it plays
+/// "Schedule music…": a time, once or on repeat, for a collection to start by itself; or a stretch of the day when it plays
 /// now and then while you're at the Mac.
 struct AlarmSheet: View {
     let request: AlarmRequest

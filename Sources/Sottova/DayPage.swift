@@ -379,7 +379,7 @@ struct DayPage: View {
                 if let minute = empty(point) { router.alarm = .newAt(minute) }
             }
             .sottovaMenu {
-                adding.map { minute in [.item("New Row at \(plan.timeText(minute: minute))…") { router.alarm = .newAt(minute) }] } ?? []
+                adding.map { minute in [.item("Schedule music at \(plan.timeText(minute: minute))…") { router.alarm = .newAt(minute) }] } ?? []
             }
     }
 
@@ -543,9 +543,9 @@ struct MusicChoices: View {
                 HStack(spacing: 12) {
                     if showPlay {
                         ThemeButton(title: "Play", primary: true) { controller.playCollection(choice.songs, source: choice.source) }
-                        ThemeLink(text: "Schedule…") { router.alarm = .new(choice.target) }
+                        ThemeLink(text: "Schedule music…") { router.alarm = .new(choice.target) }
                     } else {
-                        ThemeButton(title: "Schedule…", primary: true) { router.alarm = .new(choice.target) }
+                        ThemeButton(title: "Schedule music…", primary: true) { router.alarm = .new(choice.target) }
                         ThemeLink(text: "Open collections") { navigate(.collections) }
                     }
                 }

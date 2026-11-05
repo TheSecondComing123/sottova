@@ -299,7 +299,7 @@ struct SottovaCommands: Commands {
             MenuEntries(entries: songEntries)
         }
         CommandMenu("Day") {
-            Button("New…") {
+            Button("Schedule music…") {
                 openWindow(id: "main")
                 router.alarm = .new(nil)
             }
@@ -325,7 +325,7 @@ struct SottovaCommands: Commands {
             },
             .divider,
         ]
-        let off = ["Play", "Shuffle", "Play next", "Add to collection", "Add songs", "New part from selection", "Rename", "Choose cover…", "Start at…",
+        let off = ["Play", "Shuffle", "Play next", "Add to collection", "Add songs", "New part from selection", "Rename", "Choose cover…", "Schedule music…",
                    "Silence between songs", "Show in Finder", "Move to Trash"]
             .map { MenuEntry.item($0, enabled: false) {} }
         guard router.presetEdit == nil else { return new + off }

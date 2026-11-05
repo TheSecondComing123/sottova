@@ -1063,7 +1063,7 @@ struct CollectionGrid: View {
         HStack(alignment: .center) {
             Text("Collections").role(.title).offset(y: -2).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
             Spacer(minLength: 16)
-            ThemeButton(title: "New", icon: .plus, iconWeight: .bold) {
+            ThemeButton(title: "New collection", icon: .plus, iconWeight: .bold) {
                 guard let id = controller.newPlaylist() else { return }
                 renaming.wrappedValue = id
                 navigate(.playlist(id))

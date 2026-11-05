@@ -282,7 +282,7 @@ private struct CalendarRow: View {
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Sottova can't read your calendars").role(.body).foregroundStyle(Theme.text)
-                        Text("Rows can't wait for a busy calendar until you allow it.").role(.small).foregroundStyle(Theme.muted)
+                        Text("Music can't wait for a busy calendar until you allow it.").role(.small).foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 0)
                     ThemeButton(title: "Open Privacy settings") {

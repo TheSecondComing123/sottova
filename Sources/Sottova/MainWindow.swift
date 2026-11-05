@@ -88,7 +88,7 @@ struct MainWindow: View {
                 controller.trashPlaylist(id)
             }
         } message: {
-            Text("Its rows on Your day go too: they'd have nothing to play.")
+            Text("Its hours on Your day go too: they'd have nothing to play.")
         }
         // at the window, never inside a lazy row that could be recycled with the sheet open
         .sheet(item: Binding(get: { router.coverFor }, set: { router.coverFor = $0 })) { CoverPicker(target: $0) }

@@ -129,7 +129,7 @@ extension MenuEntry {
         return playing(album.songs, controller: controller, router: router) + goToArtist + [
             .divider,
             .item("Choose cover…") { router.coverFor = .album(album.id) },
-            .item("Start at…") { router.alarm = .new(.album(album.id)) },
+            .item("Schedule music…") { router.alarm = .new(.album(album.id)) },
             .item("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } },
             .submenu("Silence between songs", silence),
         ]
@@ -179,7 +179,7 @@ extension MenuEntry {
                 navigate(.playlist(playlist.id))
             },
             .item("Choose cover…") { router.coverFor = .playlist(playlist.id) },
-            .item("Start at…", enabled: !songs.isEmpty) { router.alarm = .new(.playlist(playlist.id)) },
+            .item("Schedule music…", enabled: !songs.isEmpty) { router.alarm = .new(.playlist(playlist.id)) },
             .submenu("Silence between songs", silence),
             .item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
             .divider,

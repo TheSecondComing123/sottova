@@ -458,7 +458,7 @@ struct PickActions: View {
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Text("Add to").role(.body).foregroundStyle(Theme.muted)
+                    Text("Add to collection").role(.body).foregroundStyle(Theme.muted)
                     Ph.caretDown.icon(.bold, size: 8).foregroundStyle(Theme.muted)
                 }
                 .padding(.horizontal, 4)
