@@ -303,22 +303,35 @@ public final class Controller {
     public func deletePreset(_ name: String) {
         guard let i = customPresets.firstIndex(where: { $0.name == name }) else { return }
         // collections' silence undoes itself, through setGaps
-        let albums = albumSettings.filter { $0.value.name == name }
-        let own = ownSettings?.name == name ? ownSettings : nil
-        let inUse = settings.name == name
+        let albums = albumSettings.keys.filter { albumSettings[$0]?.name == name }
+        // yours, and not what a playing album lays over it
+        let yours = yourSettings.name == name
         let preset = customPresets.remove(at: i)
         everyoneOn(name) {
             var s = $0
             s.name = "Custom"
             return s
         }
-        if inUse { settings.name = "Custom" }
+        if settings.name == name { settings.name = "Custom" }
+        saveProfile()
         undo?.registerUndo(withTarget: self) { controller in
+            // the Custom copy this made gets its name back; a change since stays as it is
+            func named(_ s: Settings) -> Settings? {
+                var back = s
+                back.name = name
+                return s.name == "Custom" && preset.gaps(over: s) == back ? back : nil
+            }
             // first: settings named for a preset that isn't there turn Custom
             controller.customPresets.insert(preset, at: min(i, controller.customPresets.count))
-            for (id, album) in albums { controller.albumSettings[id] = album }
-            if let own { controller.ownSettings = own }
-            if inUse { controller.settings.name = name }
+            for id in albums { if let back = controller.albumSettings[id].flatMap(named) { controller.albumSettings[id] = back } }
+            if yours {
+                if let own = controller.ownSettings, controller.settings == controller.albumApplied {
+                    controller.ownSettings = named(own) ?? own
+                } else if let back = named(controller.settings) {
+                    controller.settings = back
+                }
+            }
+            controller.saveProfile()
             controller.undo?.registerUndo(withTarget: controller) { $0.deletePreset(name) }
         }
         did("Delete \(name)", "Deleted \(name)", back: "Put back \(name)")

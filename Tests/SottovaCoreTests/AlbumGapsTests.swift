@@ -56,6 +56,51 @@ struct AlbumGapsTests {
         #expect(c.albumSettings["compline"]?.gapRange == 60...200)
     }
 
+    /// Undo while a collection plays with the preset: the collection gets it back, and your own silence stays yours.
+    @Test func undoingAPresetDeleteDuringItsCollectionLeavesYourOwnSilenceAlone() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-album-gaps-\(UUID().uuidString)")
+        let c = Controller(storage: dir, playlistFolder: dir.appending(path: "collections"))
+        c.settings = sparse
+        var night = minecraft
+        (night.name, night.gapMax) = ("Night", 2000)
+        c.customPresets = [night]
+        let song = Song(id: "/1", title: "t", work: "t", detail: nil, artist: "p", album: "a", albumID: "a", albumArtist: "",
+                        composer: nil, trackNumber: nil, discNumber: nil, year: nil, duration: 60, artwork: nil, searchKey: "/1")
+        let id = try #require(c.newPlaylist(named: "Compline", songs: [song]))
+        c.setGaps(night, for: id)
+        c.useAlbumSettings(for: id)
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        c.undo = undo
+        undo.beginUndoGrouping()
+        c.deletePreset("Night")
+        undo.endUndoGrouping()
+        undo.undo()
+        #expect(c.settings.name == "Night")
+        #expect(c.yourSettings.name == "Sparse")
+        c.useAlbumSettings(for: nil)
+        #expect(c.settings.name == "Sparse")
+    }
+
+    /// Your own silence on the preset, put back while an album plays over it, is what a relaunch finds.
+    @Test func undoingAPresetDeleteUnderAnAlbumIsSaved() throws {
+        let (c, dir) = controller()
+        var night = sparse
+        (night.name, night.gapMax) = ("Night", 900)
+        c.savePreset(night)
+        c.useAlbumSettings(for: "compline")
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        c.undo = undo
+        undo.beginUndoGrouping()
+        c.deletePreset("Night")
+        undo.endUndoGrouping()
+        #expect(Controller(storage: dir).settings.name == "Custom")
+        undo.undo()
+        #expect(c.yourSettings.name == "Night")
+        #expect(Controller(storage: dir).settings.name == "Night")
+    }
+
     @Test func albumPlaysWithItsGapsOverTheUsersLoudness() {
         let (c, _) = controller()
         c.useAlbumSettings(for: "compline")
