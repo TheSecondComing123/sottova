@@ -162,7 +162,7 @@ final class Router {
         currentRun.map { $0.order.filter(selected.contains).map(Playlist.path(ofRow:)) } ?? []
     }
 
-    /// Return, and Play in the pick's right-click and the Song menu.
+    /// Return, and Play in the pick's right-click and the Song menu: see `Controller.playPick`.
     func playPick() {
         guard let run = currentRun else { return }
         let picked = run.order.filter(selected.contains)

@@ -370,8 +370,10 @@ public final class Controller {
     public private(set) var origin: Origin?
 
     /// `source` is a playlist id, whose gaps the songs play with; without one, songs from one album play with its gaps.
-    /// `row` is the alarm this is for and the time it's for.
-    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false, row: (id: Alarm.ID, time: Date)? = nil) {
+    /// `row` is the alarm this is for and the time it's for. `key` is what Play buttons know it by, when that isn't
+    /// its songs and source.
+    public func play(_ songs: [Song], from index: Int = 0, source: String? = nil, shuffled: Bool = false, row: (id: Alarm.ID, time: Date)? = nil,
+                     key: String? = nil) {
         guard songs.indices.contains(index) else { return }
         // first, since it can end what's playing: the check below and the alarm's marks have to come after that
         catchUp()
@@ -382,7 +384,7 @@ public final class Controller {
         fromAlarm = row != nil
         alarmDue = row?.time
         partDue = row
-        origin = Origin(key: Origin.key(of: songs, source: source), shuffled: shuffled)
+        origin = Origin(key: key ?? Origin.key(of: songs, source: source), shuffled: shuffled)
         let source = source ?? Self.source(of: songs)
         upNext = songs[index...].map { QueueEntry(path: $0.id, source: source) }
         if retrying != nil {
@@ -1888,8 +1890,12 @@ public final class Controller {
     }
 
     public func playCollection(_ songs: [Song], source: String? = nil) {
-        guard origin?.key == Origin.key(of: songs, source: source), status != .idle else {
-            play(songs, source: source)
+        playKnown(songs, source: source, as: Origin.key(of: songs, source: source))
+    }
+
+    private func playKnown(_ songs: [Song], source: String?, as key: String) {
+        guard origin?.key == key, status != .idle else {
+            play(songs, source: source, key: key)
             return
         }
         if inSilence {
@@ -1897,6 +1903,18 @@ public final class Controller {
         } else if status == .paused {
             toggle()
         }
+    }
+
+    /// Return and Play on a pick, by place in `list`: one plays on from there, as a double-click does; several play
+    /// just themselves.
+    public func playPick(_ picked: [Int], of list: [Song], source: String? = nil) {
+        if picked.count == 1, let index = picked.first {
+            play(list, from: index, source: source)
+            return
+        }
+        let songs = picked.filter(list.indices.contains).map { list[$0] }
+        // known by its songs: a collection is known by its id, and a pick from the one that's going isn't all of it
+        playKnown(songs, source: source, as: Origin.key(of: songs, source: nil))
     }
 
     public func pause() {

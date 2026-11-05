@@ -58,6 +58,25 @@ struct CollectionRowTests {
         c.pause()
     }
 
+    @Test func aPickFromThePlayingCollectionPlaysThePickAndOneRowPlaysOnFromThere() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let id = try #require(c.newPlaylist(named: "Compline", songs: songs))
+        c.play(songs, source: id)
+        c.playPick([3, 4], of: songs, source: id)
+        c.advance(1.5)
+        #expect(c.current?.id == songs[3].id)
+        #expect(c.upNext.map(\.path) == [songs[4].id])
+        #expect(c.upNext.allSatisfy { $0.source == id })
+        #expect(c.collectionState(songs, source: id) == nil)
+
+        c.playPick([2], of: songs, source: id)
+        c.advance(1.5)
+        #expect(c.current?.id == songs[2].id)
+        #expect(c.upNext.map(\.path) == songs[3...].map(\.id))
+        c.pause()
+    }
+
     @Test func renameUpdatesSavedQueueBeforeCrash() async throws {
         let dir = try root(), c = try controller(dir)
         let songs = try await seed(c, in: dir)
