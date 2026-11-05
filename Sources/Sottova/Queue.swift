@@ -33,14 +33,7 @@ struct QueuePanel: View {
                     ThemeLink(text: "Clear queue", color: Theme.muted) { withAnimation(Theme.quick) { controller.clearQueue() } }
                         .help("empty the queue")
                 }
-                Button(action: close) {
-                    Ph.x.icon(.bold, size: 11)
-                        .foregroundStyle(Theme.muted)
-                        .frame(width: 24, height: 24)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(PressStyle())
-                .accessibilityLabel("close queue")
+                IconButton(icon: .x, weight: .bold, help: "close queue", size: 24, action: close)
             }
             .role(.body)
             .frame(height: 36)

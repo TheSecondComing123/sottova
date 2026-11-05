@@ -1038,13 +1038,8 @@ private struct DayRow: View {
                 .accessibilityLabel("Edit \(alarm.name)")
                 .revealed(shown || picked)
             RowDots(alarm: alarm, entries: entries)
-            Button { controller.removeAlarm(alarm.id) } label: {
-                Ph.x.icon(.bold, size: 11).foregroundStyle(Theme.muted)
-                    .frame(width: 24, height: 24).contentShape(.rect).hoverable(radius: 4)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("delete \(alarm.name)")
-            .revealed(shown)
+            IconButton(icon: .x, weight: .bold, help: "delete \(alarm.name)", size: 24) { controller.removeAlarm(alarm.id) }
+                .revealed(shown)
         }
     }
 

@@ -62,10 +62,6 @@ struct LookRulesTests {
     static let exceptions: [Exception] = [
         // the row-edit × sits inside the hover cross, with its offset and the cross's plate: its own role
         Exception("CollectionPage.swift", .icon, "Ph.x.icon(.bold, size: 9)"),
-        // close × to IconButton
-        Exception("DayPage.swift", .icon, "Ph.x.icon(", 1),
-        Exception("NowPage.swift", .icon, "Ph.x.icon(", 1),
-        Exception("Queue.swift", .icon, "Ph.x.icon(", 1),
         // ••• to one menu
         Exception("CollectionPage.swift", .icon, "Ph.dotsThree.icon(", 2),
         Exception("DayPage.swift", .icon, "Ph.dotsThree.icon(", 1),

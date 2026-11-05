@@ -98,11 +98,7 @@ struct NowPage: View {
                 let missed = line.hasPrefix("Missed")
                 Text(line).detail(size).foregroundStyle(missed ? Theme.text : Theme.muted)
                 if missed {
-                    Button { router.dismissedFoot = line } label: {
-                        Ph.x.icon(.bold, size: 12).foregroundStyle(Theme.faint)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("dismiss")
+                    IconButton(icon: .x, weight: .bold, help: "dismiss", size: 24) { router.dismissedFoot = line }
                 }
             }
         }
