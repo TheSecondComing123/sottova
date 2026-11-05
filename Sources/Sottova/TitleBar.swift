@@ -212,11 +212,11 @@ private struct SleepControl: View {
     var body: some View {
         let timer = controller.sleepTimer
         let resting = controller.status == .resting
-        BarControl(actsOnPress: true, help: "stop the music after a while", action: open) { hovering in
+        BarControl(actsOnPress: true, help: "Stops the music after a while", action: open) { hovering in
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 HStack(spacing: 2) {
                     BarIcon(icon: .timer, strong: timer != nil)
-                    Text(timer.map { "Stop \(Format.sleep($0, resting: resting, at: context.date, sentence: true))" } ?? "Stop music")
+                    Text(timer.map { "Stops \(Format.sleep($0, resting: resting, at: context.date, sentence: true))" } ?? "Sleep timer")
                         .role(.small)
                         .monospacedDigit()
                         .foregroundStyle(enabled ? Theme.muted : Theme.disabled)
@@ -226,7 +226,7 @@ private struct SleepControl: View {
             }
         } access: {
             // a Menu here would list its choices as buttons beside it, even closed
-            Button("sleep timer") {
+            Button("Sleep timer") {
                 NSMenu(StatusMenu.sleepChoices(controller)).popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
             }
             .accessibilityValue(timer.map { Format.sleep($0, resting: resting, at: .now) } ?? "off")

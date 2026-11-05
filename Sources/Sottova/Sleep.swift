@@ -9,7 +9,7 @@ struct SleepChoices: View {
         let timer = controller.sleepTimer
         let resting = controller.status == .resting
         // what the times are for, said before them
-        Button(timer.map { "Stops \(Format.sleep($0, resting: resting, at: .now, sentence: true))" } ?? "Stop the music") {}
+        Button(timer.map { "Stops \(Format.sleep($0, resting: resting, at: .now, sentence: true))" } ?? "Sleep timer") {}
             .disabled(true)
         Divider()
         Toggle(resting ? "After the next song" : "After this song", isOn: Binding(

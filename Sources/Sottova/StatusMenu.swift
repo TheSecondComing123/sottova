@@ -109,7 +109,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let timer = controller.sleepTimer
         let resting = controller.status == .resting
         // what the times are for, said before them
-        var entries: [MenuEntry] = [.item(timer.map { "Stops \(Format.sleep($0, resting: resting, at: .now, sentence: true))" } ?? "Stop the music", enabled: false) {}, .divider]
+        var entries: [MenuEntry] = [.item(timer.map { "Stops \(Format.sleep($0, resting: resting, at: .now, sentence: true))" } ?? "Sleep timer", enabled: false) {}, .divider]
         entries.append(.item(resting ? "After the next song" : "After this song", checked: timer == .afterCurrent) {
             timer == .afterCurrent ? controller.cancelSleep() : controller.sleepAfterCurrent()
         })
