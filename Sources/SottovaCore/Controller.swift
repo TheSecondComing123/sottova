@@ -1904,6 +1904,19 @@ public final class Controller {
         if status == .playing || status == .resting { toggle() }
     }
 
+    /// A preview on a player of its own holds the music, a silence's countdown too. True when there's something to
+    /// give back with `endPreview()`.
+    public func holdForPreview() -> Bool {
+        guard status == .playing || status == .resting else { return false }
+        pause()
+        return true
+    }
+
+    /// Not Play: that would end a held silence, and a preview isn't your quiet being over.
+    public func endPreview() {
+        if status == .paused { command(.resume) }
+    }
+
     public func skip() {
         command(.skip)
     }

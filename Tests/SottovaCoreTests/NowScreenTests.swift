@@ -105,6 +105,18 @@ struct NowScreenTests {
         #expect(c.status == .playing)
     }
 
+    /// A preview isn't your quiet being over: the silence goes on from where it was.
+    @Test func aPreviewInASilenceLeavesTheRestOfItToCome() async throws {
+        let (c, _) = try await playing()
+        while c.status != .resting { c.advance(0.5) }
+        c.advance(5)
+        let left = try #require(c.machine.restRemaining)
+        #expect(c.holdForPreview())
+        c.endPreview()
+        #expect(c.status == .resting)
+        #expect(c.machine.restRemaining == left)
+    }
+
     @Test(arguments: [(Hold.away, "away"), (.call, "call"), (.busy, "busy"), (.media, "playing")])
     func aHoldSaysWhy(hold: Hold, line: String) {
         #expect(NowScreen.waiting(hold).sub.contains(line))

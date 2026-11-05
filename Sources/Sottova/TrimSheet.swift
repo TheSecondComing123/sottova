@@ -78,7 +78,7 @@ struct TrimSheet: View {
         .onDisappear {
             preview?.stop()
             previewStop?.cancel()
-            if pausedQueue { controller.play() }
+            if pausedQueue { controller.endPreview() }
         }
     }
 
@@ -125,8 +125,7 @@ struct TrimSheet: View {
 
     /// A few seconds from a handle, on a player of its own; the queue is paused so the two don't play at once.
     private func hear(from time: Double) {
-        if controller.status == .playing || controller.status == .resting {
-            controller.pause()
+        if controller.holdForPreview() {
             pausedQueue = true
         }
         previewStop?.cancel()
