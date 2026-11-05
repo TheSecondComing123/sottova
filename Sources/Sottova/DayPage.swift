@@ -1024,6 +1024,8 @@ private struct DayRow: View {
         .simultaneousGesture(TapGesture().onEnded { router.select(alarm.id.uuidString, in: order) })
         .accessibilityAddTraits(picked ? .isSelected : [])
         .accessibilityAction(named: "Edit") { router.alarm = .edit(alarm) }
+        // its × is there only under the pointer
+        .accessibilityAction(named: "Delete") { controller.removeAlarm(alarm.id) }
         .sottovaMenu(open: { menuOpen = $0 }) { entries }
     }
 
@@ -1034,8 +1036,7 @@ private struct DayRow: View {
             ThemeLink(text: "Edit…", color: Theme.muted) { router.alarm = .edit(alarm) }
                 .role(.body).frame(height: 24).fixedSize()
                 .accessibilityLabel("Edit \(alarm.name)")
-                .opacity(shown || picked ? 1 : 0)
-                .allowsHitTesting(shown || picked)
+                .revealed(shown || picked)
             RowDots(alarm: alarm, entries: entries)
             Button { controller.removeAlarm(alarm.id) } label: {
                 Ph.x.icon(.bold, size: 11).foregroundStyle(Theme.muted)
@@ -1043,9 +1044,7 @@ private struct DayRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("delete \(alarm.name)")
-            .opacity(shown ? 1 : 0)
-            .allowsHitTesting(shown)
-            .animation(Theme.reveal(shown), value: shown)
+            .revealed(shown)
         }
     }
 

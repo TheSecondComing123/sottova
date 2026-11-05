@@ -467,8 +467,7 @@ struct YourCollection: View {
             }
             .frame(height: 24)
             .padding(.leading, 22).padding(.bottom, 12)
-            .opacity(selected.count > 1 ? 1 : 0)
-            .allowsHitTesting(selected.count > 1)
+            .revealed(selected.count > 1)
             .disabled(selected.count <= 1)
             .accessibilityHidden(selected.count <= 1)
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -891,11 +890,12 @@ private struct RowEdits: ViewModifier {
                 .help("remove from this collection")
                 .accessibilityLabel("Remove from this collection")
                 .onHover { cross = $0 }
-                .opacity(shown ? 1 : 0)
-                .allowsHitTesting(shown)
+                .revealed(shown)
                 // in the list's right margin, past the plate, which ends in the gap after the time
                 .offset(x: 20)
             }
+            // the × is there only under the pointer
+            .accessibilityAction(named: "Remove from this collection", remove)
             .onAppear {
                 #if SHOT
                 if UserDefaults.standard.object(forKey: "shotEditRow") != nil, UserDefaults.standard.integer(forKey: "shotEditRow") == index { cross = true }
@@ -925,8 +925,7 @@ private struct SplitTarget: ViewModifier {
                             .background(Theme.background)
                             .padding(.trailing, 46)
                     }
-                    .opacity(seam ? 1 : 0)
-                    .animation(Theme.curve(seam ? 0.12 : 0.08), value: seam)
+                    .revealed(seam)
                     // thin, so the rows keep nearly all of their height for picking
                     .frame(height: 8)
                     .contentShape(.rect)
@@ -1017,9 +1016,7 @@ private struct PartHeading: View {
                         if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
                     }
                 }
-                .opacity(shown ? 1 : 0)
-                .allowsHitTesting(shown)
-                .animation(Theme.curve(shown ? 0.12 : 0.08), value: shown)
+                .revealed(shown)
             }
             Rectangle().fill(Theme.hairline).frame(height: 1).padding(.top, 6).padding(.bottom, 4)
         }
@@ -1204,21 +1201,18 @@ private struct CollectionCard: View {
                 if !songs.isEmpty {
                     PlayButton(songs: songs, source: playlist?.id)
                         .padding(10)
-                        .opacity(shown ? 1 : 0)
-                        .allowsHitTesting(shown)
+                        .revealed(shown)
                 }
             }
             HStack(alignment: .top, spacing: 4) {
                 TileCaption(title: collection.title, detail: hours ?? (songs.isEmpty ? "no songs yet" : nil))
                 Spacer(minLength: 0)
                 TileDots(title: collection.title, entries: entries)
-                    .opacity(shown ? 1 : 0)
-                    .allowsHitTesting(shown)
+                    .revealed(shown)
             }
             .contentShape(.rect)
             .onTapGesture { open() }
         }
-        .animation(Theme.curve(shown ? 0.12 : 0.08), value: shown)
         .onHover { hovering = $0 }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([collection.title, hours].compactMap { $0 }.joined(separator: ", "))

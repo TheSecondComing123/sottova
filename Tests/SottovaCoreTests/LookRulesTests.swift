@@ -62,9 +62,6 @@ struct LookRulesTests {
     static let exceptions: [Exception] = [
         // the row-edit × sits inside the hover cross, with its offset and the cross's plate: its own role
         Exception("CollectionPage.swift", .icon, "Ph.x.icon(.bold, size: 9)"),
-        // still to move: hover reveals to `.revealed`
-        Exception("CollectionPage.swift", .reveal, ".allowsHitTesting(", 5),
-        Exception("DayPage.swift", .reveal, ".allowsHitTesting(", 2),
         // close × to IconButton
         Exception("DayPage.swift", .icon, "Ph.x.icon(", 1),
         Exception("NowPage.swift", .icon, "Ph.x.icon(", 1),
