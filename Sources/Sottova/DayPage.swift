@@ -121,7 +121,7 @@ struct DayPage: View {
     }
 
     private var newButton: some View {
-        ThemeButton(title: "Schedule music…", icon: .plus, iconWeight: .line) { router.alarm = .new(nil) }
+        ThemeButton(title: "Schedule music…", icon: .plus, iconWeight: .bold) { router.alarm = .new(nil) }
     }
 
     private var emptyDay: some View {
