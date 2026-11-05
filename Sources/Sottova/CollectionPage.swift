@@ -238,6 +238,25 @@ struct SilenceChoices: View {
     }
 }
 
+/// Over a collection's rows: what Songs offers a pick, in a row that keeps its place so the list doesn't move.
+private struct CollectionPick<Extra: View>: View {
+    let picked: [Int]
+    let list: [Song]
+    var source: String?
+    @ViewBuilder let extra: Extra
+
+    var body: some View {
+        HStack(spacing: 8) {
+            PickActions(picked: picked, list: list, source: source)
+            extra
+        }
+        .padding(.leading, 22).padding(.bottom, 12)
+        .revealed(!picked.isEmpty)
+        .disabled(picked.isEmpty)
+        .accessibilityHidden(picked.isEmpty)
+    }
+}
+
 private func songCount(_ songs: [Song]) -> String {
     "\(Format.count(songs.count, "song")), \(Format.length(songs.reduce(0) { $0 + $1.duration }))"
 }
@@ -267,11 +286,18 @@ struct AlbumCollection: View {
                 }
             } songs: { narrow in
                 let columns = CollectionColumns(songs: album.songs, narrow: narrow)
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(album.songs.enumerated()), id: \.element.id) { index, song in
-                        LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song)) { controller.play(album.songs, from: index) }
+                VStack(alignment: .leading, spacing: 0) {
+                    let picked = album.songs.indices.filter { router.selected.contains(album.songs[$0].id) }
+                    // as Songs has it: a row held open here would be empty space, where yours keeps it for New part
+                    if !picked.isEmpty {
+                        CollectionPick(picked: picked, list: album.songs) { EmptyView() }
                     }
-                    .environment(\.songOrder, album.songs.map(\.id))
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(album.songs.enumerated()), id: \.element.id) { index, song in
+                            LibraryLine(song: song, columns: columns.line, performer: columns.performer(of: song)) { controller.play(album.songs, from: index) }
+                        }
+                        .environment(\.songOrder, album.songs.map(\.id))
+                    }
                 }
                 .modifier(SongListRun(order: album.songs.map(\.id)))
                 .padding(.leading, -22)
@@ -386,16 +412,13 @@ struct YourCollection: View {
         let next = Dictionary(grouping: controller.alarms.filter { $0.source == pid && $0.rotates }) { controller.partChoices(for: $0).next }.mapValues { $0.map(\.name) }
         let keys = playlist.paths.indices.filter { controller.catalog.songsByID[playlist.paths[$0]] != nil }.map { Playlist.rowKey($0, playlist.paths[$0]) }
         return VStack(alignment: .leading, spacing: 0) {
-            let selected = playlist.rows(router.selected).compactMap { index in controller.catalog.songsByID[playlist.paths[index]] }
-            HStack(spacing: 12) {
-                Text("\(selected.count) selected").role(.body).foregroundStyle(Theme.muted)
-                ThemeLink(text: "New part", color: Theme.muted) { newPartFromPick(playlist) }.role(.body)
+            let picked = keys.indices.filter { router.selected.contains(keys[$0]) }
+            CollectionPick(picked: picked, list: songs, source: pid) {
+                ThemeLink(text: "New part", color: Theme.muted) { newPartFromPick(playlist) }
+                    .role(.body)
+                    .revealed(picked.count > 1)
+                    .disabled(picked.count <= 1)
             }
-            .frame(height: 24)
-            .padding(.leading, 22).padding(.bottom, 12)
-            .revealed(selected.count > 1)
-            .disabled(selected.count <= 1)
-            .accessibilityHidden(selected.count <= 1)
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(playlist.identifiedPaths, id: \.id) { _, index, path in
                     if index == 0 && !playlist.breaks.isEmpty || playlist.breaks.contains(index) {
