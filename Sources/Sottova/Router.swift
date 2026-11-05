@@ -366,22 +366,27 @@ struct SottovaCommands: Commands {
         return controller.copy(ofAlbum: song.albumID)?.name ?? song.album
     }
 
+    private func inWindow(_ go: () -> Void) {
+        openWindow(id: "main")
+        go()
+    }
+
     @ViewBuilder
     private var goItems: some View {
         Group {
-            Button("Back") { router.goBack() }
+            Button("Back") { inWindow(router.goBack) }
                 .keyboardShortcut("[")
                 .disabled(router.back.isEmpty)
-            Button("Forward") { router.goForward() }
+            Button("Forward") { inWindow(router.goForward) }
                 .keyboardShortcut("]")
                 .disabled(router.forward.isEmpty)
             Divider()
-            Button("Now") { router.go(to: .home) }.keyboardShortcut("1")
-            Button("Your day") { router.go(to: .alarms) }.keyboardShortcut("2")
-            Button("Songs") { router.go(to: .songs) }.keyboardShortcut("3")
-            Button("Free music") { router.go(to: .shelf) }.keyboardShortcut("4")
-            Button("Collections") { router.go(to: .collections) }.keyboardShortcut("5")
-            Button("Artists") { router.go(to: .artists) }.keyboardShortcut("6")
+            Button("Now") { inWindow { router.go(to: .home) } }.keyboardShortcut("1")
+            Button("Your day") { inWindow { router.go(to: .alarms) } }.keyboardShortcut("2")
+            Button("Songs") { inWindow { router.go(to: .songs) } }.keyboardShortcut("3")
+            Button("Free music") { inWindow { router.go(to: .shelf) } }.keyboardShortcut("4")
+            Button("Collections") { inWindow { router.go(to: .collections) } }.keyboardShortcut("5")
+            Button("Artists") { inWindow { router.go(to: .artists) } }.keyboardShortcut("6")
             Divider()
             Button("Filter songs") {
                 openWindow(id: "main")
