@@ -43,7 +43,7 @@ struct AlarmSheet: View {
     private let preview = AlarmPreview.shared
 
     enum Kind: String, CaseIterable {
-        case byItself = "Starts by itself", whileHere = "Plays while you're here"
+        case byItself = "Starts by itself", whileHere = "While you're at the Mac"
     }
 
     enum Repeat: String, CaseIterable {
@@ -155,7 +155,7 @@ struct AlarmSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             let unnamed = "Schedule music"
-            Text(kind == .whileHere ? name.map { "Play \($0) while you're here" } ?? "Music while you're here"
+            Text(kind == .whileHere ? name.map { "Play \($0) while you're at the Mac" } ?? "Music while you're at the Mac"
                                     : name.map { "Start \($0)" } ?? unnamed)
                 .role(.sheet)
                 .foregroundStyle(Theme.text)

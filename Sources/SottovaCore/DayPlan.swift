@@ -467,7 +467,7 @@ extension DayPlan {
         var pieces: [Piece] = []
         if !alarm.whileHere || alarm.weekdays != Set(1...7) { pieces.append(Piece(days(alarm), .days)) }
         if let off = offRuns(alarm).first { pieces.append(Piece(off.text, .daysOff)) }
-        if alarm.whileHere { pieces.append(Piece("At the Mac", .kind)) }
+        if alarm.whileHere { pieces.append(Piece("While you're at the Mac", .kind)) }
         if alarm.shuffled {
             pieces.append(Piece("shuffled", .order))
         } else if !alarm.rotates {

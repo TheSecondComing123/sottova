@@ -368,7 +368,7 @@ struct DayPlanTests {
         #expect(text(day.sentence(morning, nextPart: "Strings")) == "Weekdays · shuffled · 25% volume · Strings next")
         var here = overworld
         (here.shuffled, here.heedsCalendar) = (true, true)
-        #expect(text(day.sentence(here, nextPart: nil)) == "At the Mac · shuffled · unless busy")
+        #expect(text(day.sentence(here, nextPart: nil)) == "While you're at the Mac · shuffled · unless busy")
         var evening = compline
         (evening.volume, evening.rotates) = (0.15, true)
         #expect(says(text(day.sentence(evening, nextPart: "part 2")), "Every day", "15%", "Part 2"))
@@ -377,7 +377,7 @@ struct DayPlanTests {
         #expect(text(day.sentence(plain, nextPart: nil)) == "Every day · in order")
         var some = overworld
         some.weekdays = [2, 3, 4, 5, 6]
-        #expect(text(day.sentence(some, nextPart: nil)) == "Weekdays · At the Mac · in order")
+        #expect(text(day.sentence(some, nextPart: nil)) == "Weekdays · While you're at the Mac · in order")
         #expect(day.sentence(here, nextPart: nil).compactMap(\.word) == [.kind, .order, .calendar])
     }
 
@@ -498,7 +498,7 @@ struct DayPlanTests {
         // a miss today mustn't hide that the next one can't wake either
         #expect(text(day.line(for: row, nextPart: nil, cantWake: true)) == "Missed at 7:02. The Mac was off. · Play it now · The Mac won't wake for the next one. · Wake it")
         #expect(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: true)) == "The Mac won't wake for this. · Wake it")
-        #expect(says(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: false)), "At the Mac", "in order"))
+        #expect(says(text(day.wakeLine(alarm: overworld, nextPart: nil, cantWake: false)), "While you're at the Mac", "in order"))
     }
 
     @Test func anOverlapIsAddedToTheRowsWords() {
@@ -506,7 +506,7 @@ struct DayPlanTests {
         (chopin.whileHere, chopin.minutes, chopin.shuffled) = (true, 60, true)
         let day = plan([overworld, chopin], date(2, 12))
         let line = day.line(for: day.rows[1], nextPart: nil)
-        #expect(text(line) == "At the Mac · shuffled · Overworld waits")
+        #expect(text(line) == "While you're at the Mac · shuffled · Overworld waits")
         #expect(line.compactMap(\.word) == [.kind, .order])
     }
 
