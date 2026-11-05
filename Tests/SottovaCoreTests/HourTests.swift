@@ -196,6 +196,19 @@ struct HourTests {
         #expect(c.status == .playing)
     }
 
+    /// The status menu, the title bar and Space all pause a waiting hour, as any silence.
+    @Test func aWaitingHourPausesAndPlayGoesOnToTheNextPiece() async throws {
+        let (c, album) = try await controller()
+        _ = open(c, album)
+        c.presence = { _ in .away }
+        c.checkHours()
+        #expect(c.hold == .away)
+        c.pause()
+        #expect(c.status == .paused)
+        c.play()
+        #expect(c.status == .playing)
+    }
+
     @Test func theWindowClosingEndsASilenceButNotAPiece() async throws {
         let (c, album) = try await controller()
         _ = open(c, album)

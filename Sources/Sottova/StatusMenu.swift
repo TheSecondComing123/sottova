@@ -66,20 +66,17 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     /// The same two in every state, dimmed when they can't act, so the menu doesn't move under the pointer.
     private func actions(_ screen: NowScreen) -> [MenuEntry] {
         let controller = controller
-        let holding = controller.hold != nil && controller.status != .paused
         let paused = controller.status == .paused
         let skip = { (enabled: Bool) in MenuEntry.item("Skip", enabled: enabled, action: controller.skip) }
-        let playOrPause = { (enabled: Bool) in
-            paused ? MenuEntry.item("Play", enabled: enabled, action: controller.play) : .item("Pause", enabled: enabled, action: controller.pause)
-        }
+        let playOrPause = paused ? MenuEntry.item("Play", action: controller.play) : .item("Pause", action: controller.pause)
         switch screen.kind {
         case .firstRun: return [.item("Add folder…", action: controller.chooseFolders)]
         case .reading: return [.item("Play", enabled: false, action: controller.play), skip(false)]
         case .quiet: return [.item("Play", action: controller.play), skip(false)]
-        case .piece: return [playOrPause(true), skip(true)]
+        case .piece: return [playOrPause, skip(true)]
         case .silence:
             if screen.action == .openSound { return [.item("Open Sound settings") { NSWorkspace.shared.open(.soundSettings) }] }
-            return [playOrPause(!holding), skip(true)]
+            return [playOrPause, skip(true)]
         }
     }
 
