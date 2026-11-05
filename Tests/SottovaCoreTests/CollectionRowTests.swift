@@ -103,6 +103,24 @@ struct CollectionRowTests {
         c.pause()
     }
 
+    @Test func aSongTwiceInACollectionIsTwoRowsThatGoOnDifferently() async throws {
+        let dir = try root(), c = try controller(dir)
+        let songs = try await seed(c, in: dir)
+        let list = [songs[0], songs[1], songs[0], songs[2]]
+        let id = try #require(c.newPlaylist(named: "Compline", songs: list))
+        c.playPick([0], of: list, source: id)
+        c.advance(1)
+        #expect(c.pickState([0], of: list, source: id) != nil)
+        #expect(c.pickState([2], of: list, source: id) == nil)
+        c.playPick([2], of: list, source: id)
+        c.advance(1.5)
+        #expect(c.current?.id == songs[0].id)
+        #expect(c.upNext.map(\.path) == [songs[2].id])
+        #expect(c.pickState([2], of: list, source: id) != nil)
+        #expect(c.pickState([0], of: list, source: id) == nil)
+        c.pause()
+    }
+
     @Test func theSamePickFromTwoCollectionsIsTwoPicksAndARenameKeepsIt() async throws {
         let dir = try root(), c = try controller(dir)
         let songs = try await seed(c, in: dir)

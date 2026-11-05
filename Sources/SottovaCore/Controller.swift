@@ -1968,21 +1968,23 @@ public final class Controller {
     /// Return and Play on a pick, by place in `list`: one plays on from there, as a double-click does; several play
     /// just themselves.
     public func playPick(_ picked: [Int], of list: [Song], source: String? = nil) {
-        let songs = picked.filter(list.indices.contains).map { list[$0] }
-        guard songs.count == 1 else {
+        let rows = picked.filter(list.indices.contains)
+        guard rows.count == 1, let row = rows.first else {
+            let songs = rows.map { list[$0] }
             playKnown(songs, source: source, as: pickKey(songs, source: source))
             return
         }
-        if pickState(picked, of: list, source: source) == nil { play(list, from: picked[0], source: source) } else { bringBack() }
+        if pickState(rows, of: list, source: source) == nil { play(list, from: row, source: source) } else { bringBack() }
     }
 
     /// Whether a pick is what's going, as `playPick` plays it: for the pick bar's Play. One row is while its list
-    /// goes and it's the song sounding.
+    /// goes, its song is sounding and what's queued is the rest of the list after it.
     public func pickState(_ picked: [Int], of list: [Song], source: String? = nil) -> (paused: Bool, shuffled: Bool)? {
-        let songs = picked.filter(list.indices.contains).map { list[$0] }
-        guard songs.count == 1 else { return state(of: pickKey(songs, source: source)) }
-        // ponytail: a collection holding the song twice counts either row as sounding
-        return current?.id == songs[0].id ? collectionState(list, source: source) : nil
+        let rows = picked.filter(list.indices.contains)
+        guard rows.count == 1, let row = rows.first else { return state(of: pickKey(rows.map { list[$0] }, source: source)) }
+        // the row and not only its song: a collection can hold a song twice, each going on to something else
+        guard current?.id == list[row].id, upNext.map(\.path) == list[(row + 1)...].map(\.id) else { return nil }
+        return collectionState(list, source: source)
     }
 
     /// Several are known by their songs and the collection they're picked in: a collection alone is known by its id,
