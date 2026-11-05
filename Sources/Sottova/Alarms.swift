@@ -38,6 +38,8 @@ struct AlarmSheet: View {
     @State private var heedsCalendar: Bool
     @State private var rotates: Bool
     @State private var partCount: Int
+    /// A new one's id while the sheet is open: Hear it knows its preview by it.
+    @State private var draft = UUID()
     private let preview = AlarmPreview.shared
 
     enum Kind: String, CaseIterable {
@@ -131,6 +133,7 @@ struct AlarmSheet: View {
         guard let source, let name else { return nil }
         let clock = RowTime.clock(time)
         var alarm = Alarm(source: source, name: name, hour: clock.hour, minute: clock.minute, weekdays: repeats.days, shuffled: shuffled)
+        alarm.id = draft
         alarm.volume = volume
         alarm.heedsCalendar = heedsCalendar
         alarm.rotates = rotates
