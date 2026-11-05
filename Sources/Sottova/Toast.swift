@@ -3,7 +3,10 @@ import SottovaCore
 
 /// What was just done, at the foot of the page, with Undo. A newer one takes its place.
 struct Toast: View {
+    /// The main window's also shows while Sottova is in the background; Settings' only while it's in front.
+    var main = true
     @Environment(Controller.self) private var controller
+    @Environment(\.controlActiveState) private var activeState
     @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
@@ -12,7 +15,8 @@ struct Toast: View {
 
     var body: some View {
         ZStack {
-            if let notice = controller.notice {
+            // in one window at a time, so one timer takes it down
+            if let notice = controller.notice, activeState == .key || main && activeState == .inactive {
                 bar(notice)
                     // restarts on leaving, so it never goes while you're reaching for Undo
                     .task(id: hovering) {
