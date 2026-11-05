@@ -81,7 +81,7 @@ extension MenuEntry {
         // a name opens Songs filtered, and no song is tagged with Catalog's word for a compilation
         if album.artist == "Various Artists" { goToArtist = [] }
         return [
-            .item("Play") { controller.play(album.songs) },
+            .item("Play") { controller.playCollection(album.songs) },
             .item("Play next") { controller.playNext(album.songs) },
             .addToCollection(album.songs, name: album.title, controller: controller),
         ] + goToArtist + [
@@ -125,7 +125,7 @@ extension MenuEntry {
     @MainActor static func yours(_ playlist: Playlist, controller: Controller, router: Router, navigate: Navigate,
                                  renaming: Binding<String?>) -> [MenuEntry] {
         [
-            .item("Play") { controller.play(controller.songs(of: playlist), source: playlist.id) },
+            .item("Play") { controller.playCollection(controller.songs(of: playlist), source: playlist.id) },
             .item("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) },
             .divider,
             .item("Rename") {

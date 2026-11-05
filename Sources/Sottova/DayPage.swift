@@ -545,7 +545,7 @@ struct MusicChoices: View {
             if let choice {
                 HStack(spacing: 12) {
                     if showPlay {
-                        ThemeButton(title: "Play", primary: true) { controller.play(choice.songs, source: choice.source) }
+                        ThemeButton(title: "Play", primary: true) { controller.playCollection(choice.songs, source: choice.source) }
                         ThemeLink(text: "Schedule…") { router.alarm = .new(choice.target) }
                     } else {
                         ThemeButton(title: "Schedule…", primary: true) { router.alarm = .new(choice.target) }

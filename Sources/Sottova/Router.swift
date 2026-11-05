@@ -323,7 +323,7 @@ struct SottovaCommands: Commands {
         guard router.presetEdit == nil else { return new + off }
         if case .album(let id) = router.route, let album = controller.catalog.albums.first(where: { $0.id == id }) {
             var entries = off
-            entries[0] = .item("Play") { controller.play(album.songs) }
+            entries[0] = .item("Play") { controller.playCollection(album.songs) }
             entries[1] = .item("Shuffle") { controller.play(album.songs.shuffled(), shuffled: true) }
             return new + entries
         }
