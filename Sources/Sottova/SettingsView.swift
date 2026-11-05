@@ -186,7 +186,7 @@ struct SettingsView: View {
                 label("Don't repeat any of the last")
                 Spacer(minLength: 0)
                 ValueStepper(value: Binding(get: { Double(controller.settings.avoidLastN) }, set: { controller.settings.avoidLastN = Int($0) }),
-                             range: 0...50) { "\(Int($0)) songs" }
+                             range: 0...50) { Format.count(Int($0), "song") }
             }
             .modifier(SettingsRow())
             Toggle(isOn: $controller.keepsMacAwake) { label("Keep the Mac awake during silence") }
