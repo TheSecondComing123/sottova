@@ -210,68 +210,13 @@ private struct SilenceFoot: View {
     }
 
     private func open() {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        var presets = controller.allPresets
-        if controller.settings.name == "Custom" { presets.append(controller.settings) }
-        for preset in presets {
-            let item = FootItem(title: preset.name) {
-                if preset.name == "Custom" {
-                    var saving = preset
-                    saving.name = ""
-                    router.presetEdit = PresetEdit(preset: saving)
-                } else {
-                    controller.apply(preset)
-                }
-            }
-            item.attributedTitle = Self.title(preset)
-            item.state = preset.name == controller.settings.name ? .on : .off
-            menu.addItem(item)
-        }
-        menu.addItem(.separator())
-        if controller.customPresets.contains(where: { $0.name == controller.settings.name }) {
-            let current = controller.settings
-            menu.addItem(FootItem(title: "Edit \(current.name)…") {
-                router.presetEdit = PresetEdit(preset: current, replacing: current.name)
-            })
-        }
-        menu.addItem(FootItem(title: "New preset…") {
-            var preset = controller.settings
-            preset.name = ""
-            preset.crossfade = false
-            router.presetEdit = PresetEdit(preset: preset)
-        })
+        let menu = NSMenu(MenuEntry.silence(nil, controller: controller, router: router))
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.bounds.height - 3 + menu.size.height), in: anchor)
-    }
-
-    /// The name, and its range in a right-aligned column.
-    private static func title(_ preset: SottovaCore.Settings) -> NSAttributedString {
-        let font = NSFont.menuFont(ofSize: 13)
-        let range = Format.range(preset).replacingOccurrences(of: "–", with: " to ")
-        let style = NSMutableParagraphStyle()
-        style.tabStops = [NSTextTab(textAlignment: .right, location: 160)]
-        let title = NSMutableAttributedString(string: preset.name, attributes: [.font: font, .paragraphStyle: style])
-        title.append(NSAttributedString(string: "\t\(range)", attributes: [.font: font, .paragraphStyle: style, .foregroundColor: NSColor.secondaryLabelColor]))
-        return title
     }
 
     private struct AnchorView: NSViewRepresentable {
         let view: NSView
         func makeNSView(context: Context) -> NSView { view }
         func updateNSView(_ view: NSView, context: Context) {}
-    }
-
-    private final class FootItem: NSMenuItem {
-        private let run: () -> Void
-
-        init(title: String, run: @escaping () -> Void) {
-            self.run = run
-            super.init(title: title, action: #selector(fire), keyEquivalent: "")
-            target = self
-        }
-
-        required init(coder: NSCoder) { fatalError("menus are built in code") }
-
-        @objc private func fire() { run() }
     }
 }

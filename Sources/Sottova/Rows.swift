@@ -65,30 +65,73 @@ extension MenuEntry {
         return entries
     }
 
+    /// What any collection's menus start with. Past these, an album goes to its artist and can be made yours, and only
+    /// one of yours, a file of yours, can be renamed, shown in Finder or trashed.
+    @MainActor static func playing(_ songs: [Song], source: String? = nil, controller: Controller, router: Router) -> [MenuEntry] {
+        var entries: [MenuEntry] = [
+            .item("Play") { controller.playCollection(songs, source: source) },
+            .item("Shuffle") { controller.play(songs.shuffled(), source: source, shuffled: true) },
+            .item("Play next") { controller.playNext(songs, source: source) },
+            .addToCollection(songs, controller: controller, router: router),
+        ]
+        for i in entries.indices { entries[i].enabled = !songs.isEmpty }
+        return entries
+    }
+
+    /// Silence between songs, one list wherever it's chosen: the presets, then Custom…, checked while it's in effect,
+    /// to type your own. A collection's starts with Your setting and keeps what's typed for itself; yours keeps it as a
+    /// preset, and a preset of yours in use can be edited.
+    @MainActor static func silence(_ chosen: SottovaCore.Settings?, for collection: (title: String, choose: (SottovaCore.Settings?) -> Void)? = nil,
+                                   controller: Controller, router: Router) -> [MenuEntry] {
+        let lengths = { (setting: SottovaCore.Settings) in Format.range(setting).replacingOccurrences(of: "–", with: " to ") }
+        let current = collection == nil ? controller.settings : chosen
+        var entries: [MenuEntry] = []
+        if let collection {
+            var yours = MenuEntry.item("Your setting", checked: chosen == nil) { collection.choose(nil) }
+            yours.detail = lengths(controller.yourSettings)
+            entries.append(yours)
+        }
+        entries += controller.allPresets.map { preset in
+            var entry = MenuEntry.item(preset.name, checked: current?.name == preset.name) {
+                if let collection { collection.choose(preset) } else { controller.apply(preset) }
+            }
+            entry.detail = lengths(preset)
+            return entry
+        }
+        let custom = current?.name == "Custom"
+        let own = collection == nil ? controller.settings : chosen?.gaps(over: controller.yourSettings) ?? controller.yourSettings
+        var typed = MenuEntry.item("Custom…", checked: custom) {
+            var preset = own
+            preset.name = collection == nil ? "" : "Custom"
+            preset.crossfade = custom && preset.crossfade
+            // the sheet is the window's, and the status menu can be open with the window closed
+            AppDelegate.showMain()
+            router.presetEdit = PresetEdit(preset: preset, collection: collection.map { collection in (collection.title, { collection.choose($0) }) })
+        }
+        if custom { typed.detail = lengths(own) }
+        entries += [.divider, typed]
+        if collection == nil, controller.customPresets.contains(where: { $0.name == controller.settings.name }) {
+            let preset = controller.settings
+            entries.append(.item("Edit \(preset.name)…") {
+                AppDelegate.showMain()
+                router.presetEdit = PresetEdit(preset: preset, replacing: preset.name)
+            })
+        }
+        return entries
+    }
+
     @MainActor static func album(_ album: Album, controller: Controller, router: Router, navigate: Navigate) -> [MenuEntry] {
-        let gaps = controller.albumSettings[album.id]?.name
-        var choices: [MenuEntry] = [.item("Your setting", checked: gaps == nil) { controller.setAlbumGaps(nil, for: album) }]
-        choices += controller.allPresets.map { preset in
-            .item(preset.name, checked: gaps == preset.name) { controller.setAlbumGaps(preset, for: album) }
-        }
-        // Custom is edited on the album page; here it only shows that it's the one in use
-        if gaps == "Custom" {
-            choices.append(.item("Custom", checked: true, enabled: false) {})
-        }
-        let choicesName = "Silence between songs"
         var goToArtist: [MenuEntry] = [.item("Go to artist") { navigate(.artist(album.artist)) }]
         // a name opens Songs filtered, and no song is tagged with Catalog's word for a compilation
         if album.artist == "Various Artists" { goToArtist = [] }
-        return [
-            .item("Play") { controller.playCollection(album.songs) },
-            .item("Play next") { controller.playNext(album.songs) },
-            .addToCollection(album.songs, controller: controller, router: router),
-        ] + goToArtist + [
+        let silence = MenuEntry.silence(controller.albumSettings[album.id], for: (album.title, { controller.setAlbumGaps($0, for: album) }),
+                                        controller: controller, router: router)
+        return playing(album.songs, controller: controller, router: router) + goToArtist + [
             .divider,
             .item("Choose cover…") { router.coverFor = .album(album.id) },
             .item("Start at…") { router.alarm = .new(.album(album.id)) },
             .item("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } },
-            .submenu(choicesName, choices),
+            .submenu("Silence between songs", silence),
         ]
     }
 
@@ -126,16 +169,18 @@ extension MenuEntry {
     /// One of yours, from the sidebar or a tile. Rename opens its page with the name selected.
     @MainActor static func yours(_ playlist: Playlist, controller: Controller, router: Router, navigate: Navigate,
                                  renaming: Binding<String?>) -> [MenuEntry] {
-        [
-            .item("Play") { controller.playCollection(controller.songs(of: playlist), source: playlist.id) },
-            .item("Shuffle") { controller.play(controller.songs(of: playlist).shuffled(), source: playlist.id, shuffled: true) },
+        let songs = controller.songs(of: playlist)
+        let silence = MenuEntry.silence(playlist.gaps, for: (playlist.name, { controller.setGaps($0, for: playlist.id) }),
+                                        controller: controller, router: router)
+        return playing(songs, source: playlist.id, controller: controller, router: router) + [
             .divider,
             .item("Rename") {
                 renaming.wrappedValue = playlist.id
                 navigate(.playlist(playlist.id))
             },
             .item("Choose cover…") { router.coverFor = .playlist(playlist.id) },
-            .item("Start at…") { router.alarm = .new(.playlist(playlist.id)) },
+            .item("Start at…", enabled: !songs.isEmpty) { router.alarm = .new(.playlist(playlist.id)) },
+            .submenu("Silence between songs", silence),
             .item("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: playlist.id)]) },
             .divider,
             .item("Move to Trash", action: unlessTyping {

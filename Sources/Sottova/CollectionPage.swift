@@ -242,20 +242,8 @@ struct SilenceChoices: View {
         }
     }
 
-    @ViewBuilder private var entries: some View {
-        Toggle("Your setting", isOn: Binding(get: { chosen == nil }, set: { _ in choose(nil) }))
-        ForEach(controller.allPresets, id: \.name) { preset in
-            Toggle(preset.name, isOn: Binding(get: { chosen?.name == preset.name }, set: { _ in choose(preset) }))
-        }
-        Divider()
-        Toggle("Custom…", isOn: Binding(get: { chosen?.name == "Custom" }, set: { _ in custom() }))
-    }
-
-    private func custom() {
-        var own = chosen?.gaps(over: controller.yourSettings) ?? controller.yourSettings
-        own.name = "Custom"
-        own.crossfade = chosen?.name == "Custom" && own.crossfade
-        router.presetEdit = PresetEdit(preset: own, collection: (title, choose))
+    private var entries: some View {
+        MenuEntries(entries: MenuEntry.silence(chosen, for: (title, choose), controller: controller, router: router))
     }
 }
 

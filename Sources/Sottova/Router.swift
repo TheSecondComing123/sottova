@@ -324,7 +324,8 @@ struct SottovaCommands: Commands {
             },
             .divider,
         ]
-        let off = ["Play", "Shuffle", "Add songs", "New part from selection", "Rename", "Choose cover…", "Start at…", "Show in Finder", "Move to Trash"]
+        let off = ["Play", "Shuffle", "Play next", "Add to collection", "Add songs", "New part from selection", "Rename", "Choose cover…", "Start at…",
+                   "Silence between songs", "Show in Finder", "Move to Trash"]
             .map { MenuEntry.item($0, enabled: false) {} }
         guard router.presetEdit == nil else { return new + off }
         if case .album(let id) = router.route, let album = controller.catalog.albums.first(where: { $0.id == id }) {
@@ -338,11 +339,10 @@ struct SottovaCommands: Commands {
         }
         var entries = MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate,
                                       renaming: Binding(get: { router.renaming }, set: { router.renaming = $0 }))
-        if playlist.paths.isEmpty { entries[0].enabled = false; entries[1].enabled = false }
         entries.insert(contentsOf: [
             .item("Add songs") { router.addSongsRequests += 1 },
             .item("New part from selection", enabled: router.selected.count > 1) { router.newPartRequests += 1 },
-        ], at: 2)
+        ], at: 4)
         return new + entries
     }
 
