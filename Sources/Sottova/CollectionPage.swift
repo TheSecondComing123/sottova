@@ -124,7 +124,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
             if !empty {
                 VStack(alignment: .leading, spacing: 6) {
                     let setting = gaps?.gaps(over: controller.yourSettings) ?? controller.yourSettings
-                    let range = setting.crossfade ? "\(TypedDuration.format(setting.crossfadeSec)) overlap" : Format.range(setting).replacingOccurrences(of: "–", with: " to ")
+                    let range = setting.crossfade ? "\(TypedDuration.format(setting.crossfadeSec)) crossfade" : Format.range(setting).replacingOccurrences(of: "–", with: " to ")
                     SilenceChoices(title: title, chosen: gaps, choose: chooseGaps, label: "Between songs: \(setting.name), \(range)")
                         .fixedSize()
                         .foregroundStyle(Theme.muted)

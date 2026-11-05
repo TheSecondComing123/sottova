@@ -72,7 +72,7 @@ struct SilenceSheet: View {
                 length($fadeOut, .fadeOut, unit: 1)
                 unread(fadeOut, unit: 1)
             }
-            row("Overlap") { overlap }
+            row("Crossfade") { overlap }
             HStack(spacing: 8) {
                 if let name = edit.replacing {
                     Button("Delete", role: .destructive) {
