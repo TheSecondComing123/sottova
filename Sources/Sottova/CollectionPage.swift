@@ -543,7 +543,7 @@ struct YourCollection: View {
                 draggingPart = nil
             }, part: index == 0 ? nil : (playlist.breaks.contains(index), {
                 withAnimation(Theme.quick) { controller.setBreak(!playlist.breaks.contains(index), at: index, in: pid) }
-            }), key: key, more: {
+            }), key: key, source: pid, more: {
                 guard router.selected.count > 1, router.selected.contains(key) else { return [] }
                 return [.item("New part from selection") { newPartFromPick(playlist) }]
             }) {

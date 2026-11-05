@@ -23,15 +23,15 @@ enum MusicCollection: Identifiable {
 }
 
 extension MenuEntry {
-    /// A song's row; several picked get what can be done to all of them.
-    @MainActor static func song(_ song: Song, picked songs: [Song], play: @escaping () -> Void, remove: ((Set<String>) -> Void)?,
+    /// A song's row; several picked get what can be done to all of them. `source` is the collection they're queued from.
+    @MainActor static func song(_ song: Song, picked songs: [Song], source: String? = nil, play: @escaping () -> Void, remove: ((Set<String>) -> Void)?,
                                 part: (starts: Bool, flip: () -> Void)?, naming: @escaping () -> Void,
                                 controller: Controller, router: Router, navigate: Navigate) -> [MenuEntry] {
         if songs.count > 1 {
             var entries: [MenuEntry] = [
                 .item("Play", action: router.playPick),
-                .item("Play \(songs.count) next") { controller.playNext(songs) },
-                .item("Add \(songs.count) to queue") { controller.playNext(songs, at: controller.upNext.count) },
+                .item("Play \(songs.count) next") { controller.playNext(songs, source: source) },
+                .item("Add \(songs.count) to queue") { controller.playNext(songs, source: source, at: controller.upNext.count) },
                 .addToCollection(songs, name: "", controller: controller, naming: naming),
             ]
             if let remove {
@@ -42,8 +42,8 @@ extension MenuEntry {
         }
         var entries: [MenuEntry] = [
             .item("Play", action: play),
-            .item("Play next") { controller.playNext([song]) },
-            .item("Add to queue") { controller.playNext([song], at: controller.upNext.count) },
+            .item("Play next") { controller.playNext([song], source: source) },
+            .item("Add to queue") { controller.playNext([song], source: source, at: controller.upNext.count) },
             .addToCollection([song], name: "", controller: controller, naming: naming),
         ]
         entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })

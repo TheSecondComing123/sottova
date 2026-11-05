@@ -57,7 +57,7 @@ final class Router {
     /// The click under way brings the window forward: read at the press, because a tap ends after the window has come.
     @ObservationIgnored var pressActivates = false
 
-    private var currentRun: SongRun? { run?.route == route ? run : nil }
+    var currentRun: SongRun? { run?.route == route ? run : nil }
     var canSelectAll: Bool { currentRun != nil }
 
     func select(_ id: String, in order: [String]) {
@@ -235,6 +235,7 @@ struct SongRun {
     /// The picked, in the list's order.
     let play: ([String]) -> Void
     var remove: ((Set<String>) -> Void)?
+    var source: String?
 }
 
 /// The menu bar's Controls and Go menus: everything here is also a click away in the window.
@@ -348,7 +349,7 @@ struct SottovaCommands: Commands {
         guard router.presetEdit == nil, let first = songs.first else {
             return ["Play", "Play next", "Add to queue", "Add to collection", "Trim…", "Show in Finder"].map { .item($0, enabled: false) {} }
         }
-        return MenuEntry.song(first, picked: songs, play: router.playPick, remove: router.removePick.map { remove in { _ in remove() } }, part: nil, naming: {
+        return MenuEntry.song(first, picked: songs, source: router.currentRun?.source, play: router.playPick, remove: router.removePick.map { remove in { _ in remove() } }, part: nil, naming: {
             guard let id = controller.newPlaylist(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
             router.renaming = id
             router.go(to: .playlist(id))

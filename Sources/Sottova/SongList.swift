@@ -25,6 +25,8 @@ struct LibraryLine: View {
     var part: (starts: Bool, flip: () -> Void)?
     /// What it's picked by, when that isn't the song: a collection's row.
     var key: String?
+    /// The collection it's queued from, with its silence.
+    var source: String?
     /// The page's own lines, after the song's in the right-click.
     var more: (() -> [MenuEntry])?
     let play: () -> Void
@@ -108,7 +110,7 @@ struct LibraryLine: View {
         .opacity(lifted || liftedPick.contains(id) ? 0.4 : 1)
         .onDragSessionUpdated { lifted = $0.phase.lifted }
         .sottovaMenu(open: { menuOpen = $0 }) {
-            MenuEntry.song(song, picked: picked, play: play, remove: remove, part: part, naming: { naming = true },
+            MenuEntry.song(song, picked: picked, source: source, play: play, remove: remove, part: part, naming: { naming = true },
                            controller: controller, router: router, navigate: navigate)
                 + (more?() ?? [])
         }
@@ -168,7 +170,7 @@ struct SongListRun: ViewModifier {
                 // what was picked, as the pick's Play button plays it
                 router.run = SongRun(route: router.route, order: order, play: { [controller, source] keys in
                     controller.playCollection(keys.compactMap { controller.catalog.songsByID[Playlist.path(ofRow: $0)] }, source: source)
-                }, remove: remove)
+                }, remove: remove, source: source)
             }
     }
 }
