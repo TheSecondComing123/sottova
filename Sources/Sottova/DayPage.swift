@@ -457,7 +457,7 @@ struct DayPage: View {
             ForEach(played.reversed().prefix(cap), id: \.at) { line in
                 HStack(spacing: 8) {
                     // one column: the time in the rail's gutter, the art at the blocks' edge
-                    Text(plan.clockText(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: oneColumn(plan) ? DayLayout.blockLeft - 30 : 38, alignment: .trailing)
+                    Text(DayPlan.fullTime(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: oneColumn(plan) ? DayLayout.blockLeft - 30 : 62, alignment: .trailing)
                         .padding(.trailing, oneColumn(plan) ? 22 : 0)
                     Artwork(key: line.artwork, size: 20, radius: 3)
                     Text(line.title).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(line.title)
@@ -485,7 +485,7 @@ struct DayPage: View {
                 ForEach(played.reversed(), id: \.at) { line in
                     let words = [line.title, line.row].compactMap { $0 }.joined(separator: ", ")
                     HStack(spacing: 8) {
-                        Text(plan.clockText(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: 38, alignment: .trailing)
+                        Text(DayPlan.fullTime(line.at)).monospacedDigit().foregroundStyle(Theme.faint).lineLimit(1).frame(width: 62, alignment: .trailing)
                         Text(words).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(words)
                     }
                     .role(.body)

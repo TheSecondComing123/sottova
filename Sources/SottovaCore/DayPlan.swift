@@ -495,7 +495,7 @@ extension DayPlan {
         railTime(hour: alarm.hour, minute: alarm.minute, full: true, twelveHour: twelveHour)
     }
 
-    /// "7:02" in What played, where 3 alone would look like a count.
+    /// "7:02" at the rail's now line, where 3 alone would look like a count.
     public func clockText(_ date: Date) -> String {
         let clock = calendar.dateComponents([.hour, .minute], from: date)
         let hour = clock.hour ?? 0
