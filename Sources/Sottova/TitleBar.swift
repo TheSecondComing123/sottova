@@ -79,7 +79,6 @@ private struct BarIcon: View {
     let icon: Ph
     var strong = false
     var on = false
-    let hovering: Bool
     @Environment(\.isEnabled) private var enabled
     @Environment(\.appearsActive) private var active
 
@@ -109,7 +108,7 @@ private struct BarButton: View {
     var body: some View {
         BarControl(help: help, action: { _ in action() }) { hovering in
             HStack(spacing: 0) {
-                BarIcon(icon: icon, strong: strong, on: on, hovering: hovering)
+                BarIcon(icon: icon, strong: strong, on: on)
                 if let title {
                     Text(title)
                         .role(.small)
@@ -216,7 +215,7 @@ private struct SleepControl: View {
         BarControl(actsOnPress: true, help: "stop the music after a while", action: open) { hovering in
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 HStack(spacing: 2) {
-                    BarIcon(icon: .timer, strong: timer != nil, hovering: hovering)
+                    BarIcon(icon: .timer, strong: timer != nil)
                     Text(timer.map { "Stop \(Format.sleep($0, resting: resting, at: context.date, sentence: true))" } ?? "Stop music")
                         .role(.small)
                         .monospacedDigit()
