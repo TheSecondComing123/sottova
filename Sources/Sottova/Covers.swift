@@ -47,7 +47,7 @@ struct CoverPicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             Text("Choose a cover for \(name)")
-                .font(.system(size: 17, weight: .semibold))
+                .role(.sheet)
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
 

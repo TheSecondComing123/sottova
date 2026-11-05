@@ -157,7 +157,7 @@ struct AlarmSheet: View {
             let unnamed = "Schedule music"
             Text(kind == .whileHere ? name.map { "Play \($0) while you're here" } ?? "Music while you're here"
                                     : name.map { "Start \($0)" } ?? unnamed)
-                .font(.system(size: 17, weight: .semibold))
+                .role(.sheet)
                 .foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
             if picking {

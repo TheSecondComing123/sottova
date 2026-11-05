@@ -84,7 +84,8 @@ enum Role {
         case .title: 32
         case .name: 22
         case .row: 17
-        case .item, .sheet: 15
+        case .sheet: 17
+        case .item: 15
         case .body: 13
         case .small: 12
         case .label, .column: 11
@@ -96,7 +97,8 @@ enum Role {
         case .title: 37
         case .name: 27
         case .row: 22
-        case .item, .sheet: 20
+        case .sheet: 21
+        case .item: 20
         case .body: 18
         case .small: 16
         case .label, .column: 14

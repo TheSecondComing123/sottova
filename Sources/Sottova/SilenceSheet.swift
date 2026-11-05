@@ -46,6 +46,7 @@ struct SilenceSheet: View {
             Text(edit.collection.map { "Silence for \($0.name)" } ?? edit.replacing.map { "Edit \($0)" } ?? "New preset")
                 .role(.sheet)
                 .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 4)
             if edit.collection == nil {
                 row("Name") {

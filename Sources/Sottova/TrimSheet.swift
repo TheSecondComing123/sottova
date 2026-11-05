@@ -24,7 +24,7 @@ struct TrimSheet: View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Trim \(song.title)")
-                    .font(.system(size: 17, weight: .semibold))
+                    .role(.sheet)
                     .foregroundStyle(Theme.text)
                     .accessibilityAddTraits(.isHeader)
                     .lineLimit(1)
