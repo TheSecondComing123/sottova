@@ -302,14 +302,25 @@ public final class Controller {
     /// Whatever played with it keeps those gaps, as Custom.
     public func deletePreset(_ name: String) {
         guard let i = customPresets.firstIndex(where: { $0.name == name }) else { return }
+        // collections' silence undoes itself, through setGaps
+        let albums = albumSettings.filter { $0.value.name == name }
+        let own = ownSettings?.name == name ? ownSettings : nil
+        let inUse = settings.name == name
         let preset = customPresets.remove(at: i)
         everyoneOn(name) {
             var s = $0
             s.name = "Custom"
             return s
         }
-        if settings.name == name { settings.name = "Custom" }
-        undo?.registerUndo(withTarget: self) { $0.customPresets.insert(preset, at: min(i, $0.customPresets.count)) }
+        if inUse { settings.name = "Custom" }
+        undo?.registerUndo(withTarget: self) { controller in
+            // first: settings named for a preset that isn't there turn Custom
+            controller.customPresets.insert(preset, at: min(i, controller.customPresets.count))
+            for (id, album) in albums { controller.albumSettings[id] = album }
+            if let own { controller.ownSettings = own }
+            if inUse { controller.settings.name = name }
+            controller.undo?.registerUndo(withTarget: controller) { $0.deletePreset(name) }
+        }
         did("Delete \(name)", "Deleted \(name)", back: "Put back \(name)")
     }
 

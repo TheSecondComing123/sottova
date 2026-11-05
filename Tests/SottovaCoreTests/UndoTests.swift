@@ -343,6 +343,32 @@ struct UndoTests {
         #expect(c.playlists[0].partPaths[next] == ["/3", "/4", "/5", "/6"])
     }
 
+    @Test func aDeletedPresetComesBackOnWhatPlayedWithItAndGoesAgainOnRedo() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let c = Controller(storage: nil, playlistFolder: dir)
+        var night = Settings.presets.first { $0.name == "Sparse" }!
+        (night.name, night.gapMax) = ("Night", 200)
+        c.savePreset(night)
+        let id = try #require(c.newPlaylist(named: "Compline", songs: [song("/1")]))
+        c.setGaps(c.customPresets[0], for: id)
+        c.albumSettings["lauds"] = c.customPresets[0]
+        let undo = undoing(c) { c.deletePreset("Night") }
+        #expect(c.customPresets.isEmpty)
+        #expect(c.settings.name == "Custom")
+        undo.undo()
+        #expect(c.customPresets.map(\.name) == ["Night"])
+        #expect(c.settings.name == "Night")
+        #expect(c.albumSettings["lauds"]?.name == "Night")
+        #expect(c.playlists[0].gaps?.name == "Night")
+        undo.redo()
+        #expect(c.customPresets.isEmpty)
+        #expect(c.settings.name == "Custom")
+        #expect(c.albumSettings["lauds"]?.name == "Custom")
+        #expect(c.playlists[0].gaps?.name == "Custom")
+        #expect(c.notice?.text == "Deleted Night")
+    }
+
     @Test func addingMovingRenamingAndSilenceUndo() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
