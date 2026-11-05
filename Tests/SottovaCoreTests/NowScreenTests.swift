@@ -37,7 +37,7 @@ struct NowScreenTests {
         try engine.enableManualRenderingMode(.offline, format: AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!, maximumFrameCount: 480)
         let screen = Controller(engine: engine, storage: nil).nowScreen()
         #expect(screen.kind == .firstRun)
-        #expect(screen.title == "Drop your music here")
+        #expect(screen.title == "Start with your music")
     }
 
     @Test func aPieceSaysWhoAndTimeLeft() async throws {

@@ -353,7 +353,7 @@ private struct NowText: View {
                         if !dragging {
                             HStack(spacing: 0) {
                                 Text("or ")
-                                ThemeLink(text: "choose a folder", style: .inline, action: choose)
+                                ThemeLink(text: "add a folder", style: .inline, action: choose)
                                 Text(", or ")
                                 ThemeLink(text: "get free music", style: .inline, action: freeMusic)
                             }

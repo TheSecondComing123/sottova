@@ -49,7 +49,7 @@ extension Controller {
                 let done = max(0, tracks.count - pendingAnalysis)
                 return NowScreen(kind: .reading, title: "Reading \(folder.lastPathComponent)", sub: "\(done) of \(tracks.count)")
             }
-            return NowScreen(kind: .firstRun, title: "Drop your music here")
+            return NowScreen(kind: .firstRun, title: "Start with your music")
         }
         if waitingForDevice {
             return NowScreen(kind: .silence, title: "No sound output", sub: "Sottova can't start the audio device. It keeps trying.", action: .openSound)
