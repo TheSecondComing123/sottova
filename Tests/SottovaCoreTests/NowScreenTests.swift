@@ -111,10 +111,19 @@ struct NowScreenTests {
         while c.status != .resting { c.advance(0.5) }
         c.advance(5)
         let left = try #require(c.machine.restRemaining)
+        let piece = c.current?.id
         #expect(c.holdForPreview())
+        #expect(c.status == .paused)
+        // held past where the silence would have ended: nothing starts and the countdown stays put
+        c.advance(left + 5)
+        #expect(c.status == .paused)
+        #expect(c.current?.id == piece)
+        #expect(c.machine.restRemaining == left)
         c.endPreview()
         #expect(c.status == .resting)
         #expect(c.machine.restRemaining == left)
+        c.advance(left + 1)
+        #expect(c.status == .playing)
     }
 
     @Test(arguments: [(Hold.away, "away"), (.call, "call"), (.busy, "busy"), (.media, "playing")])
