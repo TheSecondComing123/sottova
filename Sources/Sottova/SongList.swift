@@ -105,7 +105,7 @@ struct LibraryLine: View {
         .onTapGesture(count: 2, perform: play)
         .simultaneousGesture(TapGesture().onEnded { router.select(id, in: order) })
         .accessibilityAddTraits(isPicked ? .isSelected : [])
-        .accessibilityAction(named: "Play", play)
+        .accessibilityAction(named: "Play") { router.playRow(id) }
         .modifier(RowDrag(several: isPicked && router.selected.count > 1, id: id, path: song.id, namespace: drag) { dragStarted?() })
         .opacity(lifted || liftedPick.contains(id) ? 0.4 : 1)
         .onDragSessionUpdated { lifted = $0.phase.lifted }
