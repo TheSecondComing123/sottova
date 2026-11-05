@@ -219,7 +219,7 @@ struct ProblemNotice: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ThemeButton(title: "Dismiss", action: dismiss)
-                .accessibilityLabel("dismiss message")
+                .accessibilityLabel("Dismiss message")
         }
     }
 }

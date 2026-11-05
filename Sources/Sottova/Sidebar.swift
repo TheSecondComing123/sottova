@@ -21,8 +21,8 @@ struct Sidebar: View {
                         Ph.plus.icon(.line, size: 12).foregroundStyle(Theme.faint).frame(width: 24, height: 24).contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .help("new collection")
-                    .accessibilityLabel("new collection")
+                    .help("New collection")
+                    .accessibilityLabel("New collection")
                 }
                 nav(.artists, "Artists", .microphoneStage)
             }

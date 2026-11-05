@@ -215,7 +215,7 @@ struct AlarmSheet: View {
                 if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
                         .buttonStyle(ThemeButtonStyle())
-                        .help(alarm.whileHere ? "a few seconds at its volume" : "a few seconds at the volume it rises to")
+                        .help(alarm.whileHere ? "A few seconds at its volume" : "A few seconds at the volume it rises to")
                 }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
@@ -273,7 +273,7 @@ struct AlarmSheet: View {
                     if on, !stops { until = time + 3600 }
                     stops = on
                 }))
-                .help(stops ? "play on instead" : "stop at a set time, easing down over the last three minutes")
+                .help(stops ? "Play on instead" : "Stop at a set time, easing down over the last three minutes")
             }
             timeField($until, label: "Until")
                 .opacity(kind == .whileHere || stops ? 1 : 0.35)
@@ -289,17 +289,17 @@ struct AlarmSheet: View {
             .fixedSize()
     }
 
-    /// "its own 3 parts, part 2 next", or "about 30 min each, part 1 next".
+    /// "Its own 3 parts, part 2 next", or "About 30 min each, part 1 next".
     private var partsLine: String? {
         guard let alarm, rotates else { return nil }
         let cut = controller.parts(for: alarm)
         guard !cut.isEmpty else { return nil }
         let next = controller.nextPartName(for: alarm) + " next"
         if controller.playlists.first(where: { $0.id == alarm.source })?.breaks.isEmpty == false {
-            return "its own \(cut.count) parts, \(next)"
+            return "Its own \(cut.count) parts, \(next)"
         }
         let total: Double = cut.joined().reduce(0) { $0 + $1.duration }
-        return "about \(Format.length(total / Double(cut.count))) each, \(next)"
+        return "About \(Format.length(total / Double(cut.count))) each, \(next)"
     }
 
     /// The order, the calendar, the parts, and the volume it plays at.
@@ -352,7 +352,7 @@ struct AlarmSheet: View {
                         .frame(width: 40, alignment: .trailing)
                 }
                 // the machine's rise, Machine.riseLength
-                .help(kind == .whileHere ? "set as it begins" : "rises to this over 90 seconds")
+                .help(kind == .whileHere ? "Set as it begins" : "Rises to this over 90 seconds")
                 .transition(.opacity)
             }
         }

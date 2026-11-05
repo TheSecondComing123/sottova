@@ -43,10 +43,10 @@ struct TrimSheet: View {
             }
 
             HStack(spacing: 8) {
-                Text("plays \(Format.time(end - start)) of \(Format.time(length)), from the next time it starts")
+                Text("Plays \(Format.time(end - start)) of \(Format.time(length)), from the next time it starts")
                     .foregroundStyle(Theme.faint)
                 if start > 0 || end < length {
-                    ThemeLink(text: "keep all of it", color: Theme.text) {
+                    ThemeLink(text: "Keep all of it", color: Theme.text) {
                         withAnimation(Theme.quick) { (start, end) = (0, length) }
                     }
                     .lineLimit(1)
@@ -89,7 +89,7 @@ struct TrimSheet: View {
                 .foregroundStyle(Theme.muted)
             HStack(spacing: 8) {
                 ValueStepper(value: value, range: range, step: 0.1, format: { Self.clock($0, tenths: true) },
-                             help: ("a tenth of a second earlier", "a tenth of a second later"))
+                             help: ("A tenth of a second earlier", "A tenth of a second later"))
                     .accessibilityLabel(label)
                 ThemeButton(title: previewTitle, icon: .play, action: hear)
             }
@@ -193,7 +193,7 @@ private struct Waveform: View {
                     }
                 }
                 if peaks.isEmpty {
-                    Text(unreadable ? "can't read this file" : "reading the file…")
+                    Text(unreadable ? "Can't read this file" : "Reading the file…")
                         .font(Role.column.font)
                         .foregroundStyle(unreadable ? Theme.text : Theme.faint)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -229,6 +229,6 @@ private struct Waveform: View {
         .offset(x: x - 8)
         .gesture(DragGesture(coordinateSpace: .named("wave")).onChanged { drag($0.location.x) })
         .pointerStyle(.columnResize)
-        .help("drag to move this end")
+        .help("Drag to move this end")
     }
 }

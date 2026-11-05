@@ -221,7 +221,7 @@ struct DayPage: View {
                         .contentShape(.rect)
                         .pointerStyle(.rowResize)
                         .gesture(drag(mark, end: true, plan: plan, rail: rail, scale: scale))
-                        .accessibilityLabel("change when \(mark.alarm.name) ends")
+                        .accessibilityLabel("Change when \(mark.alarm.name) ends")
                         .offset(x: mark.aside ? 65 : 60, y: bar.upperBound - 6)
                 }
             }
@@ -657,7 +657,7 @@ private struct RailTime: View {
             if let alarm {
                 Button { open = true } label: { text.padding(.horizontal, 3).hoverable(radius: 3).padding(.horizontal, -3) }
                     .buttonStyle(.plain)
-                    .help(label.kind == .end ? "when it stops" : "when it starts")
+                    .help(label.kind == .end ? "When it stops" : "When it starts")
                     .popover(isPresented: $open, arrowEdge: .trailing) { TimeField(alarm: alarm, end: label.kind == .end, open: $open) }
             } else {
                 text
@@ -875,8 +875,8 @@ private struct DaysOffField: View {
         .buttonStyle(.plain)
         .disabled(!earliest)
         .opacity(earliest ? 1 : 0.35)
-        .help(step < 0 ? "previous month" : "next month")
-        .accessibilityLabel(step < 0 ? "previous month" : "next month")
+        .help(step < 0 ? "Previous month" : "Next month")
+        .accessibilityLabel(step < 0 ? "Previous month" : "Next month")
     }
 
     private func grid(_ month: DayPlan.Month) -> some View {
@@ -995,7 +995,7 @@ private struct DayRow: View {
                     RowTick(alarm: alarm)
                     Text(alarm.name).role(.row).foregroundStyle(off ? Theme.faint : Theme.text)
                         .lineLimit(1)
-                    if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("sounding") }
+                    if sounding { Ph.speakerHigh.icon(size: 13).foregroundStyle(Theme.primary).accessibilityLabel("Sounding") }
                     buttons
                 }
                 WordFlow {
@@ -1034,8 +1034,8 @@ private struct DayRow: View {
                 .role(.body).frame(height: 24).fixedSize()
                 .accessibilityLabel("Edit \(alarm.name)")
                 .revealed(shown || picked)
-            MoreMenu(label: "more for \(alarm.name)") { MenuEntries(entries: entries) }
-            IconButton(icon: .x, weight: .bold, help: "delete \(alarm.name)", size: 24) { controller.removeAlarm(alarm.id) }
+            MoreMenu(label: "More for \(alarm.name)") { MenuEntries(entries: entries) }
+            IconButton(icon: .x, weight: .bold, help: "Delete \(alarm.name)", size: 24) { controller.removeAlarm(alarm.id) }
                 .revealed(shown)
         }
     }
@@ -1078,7 +1078,7 @@ private struct OtherLine: View {
                     }
                 }
                 Spacer(minLength: 0)
-                MoreMenu(label: "more for \(alarm.name)") { MenuEntries(entries: entries) }
+                MoreMenu(label: "More for \(alarm.name)") { MenuEntries(entries: entries) }
             }
             .frame(height: 24)
             .daysOffPopover(alarm)

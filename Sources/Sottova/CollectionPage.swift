@@ -150,7 +150,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
         #else
         let plan = controller.dayPlan()
         #endif
-        return ([plan.when(row)] + plan.sentence(row, nextPart: nil).map(\.text)).joined(separator: ", ")
+        return plan.summary(row)
     }
 
     private var coverHovered: Bool {
@@ -206,7 +206,7 @@ struct ShuffleButton: View {
     var body: some View {
         let on = controller.collectionState(songs, source: source)?.shuffled == true
         ThemeButton(title: "Shuffle", on: on, icon: .shuffle, iconWeight: .bold) { controller.play(songs.shuffled(), source: source, shuffled: true) }
-            .help(on ? "playing shuffled; click for a new order" : "play in a random order")
+            .help(on ? "Playing shuffled; click for a new order" : "Play in a random order")
             .accessibilityValue(on ? "on" : "")
     }
 }
@@ -303,7 +303,7 @@ struct AlbumCollection: View {
                 .padding(.trailing, -12)
             }
         } else {
-            Missing(text: "this collection isn't in your library anymore")
+            Missing(text: "This collection isn't in your library anymore")
         }
     }
 }
@@ -396,7 +396,7 @@ struct YourCollection: View {
             .onChange(of: router.addSongsRequests) { addRequests += 1 }
             .onChange(of: router.newPartRequests) { if router.selected.count > 1 { newPartFromPick(playlist) } }
         } else {
-            Missing(text: "this collection isn't in your library anymore")
+            Missing(text: "This collection isn't in your library anymore")
                 .onAppear {
                     router.shownCollection = nil
                     // gone by an undo of New collection or Make it yours: leave, as Move to Trash does
@@ -594,7 +594,7 @@ struct YourCollection: View {
                 .offset(y: -2)
                 .foregroundStyle(Theme.text)
                 .focused($typing)
-                .accessibilityLabel("collection name")
+                .accessibilityLabel("Collection name")
                 .onSubmit(commitRename)
                 .onExitCommand(perform: endRename)
                 .onDisappear { router.typing = false }
@@ -611,7 +611,7 @@ struct YourCollection: View {
                 .accessibilityAddTraits(.isHeader)
                 .onTapGesture { startRename(playlist) }
                 .pointerStyle(.horizontalText)
-                .help("click to rename")
+                .help("Click to rename")
                 .accessibilityAction(named: "Rename") { startRename(playlist) }
         }
     }
@@ -761,7 +761,7 @@ private struct AddHit: View {
                 .frame(width: 40, alignment: .trailing)
             Group {
                 if here {
-                    Text("already here").role(.small).foregroundStyle(Theme.faint)
+                    Text("Already here").role(.small).foregroundStyle(Theme.faint)
                         .multilineTextAlignment(.center)
                 } else {
                     Button("Add", action: add)
@@ -819,7 +819,7 @@ private struct RowEdits: ViewModifier {
                         .contentShape(.rect)
                 }
                 .buttonStyle(PressStyle())
-                .help("remove from this collection")
+                .help("Remove from this collection")
                 .accessibilityLabel("Remove from this collection")
                 .onHover { cross = $0 }
                 .revealed(shown)
@@ -866,7 +866,7 @@ private struct SplitTarget: ViewModifier {
                     .offset(y: -4)
                     .onTapGesture(perform: split)
                     .allowsHitTesting(seam)
-                    .help("start a new part here")
+                    .help("Start a new part here")
                     .accessibilityElement()
                     .accessibilityLabel("Start a new part here")
                     .accessibilityAddTraits(.isButton)
@@ -991,7 +991,7 @@ private struct PartHeading: View {
             .role(.row)
             .foregroundStyle(Theme.text)
             .focused($typing)
-            .accessibilityLabel("part name")
+            .accessibilityLabel("Part name")
             .onSubmit(commit)
             .onExitCommand(perform: end)
             .onDisappear { router.typing = false }
@@ -1137,9 +1137,9 @@ private struct CollectionCard: View {
                 }
             }
             HStack(alignment: .top, spacing: 4) {
-                TileCaption(title: collection.title, detail: hours ?? (songs.isEmpty ? "no songs yet" : nil))
+                TileCaption(title: collection.title, detail: hours ?? (songs.isEmpty ? "No songs yet" : nil))
                 Spacer(minLength: 0)
-                MoreMenu(label: "more for \(collection.title)") { MenuEntries(entries: entries) }
+                MoreMenu(label: "More for \(collection.title)") { MenuEntries(entries: entries) }
                     .revealed(shown)
             }
             .contentShape(.rect)

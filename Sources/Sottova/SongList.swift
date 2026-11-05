@@ -513,7 +513,7 @@ private struct PersonTile: View {
         Button(action: open) {
             HStack(spacing: 12) {
                 Artwork(key: person.artwork, size: 40, radius: 3, outlined: true)
-                    .accessibilityLabel("album artwork from \(person.name)'s songs")
+                    .accessibilityLabel("Album artwork from \(person.name)'s songs")
                     .accessibilityHidden(person.artwork == nil)
                 Text(person.name)
                     .font(Role.item.font)

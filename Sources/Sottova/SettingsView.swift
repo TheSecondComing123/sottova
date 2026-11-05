@@ -128,7 +128,7 @@ struct SettingsView: View {
                     Spacer(minLength: 0)
                     Text(Format.count(songCount(in: folder), "song")).role(.body).monospacedDigit().foregroundStyle(Theme.muted).fixedSize()
                     ThemeButton(title: "Remove") { removing = folder }
-                        .help("stop watching this folder; the files stay where they are")
+                        .help("Stop watching this folder; the files stay where they are")
                 }
                 .modifier(SettingsRow())
             }

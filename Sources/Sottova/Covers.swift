@@ -58,7 +58,7 @@ struct CoverPicker: View {
                         Text(picked == nil && file == nil ? "Current cover" : "New cover")
                             .role(.small).foregroundStyle(Theme.muted)
                     }
-                    ThemeLink(text: "choose a file…", color: Theme.text, action: chooseFile)
+                    ThemeLink(text: "Choose a file…", color: Theme.text, action: chooseFile)
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
                     if let picked {
@@ -148,7 +148,7 @@ struct CoverPicker: View {
             } else if let currentCover {
                 Artwork(key: currentCover, size: 200, radius: Radius.small)
             } else {
-                Text("drop an image here")
+                Text("Drop an image here")
                     .font(Role.body.font)
                     .foregroundStyle(Theme.faint)
             }
@@ -185,8 +185,8 @@ struct CoverPicker: View {
     }
 
     private var status: String {
-        if searching { return "asking the Met, the Art Institute and Cleveland…" }
-        if results.isEmpty { return silent.count == 3 ? "no connection. you can still drop an image" : "no public-domain paintings match “\(searched)”" }
+        if searching { return "Asking the Met, the Art Institute and Cleveland…" }
+        if results.isEmpty { return silent.count == 3 ? "No connection. You can still drop an image" : "No public-domain paintings match “\(searched)”" }
         if !silent.isEmpty { return "\(silent.joined(separator: " and ")) didn't answer; showing the rest" }
         return "\(results.count) public-domain paintings"
     }
@@ -253,7 +253,7 @@ struct CoverPicker: View {
     private func chooseFile() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
-        panel.message = "choose a cover for \(name)"
+        panel.message = "Choose a cover for \(name)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         _ = load(url)
     }

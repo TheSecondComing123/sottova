@@ -74,7 +74,7 @@ struct NowPage: View {
                 NowCover(motion: motion, layout: layout, shown: shown, album: controller.current?.album, dragging: router.droppingMusic)
                     .onTapGesture { if let route = shownRoute { navigate(route) } }
                     .pointerStyle(shownRoute == nil ? nil : .link)
-                    .help(shownRoute == nil ? "" : "open the collection")
+                    .help(shownRoute == nil ? "" : "Open the collection")
                 VStack(alignment: bare ? .center : .leading, spacing: 12) {
                     NowText(motion: motion, width: width, size: titleSize, detail: detail, lines: under ? 4 : 6, centered: bare, dragging: router.droppingMusic, act: act,
                             choose: controller.chooseFolders, freeMusic: { navigate(.shelf) })
@@ -98,7 +98,7 @@ struct NowPage: View {
                 let missed = line.hasPrefix("Missed")
                 Text(line).detail(size).foregroundStyle(missed ? Theme.text : Theme.muted)
                 if missed {
-                    IconButton(icon: .x, weight: .bold, help: "dismiss", size: 24) { router.dismissedFoot = line }
+                    IconButton(icon: .x, weight: .bold, help: "Dismiss", size: 24) { router.dismissedFoot = line }
                 }
             }
         }

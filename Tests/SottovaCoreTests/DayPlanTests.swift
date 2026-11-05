@@ -408,8 +408,11 @@ struct DayPlanTests {
         #expect(text(day.sentence(plain, nextPart: nil)) == "Every day · in order")
         var some = overworld
         some.weekdays = [2, 3, 4, 5, 6]
-        #expect(text(day.sentence(some, nextPart: nil)) == "Weekdays · While you're at the Mac · in order")
+        #expect(text(day.sentence(some, nextPart: nil)) == "Weekdays · while you're at the Mac · in order")
         #expect(day.sentence(here, nextPart: nil).compactMap(\.word) == [.kind, .order, .calendar])
+        // one sentence on a collection's page, its time first
+        #expect(day.summary(plain) == "8 to 9 PM, every day, in order")
+        #expect(day.summary(some) == "3 to 7 PM, weekdays, while you're at the Mac, in order")
     }
 
     // MARK: Days off
@@ -423,14 +426,14 @@ struct DayPlanTests {
     @Test func aDayOffSaysWhenRightAfterTheDays() {
         let monday = plan([], date(2, 12))
         let token = { (row: Alarm) in monday.sentence(row, nextPart: nil).first { $0.word == .daysOff }?.text }
-        #expect(monday.sentence(off(lauds, ["2026-11-03"]), nextPart: nil).prefix(2).map(\.text) == ["Weekdays", "Off tomorrow"])
-        #expect(token(off(lauds, ["2026-11-02"])) == "Off today")
-        #expect(token(off(lauds, ["2026-11-06"])) == "Off Friday")
-        #expect(token(off(lauds, ["2026-11-27"])) == "Off Nov 27")
-        #expect(token(off(lauds, (21...31).map { "2026-12-\($0)" } + (1...4).map { "2027-01-0\($0)" })) == "Off Dec 21 to Jan 4")
-        #expect(token(off(lauds, ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"])) == "Off till Nov 5")
+        #expect(monday.sentence(off(lauds, ["2026-11-03"]), nextPart: nil).prefix(2).map(\.text) == ["Weekdays", "off tomorrow"])
+        #expect(token(off(lauds, ["2026-11-02"])) == "off today")
+        #expect(token(off(lauds, ["2026-11-06"])) == "off Friday")
+        #expect(token(off(lauds, ["2026-11-27"])) == "off Nov 27")
+        #expect(token(off(lauds, (21...31).map { "2026-12-\($0)" } + (1...4).map { "2027-01-0\($0)" })) == "off Dec 21 to Jan 4")
+        #expect(token(off(lauds, ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"])) == "off till Nov 5")
         // the weekend isn't when it's back: Monday is
-        #expect(token(off(lauds, (2...6).map { "2026-11-0\($0)" })) == "Off till Nov 9")
+        #expect(token(off(lauds, (2...6).map { "2026-11-0\($0)" })) == "off till Nov 9")
         // yesterday's is kept but over
         #expect(token(off(lauds, ["2026-11-01"])) == nil)
         #expect(token(lauds) == nil)
@@ -523,7 +526,7 @@ struct DayPlanTests {
         let row = day.rows[0]
         #expect(text(day.line(for: row, nextPart: nil)) == "Missed at 7:02 AM. The Mac was off. · Play it now")
         #expect(day.line(for: row, nextPart: nil).last?.word == .playNow)
-        #expect(says(text(day.line(for: row, nextPart: nil, rising: true)), "Rising", "25%", "shuffled"))
+        #expect(text(day.line(for: row, nextPart: nil, rising: true)) == "Rising to 25% · weekdays · shuffled")
         #expect(says(text(day.line(for: day.rows[1], nextPart: nil, waiting: .call)), "Waiting", "call"))
         #expect(text(day.line(for: day.rows[1], nextPart: nil, cantWake: true)) == "The Mac won't wake for this. · Wake it")
         // a miss today mustn't hide that the next one can't wake either

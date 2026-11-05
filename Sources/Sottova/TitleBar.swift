@@ -15,13 +15,13 @@ struct TitleBar: View {
         ZStack {
             nowPlaying
             HStack(spacing: 2) {
-                BarButton(icon: running ? .barPause : .barPlay, strong: true, help: running ? "pause" : "play") { controller.toggle() }
+                BarButton(icon: running ? .barPause : .barPlay, strong: true, help: running ? "Pause" : "Play") { controller.toggle() }
                     .disabled(controller.tracks.isEmpty)
-                BarButton(icon: .barSkip, strong: true, help: controller.status == .resting ? "end the silence" : "skip") { controller.skip() }
+                BarButton(icon: .barSkip, strong: true, help: controller.status == .resting ? "End the silence" : "Skip") { controller.skip() }
                     .disabled(idle)
                 Spacer(minLength: 0)
                 SleepControl().disabled(idle)
-                BarButton(icon: .barQueue, on: router.showsQueue, title: "Queue", help: router.showsQueue ? "hide the queue" : "show the queue", action: toggleQueue)
+                BarButton(icon: .barQueue, on: router.showsQueue, title: "Queue", help: router.showsQueue ? "Hide the queue" : "Show the queue", action: toggleQueue)
                     .disabled(controller.tracks.isEmpty)
                 BarVolume().padding(.leading, 14)
             }
@@ -37,7 +37,7 @@ struct TitleBar: View {
     private var nowPlaying: some View {
         if router.route != .home, let song = controller.sounding {
             // not on the click that brings the window forward: going to Now would clear a picked row's selection
-            BarControl(firstClick: false, pressScale: 0.99, help: "show what's playing", action: { _ in router.go(to: .home) }) { hovering in
+            BarControl(firstClick: false, pressScale: 0.99, help: "Show what's playing", action: { _ in router.go(to: .home) }) { hovering in
                 HStack(spacing: 6) {
                     Text(song.title).linkUnderline(hovering: hovering).foregroundStyle(Theme.text)
                     Text(song.artist).linkUnderline(hovering: hovering).foregroundStyle(Theme.muted).layoutPriority(-1)
@@ -259,7 +259,7 @@ private struct BarVolume: View {
             }
             .frame(width: width, height: 28)
         }
-        .help("volume")
+        .help("Volume")
         .accessibilityRepresentation {
             Slider(value: $controller.volume, in: 0...1) { Text("Volume") }
         }
@@ -338,7 +338,7 @@ struct Hairline: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("position")
+        .accessibilityLabel("Position")
         .accessibilityValue(Format.time(seekable?.elapsed ?? 0))
         .accessibilityAdjustableAction { direction in
             guard let track = seekable else { return }

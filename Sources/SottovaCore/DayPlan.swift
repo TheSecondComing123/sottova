@@ -425,7 +425,7 @@ extension DayPlan {
         let alarm = row.alarm
         if rising {
             let level = alarm.volume.map { "Rising to \(Self.percent($0))" } ?? "Rising"
-            return [Piece(level)] + sentence(alarm, nextPart: nextPart, volume: false)
+            return Self.cased([Piece(level)] + sentence(alarm, nextPart: nextPart, volume: false))
         }
         if let waiting {
             let why = switch waiting {
@@ -468,7 +468,21 @@ extension DayPlan {
         if alarm.rotates, let nextPart {
             pieces.append(Piece(nextPart.prefix(1).uppercased() + nextPart.dropFirst() + " next", .part))
         }
-        return pieces
+        return Self.cased(pieces)
+    }
+
+    /// On a collection's page, the row's words as one sentence after its time: "8 to 9 PM, every day, shuffled".
+    public func summary(_ row: Alarm) -> String {
+        Self.cased([Piece(when(row))] + sentence(row, nextPart: nil)).map(\.text).joined(separator: ", ")
+    }
+
+    /// Sentence case across a row's words: the first starts with a capital, the rest don't. A part keeps its name's.
+    private static func cased(_ pieces: [Piece]) -> [Piece] {
+        pieces.enumerated().map { i, piece in
+            guard piece.word != .part else { return piece }
+            let first = i == 0 ? piece.text.prefix(1).uppercased() : piece.text.prefix(1).lowercased()
+            return Piece(first + piece.text.dropFirst(), piece.word)
+        }
     }
 
     /// After a row's words, while the Mac would still wake on a day off: the link asks once for the rule that cancels.

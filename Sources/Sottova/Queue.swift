@@ -32,9 +32,9 @@ struct QueuePanel: View {
                 Spacer(minLength: 4)
                 if !controller.upNext.isEmpty {
                     ThemeLink(text: "Clear queue", color: Theme.muted) { withAnimation(Theme.quick) { controller.clearQueue() } }
-                        .help("empty the queue")
+                        .help("Empty the queue")
                 }
-                IconButton(icon: .x, weight: .bold, help: "close queue", size: 24, action: close)
+                IconButton(icon: .x, weight: .bold, help: "Close queue", size: 24, action: close)
             }
             .role(.body)
             .frame(height: 36)
@@ -175,7 +175,7 @@ private struct QueueRow: View {
                 if let song {
                     Text(Format.time(song.duration)).role(.body).monospacedDigit().foregroundStyle(Theme.faint).revealed(!hovering)
                 }
-                IconButton(icon: .x, weight: .bold, help: "remove from the queue", size: 24) {
+                IconButton(icon: .x, weight: .bold, help: "Remove from the queue", size: 24) {
                     withAnimation(Theme.quick) { controller.removeQueued([entry.id]) }
                 }
                 .revealed(hovering)

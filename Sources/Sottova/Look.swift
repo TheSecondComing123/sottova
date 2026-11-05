@@ -218,7 +218,7 @@ struct MoreMenu<Content: View>: View {
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .fixedSize()
-        .help("more")
+        .help("More")
         .accessibilityLabel(label)
     }
 }
