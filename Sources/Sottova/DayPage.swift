@@ -83,11 +83,11 @@ struct DayPage: View {
         }
     }
 
-    private func order(_ plan: DayPlan) -> [String] { plan.rows.map(\.id.uuidString) }
+    private func order(_ plan: DayPlan) -> [String] { (plan.rows.map(\.id) + rest(plan).map(\.id)).map(\.uuidString) }
 
     /// Blocks pick like songs: a click picks, Delete deletes, Return edits, through the page's keys.
     private func pickable(_ order: [String]) {
-        // a block that left today, by an edit or an undo, takes its pick with it
+        // a block that's gone, by a delete or an undo, takes its pick with it
         router.selected.formIntersection(order)
         router.run = SongRun(route: .alarms, order: order, play: { ids in
             if let alarm = controller.alarms.first(where: { $0.id.uuidString == ids.first }) { router.alarm = .edit(alarm) }
@@ -426,7 +426,8 @@ struct DayPage: View {
         if !rest.isEmpty {
             heading("Other days").padding(.top, oneColumn(plan) ? 24 : 0).padding(.bottom, 6)
             ForEach(rest) { alarm in
-                OtherLine(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id) + stillWakes(alarm))
+                OtherLine(alarm: alarm, pieces: plan.wakeLine(alarm: alarm, nextPart: nextPart(alarm), cantWake: cantWake(now: now) == alarm.id) + stillWakes(alarm),
+                          order: order(plan))
             }
         }
     }
@@ -1057,9 +1058,12 @@ private struct DayRow: View {
 private struct OtherLine: View {
     let alarm: Alarm
     let pieces: [DayPlan.Piece]
+    let order: [String]
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @Environment(\.navigate) private var navigate
+
+    private var picked: Bool { router.selected.contains(alarm.id.uuidString) }
 
     private var warning: Bool { pieces.contains { $0.word == .wake } }
 
@@ -1089,8 +1093,11 @@ private struct OtherLine: View {
                     .padding(.leading, 90)
             }
         }
+        .background(picked ? Theme.picked : .clear, in: .rect(cornerRadius: Radius.small))
         .contentShape(.rect)
         .onTapGesture(count: 2) { router.alarm = .edit(alarm) }
+        .simultaneousGesture(TapGesture().onEnded { router.select(alarm.id.uuidString, in: order) })
+        .accessibilityAddTraits(picked ? .isSelected : [])
         .sottovaMenu { entries }
     }
 
