@@ -169,6 +169,11 @@ final class Router {
         if !picked.isEmpty { run.play(picked) }
     }
 
+    /// One row's right-click Play: as Return plays it picked. A double-click starts it over instead.
+    func playRow(_ id: String) {
+        currentRun?.play([id])
+    }
+
     func go(to destination: Route) {
         selected = []
         if destination == .songs { songFilter = "" }

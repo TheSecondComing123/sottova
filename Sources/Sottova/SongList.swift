@@ -110,7 +110,7 @@ struct LibraryLine: View {
         .opacity(lifted || liftedPick.contains(id) ? 0.4 : 1)
         .onDragSessionUpdated { lifted = $0.phase.lifted }
         .sottovaMenu(open: { menuOpen = $0 }) {
-            MenuEntry.song(song, picked: picked, source: source, play: play, remove: remove, part: part, naming: { naming = true },
+            MenuEntry.song(song, picked: picked, source: source, play: { router.playRow(id) }, remove: remove, part: part, naming: { naming = true },
                            controller: controller, router: router, navigate: navigate)
                 + (more?() ?? [])
         }
