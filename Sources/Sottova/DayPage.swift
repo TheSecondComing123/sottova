@@ -475,12 +475,8 @@ struct DayPage: View {
 
     private func playedEntries(_ line: Controller.Played) -> [MenuEntry] {
         guard let song = controller.catalog.songsByID[line.path] else { return [] }
-        return [
-            .item("Play") { controller.play([song]) },
-            .divider,
-            .item("Go to \(controller.copy(ofAlbum: song.albumID)?.name ?? song.album)") { navigate(.album(song.albumID)) },
-            .item("Go to artist") { navigate(.artist(song.artist)) },
-        ]
+        return MenuEntry.song(song, picked: [song], play: { controller.play([song]) }, remove: nil, part: nil,
+                              controller: controller, router: router, navigate: navigate)
     }
 
     private func allPlayedList(_ plan: DayPlan) -> some View {
