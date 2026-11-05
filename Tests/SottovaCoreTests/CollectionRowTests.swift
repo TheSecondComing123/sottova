@@ -69,11 +69,15 @@ struct CollectionRowTests {
         #expect(c.upNext.map(\.path) == [songs[4].id])
         #expect(c.upNext.allSatisfy { $0.source == id })
         #expect(c.collectionState(songs, source: id) == nil)
+        #expect(c.pickState([3, 4], of: songs, source: id)?.paused == false)
 
         c.playPick([2], of: songs, source: id)
         c.advance(1.5)
         #expect(c.current?.id == songs[2].id)
         #expect(c.upNext.map(\.path) == songs[3...].map(\.id))
+        // the bar's Play on one row: Pause while the list it plays on through is going
+        #expect(c.pickState([2], of: songs, source: id)?.paused == false)
+        #expect(c.pickState([3, 4], of: songs, source: id) == nil)
         c.pause()
     }
 

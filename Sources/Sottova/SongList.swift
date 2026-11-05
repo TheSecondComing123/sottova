@@ -301,7 +301,7 @@ struct SongList: View {
                     }
                     .padding(.bottom, 19)
                     if !picked.isEmpty {
-                        PickActions(songs: picked)
+                        PickActions(picked: songs.indices.filter { router.selected.contains(songs[$0].id) }, list: songs)
                             .padding(.bottom, 12)
                     }
                     if songs.isEmpty {
@@ -437,15 +437,24 @@ private struct SearchField: NSViewRepresentable {
 
 /// Named actions for one song or a pick of several.
 struct PickActions: View {
-    let songs: [Song]
+    /// Places in `list`.
+    let picked: [Int]
+    let list: [Song]
     var source: String?
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
     @State private var naming = false
 
+    private var songs: [Song] { picked.map { list[$0] } }
+
     var body: some View {
         HStack(spacing: 8) {
-            PlayButton(songs: songs, source: source)
+            // as Return plays it
+            if let state = controller.pickState(picked, of: list, source: source), !state.paused {
+                ThemeButton(title: "Pause", primary: true, icon: .pause) { controller.pause() }
+            } else {
+                ThemeButton(title: "Play", primary: true, icon: .play) { controller.playPick(picked, of: list, source: source) }
+            }
             ThemeLink(text: "Play next", color: Theme.muted) { controller.playNext(songs, source: source) }
                 .role(.body)
             Menu {

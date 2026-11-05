@@ -1898,7 +1898,11 @@ public final class Controller {
     /// Play on a collection's page. If it's already going this brings the music back, out of a silence too.
     /// Whether these songs are what's going, and how: for a page's Play and Shuffle. nil when something else is.
     public func collectionState(_ songs: [Song], source: String? = nil) -> (paused: Bool, shuffled: Bool)? {
-        guard status != .idle, let origin, origin.key == Origin.key(of: songs, source: source) else { return nil }
+        state(of: Origin.key(of: songs, source: source))
+    }
+
+    private func state(of key: String) -> (paused: Bool, shuffled: Bool)? {
+        guard status != .idle, let origin, origin.key == key else { return nil }
         return (status == .paused, origin.shuffled)
     }
 
@@ -1926,8 +1930,19 @@ public final class Controller {
             return
         }
         let songs = picked.filter(list.indices.contains).map { list[$0] }
-        // known by its songs: a collection is known by its id, and a pick from the one that's going isn't all of it
-        playKnown(songs, source: source, as: Origin.key(of: songs, source: nil))
+        playKnown(songs, source: source, as: pickKey(picked, of: list, source: source))
+    }
+
+    /// Whether a pick is what's going, as `playPick` plays it: for the pick bar's Play.
+    public func pickState(_ picked: [Int], of list: [Song], source: String? = nil) -> (paused: Bool, shuffled: Bool)? {
+        state(of: pickKey(picked, of: list, source: source))
+    }
+
+    /// One row plays the list on, so it's known as the list. Several are known by their songs: a collection is known
+    /// by its id, and a pick from the one that's going isn't all of it.
+    private func pickKey(_ picked: [Int], of list: [Song], source: String?) -> String {
+        guard picked.count != 1 else { return Origin.key(of: list, source: source) }
+        return Origin.key(of: picked.filter(list.indices.contains).map { list[$0] }, source: nil)
     }
 
     public func pause() {
