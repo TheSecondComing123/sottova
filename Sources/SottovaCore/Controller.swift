@@ -504,7 +504,14 @@ public final class Controller {
         // firing deletes a one-off with this set, so one that was something else would go unplayed with the next alarm
         if alarms[i].weekdays.isEmpty, !alarms[i].whileHere { alarms[i].lastFired = nil }
         alarmsChanged()
-        undo?.registerUndo(withTarget: self) { $0.changeAlarm(id) { $0.setUserFields(from: old) } }
+        // a part picked by hand is yours to undo; one the row moved on to by playing isn't
+        let part = alarms[i].nextPart == old.nextPart ? nil : old.nextPart
+        undo?.registerUndo(withTarget: self) { controller in
+            controller.changeAlarm(id) {
+                $0.setUserFields(from: old)
+                if let part { $0.nextPart = part }
+            }
+        }
         did(action ?? "Change \(old.name)", "Changed \(old.name)", back: "Put \(old.name) back as it was")
     }
 

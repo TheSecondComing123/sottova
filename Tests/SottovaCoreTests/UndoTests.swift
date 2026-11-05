@@ -195,6 +195,26 @@ struct UndoTests {
         #expect(c.alarms[0].lastFired == fired)
     }
 
+    @Test func undoingAPickedNextPartBringsTheOldOneBackAndAnEditLeavesAnAdvancedOneAlone() {
+        let c = Controller(storage: nil)
+        var lauds = Alarm(source: "l", name: "Lauds", hour: 7, minute: 2, weekdays: [2])
+        (lauds.rotates, lauds.parts) = (true, 3)
+        c.addAlarm(lauds)
+        var undo = undoing(c) { c.changeAlarm(lauds.id) { $0.nextPart = 2 } }
+        undo.undo()
+        #expect(c.alarms[0].nextPart == 0)
+        undo.redo()
+        #expect(c.alarms[0].nextPart == 2)
+
+        undo = undoing(c) { c.changeAlarm(lauds.id) { $0.hour = 8 } }
+        c.undo = nil
+        c.changeAlarm(lauds.id) { $0.nextPart = 0 }
+        c.undo = undo
+        undo.undo()
+        #expect(c.alarms[0].hour == 7)
+        #expect(c.alarms[0].nextPart == 0)
+    }
+
     @Test func songsRemovedFromACollectionGoBackWhereTheyWere() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
