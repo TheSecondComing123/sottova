@@ -609,8 +609,8 @@ final class AlarmPreview {
         let songs = controller.playlists.first { $0.id == alarm.source }.map(controller.songs(of:)) ?? controller.catalog.albumsByID[alarm.source]?.songs ?? []
         guard let song = alarm.shuffled ? songs.randomElement() : songs.first,
               let player = try? AVAudioPlayer(contentsOf: URL(filePath: song.id)) else { return }
-        if controller.status == .playing {
-            controller.toggle()
+        if controller.status == .playing || controller.status == .resting {
+            controller.pause()
             paused = controller
         }
         let own = controller.albumSettings[alarm.source] ?? controller.playlists.first { $0.id == alarm.source }?.gaps
