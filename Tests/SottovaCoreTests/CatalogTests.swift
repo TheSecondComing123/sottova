@@ -233,4 +233,11 @@ struct GapEstimateTests {
     @Test func theOldMenuKeepsItsFive() {
         #expect(SongSort.menu.map(\.rawValue) == ["title", "composer", "album", "longest", "newest"])
     }
+
+    @Test func droppedFilesAndFoldersAreTheSongsInThem() {
+        let entry = { (path: String) in (path, Library.Entry(size: 0, modified: .now, meta: TrackMeta(title: path, artist: "a", album: "x", duration: 60))) }
+        let catalog = Catalog(entries: Dictionary(uniqueKeysWithValues: ["/m/a.mp3", "/m/Bach/1.mp3", "/m/Bach/2.mp3", "/m/Bachs/3.mp3"].map(entry)))
+        let dropped = catalog.songs(dropped: [URL(filePath: "/m/a.mp3"), URL(filePath: "/m/Bach/", directoryHint: .isDirectory), URL(filePath: "/m/none.mp3")])
+        #expect(dropped.map(\.id) == ["/m/a.mp3", "/m/Bach/1.mp3", "/m/Bach/2.mp3"])
+    }
 }

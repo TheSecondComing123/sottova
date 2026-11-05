@@ -568,7 +568,7 @@ struct YourCollection: View {
             return true
         }
         let paths = urls.map { $0.standardizedFileURL.path }
-        let folders = urls.filter(\.hasDirectoryPath).map { $0.standardizedFileURL.path(percentEncoded: false) }
+        let folders = urls.filter(\.hasDirectoryPath)
         withAnimation(Theme.quick) {
             let dragged = dragFrom.flatMap { playlist.paths.indices.contains($0) && paths == [playlist.paths[$0]] ? $0 : nil }
             dragFrom = nil
@@ -579,9 +579,8 @@ struct YourCollection: View {
                 // several picked rows dragged within the list: move them, don't copy
                 move(picked, to: index, in: playlist)
             } else {
-                let inFolders = controller.catalog.songs.filter { song in folders.contains { song.id.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") } }
                 router.selected = []
-                controller.add(paths.compactMap { controller.catalog.songsByID[$0] } + inFolders, to: pid, at: index)
+                controller.add(controller.catalog.songs(dropped: urls), to: pid, at: index)
             }
         }
         return true
@@ -1194,7 +1193,7 @@ private struct CollectionCard: View {
         .accessibilityAction(.default, open)
         .dropDestination(for: URL.self) { urls, _ in
             guard let playlist else { return false }
-            let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
+            let songs = controller.catalog.songs(dropped: urls)
             guard !songs.isEmpty else { return false }
             withAnimation(Theme.quick) { controller.add(songs, to: playlist.id) }
             return true

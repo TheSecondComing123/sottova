@@ -149,7 +149,7 @@ private struct CollectionRow: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
         .dropDestination(for: URL.self) { urls, _ in
             guard let playlist else { return false }
-            let songs = urls.compactMap { controller.catalog.songsByID[$0.standardizedFileURL.path] }
+            let songs = controller.catalog.songs(dropped: urls)
             guard !songs.isEmpty else { return false }
             withAnimation(Theme.quick) { controller.add(songs, to: playlist.id) }
             return true

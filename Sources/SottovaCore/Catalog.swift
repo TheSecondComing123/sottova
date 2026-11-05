@@ -114,6 +114,13 @@ public struct Catalog: Sendable {
         return needle.isEmpty ? sorted : sorted.filter { $0.matches(needle) }
     }
 
+    /// What a drop onto a collection adds: the songs dropped, then those under any folder dropped.
+    public func songs(dropped urls: [URL]) -> [Song] {
+        let folders = urls.filter(\.hasDirectoryPath).map { $0.standardizedFileURL.path(percentEncoded: false) }
+        let inFolders = songs.filter { song in folders.contains { song.id.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") } }
+        return urls.compactMap { songsByID[$0.standardizedFileURL.path] } + inFolders
+    }
+
     init(entries: [String: Library.Entry]) {
         songs = entries.compactMap { path, entry in entry.unplayable || entry.unreachable == true ? nil : Self.song(path: path, meta: entry.meta, added: entry.added) }
             .sorted(by: Self.libraryOrder)
