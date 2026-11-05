@@ -1,3 +1,9 @@
+// One component per role, and LookRulesTests keeps every page on them:
+// type and shape: `.role` or `Role.x.font`, `Radius`, and Theme's colors; buttons: ThemeButton, or ThemeButtonStyle
+// for one with its own label, role and shortcut; IconButton for ×, MoreMenu for •••; links: ThemeLink, `.inline` in
+// running text, `.action` on its own; fields: FieldLook, and `.fieldGround` under a search; ValueStepper, ThemePopup,
+// ThemeCheckbox; and in Theme.swift, `.hoverable` for a plate under the pointer, `.revealed` for a hover-only control.
+
 import AppKit
 import SwiftUI
 import SottovaCore
