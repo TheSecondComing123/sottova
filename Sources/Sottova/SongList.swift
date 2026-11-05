@@ -166,14 +166,18 @@ struct SongListRun: ViewModifier {
             }
             .dragContainer(for: URL.self, itemID: \.path, in: drag) { (ids: [String]) in ids.map { URL(filePath: Playlist.path(ofRow: $0)) } }
             .dragContainerSelection(order.filter(router.selected.contains), containerNamespace: drag)
-            .onChange(of: order, initial: true) {
-                router.run = SongRun(route: router.route, order: order, play: { [controller, order, source] keys in
-                    // a collection's missing files have rows, not places in what plays
-                    let rows = order.filter { controller.catalog.songsByID[Playlist.path(ofRow: $0)] != nil }
-                    controller.playPick(keys.compactMap(rows.firstIndex(of:)), of: rows.compactMap { controller.catalog.songsByID[Playlist.path(ofRow: $0)] },
-                                        source: source)
-                }, remove: remove, source: source)
-            }
+            .onChange(of: order, initial: true, register)
+            // a rename moves the collection's id, and nothing else
+            .onChange(of: source, register)
+    }
+
+    private func register() {
+        router.run = SongRun(route: router.route, order: order, play: { [controller, order, source] keys in
+            // a collection's missing files have rows, not places in what plays
+            let rows = order.filter { controller.catalog.songsByID[Playlist.path(ofRow: $0)] != nil }
+            controller.playPick(keys.compactMap(rows.firstIndex(of:)), of: rows.compactMap { controller.catalog.songsByID[Playlist.path(ofRow: $0)] },
+                                source: source)
+        }, remove: remove, source: source)
     }
 }
 
