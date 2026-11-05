@@ -25,14 +25,14 @@ enum MusicCollection: Identifiable {
 extension MenuEntry {
     /// A song's row; several picked get what can be done to all of them. `source` is the collection they're queued from.
     @MainActor static func song(_ song: Song, picked songs: [Song], source: String? = nil, play: @escaping () -> Void, remove: ((Set<String>) -> Void)?,
-                                part: (starts: Bool, flip: () -> Void)?, naming: @escaping () -> Void,
+                                part: (starts: Bool, flip: () -> Void)?,
                                 controller: Controller, router: Router, navigate: Navigate) -> [MenuEntry] {
         if songs.count > 1 {
             var entries: [MenuEntry] = [
                 .item("Play", action: router.playPick),
                 .item("Play \(songs.count) next") { controller.playNext(songs, source: source) },
                 .item("Add \(songs.count) to queue") { controller.playNext(songs, source: source, at: controller.upNext.count) },
-                .addToCollection(songs, name: "", controller: controller, naming: naming),
+                .addToCollection(songs, controller: controller, router: router),
             ]
             if let remove {
                 entries.append(.item("Remove \(songs.count) from this collection", shortcut: KeyboardShortcut(.delete),
@@ -44,7 +44,7 @@ extension MenuEntry {
             .item("Play", action: play),
             .item("Play next") { controller.playNext([song], source: source) },
             .item("Add to queue") { controller.playNext([song], source: source, at: controller.upNext.count) },
-            .addToCollection([song], name: "", controller: controller, naming: naming),
+            .addToCollection([song], controller: controller, router: router),
         ]
         entries.append(.item(controller.trims[song.id] == nil ? "Trim…" : "Change trim…") { router.trimming = song })
         if let remove {
@@ -82,7 +82,7 @@ extension MenuEntry {
         return [
             .item("Play") { controller.playCollection(album.songs) },
             .item("Play next") { controller.playNext(album.songs) },
-            .addToCollection(album.songs, name: album.title, controller: controller),
+            .addToCollection(album.songs, controller: controller, router: router),
         ] + goToArtist + [
             .divider,
             .item("Choose cover…") { router.coverFor = .album(album.id) },
@@ -92,24 +92,27 @@ extension MenuEntry {
         ]
     }
 
-    /// "Add to collection ▸": every one of yours, then a new one named after what's being added, or, with `naming`,
-    /// one you're asked to name.
-    @MainActor static func addToCollection(_ songs: [Song], name: String, controller: Controller, naming: (() -> Void)? = nil) -> MenuEntry {
-        .submenu("Add to collection", collections(songs, name: name, controller: controller, naming: naming))
+    /// "Add to collection ▸": every one of yours, then a new one.
+    @MainActor static func addToCollection(_ songs: [Song], controller: Controller, router: Router) -> MenuEntry {
+        .submenu("Add to collection", collections(songs, controller: controller, router: router))
     }
 
     /// The same list for Songs' Add to button.
-    @MainActor static func collections(_ songs: [Song], name: String, controller: Controller, naming: (() -> Void)? = nil) -> [MenuEntry] {
+    @MainActor static func collections(_ songs: [Song], controller: Controller, router: Router) -> [MenuEntry] {
         var entries = controller.playlists.map { playlist in MenuEntry.item(playlist.name) { controller.add(songs, to: playlist.id) } }
         if !entries.isEmpty {
             entries.append(.divider)
         }
-        if let naming {
-            entries.append(.item("New collection…", action: naming))
-        } else {
-            entries.append(.item("New collection") { controller.newPlaylist(named: name, songs: songs) })
-        }
+        entries.append(.item("New collection…") { newCollection(songs, controller: controller, router: router) })
         return entries
+    }
+
+    /// Every new collection of songs: named for what they share, and opened with the name ready to type over, as ⌘N
+    /// opens an empty one.
+    @MainActor static func newCollection(_ songs: [Song], controller: Controller, router: Router) {
+        guard let id = controller.newPlaylist(named: name(for: songs, controller: controller), songs: songs) else { return }
+        router.renaming = id
+        router.go(to: .playlist(id))
     }
 
     /// What a new collection of these is called until you say otherwise: the piece or folder they share.

@@ -320,9 +320,7 @@ struct SottovaCommands: Commands {
                 router.go(to: .playlist(id))
             },
             .item("New collection from selection", enabled: !songs.isEmpty, shortcut: KeyboardShortcut("n", modifiers: [.command, .shift])) {
-                guard let id = controller.newPlaylist(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
-                router.renaming = id
-                router.go(to: .playlist(id))
+                MenuEntry.newCollection(songs, controller: controller, router: router)
             },
             .divider,
         ]
@@ -354,11 +352,8 @@ struct SottovaCommands: Commands {
         guard router.presetEdit == nil, let first = songs.first else {
             return ["Play", "Play next", "Add to queue", "Add to collection", "Trim…", "Show in Finder"].map { .item($0, enabled: false) {} }
         }
-        return MenuEntry.song(first, picked: songs, source: router.currentRun?.source, play: router.playPick, remove: router.removePick.map { remove in { _ in remove() } }, part: nil, naming: {
-            guard let id = controller.newPlaylist(named: MenuEntry.name(for: songs, controller: controller), songs: songs) else { return }
-            router.renaming = id
-            router.go(to: .playlist(id))
-        }, controller: controller, router: router, navigate: navigate)
+        return MenuEntry.song(first, picked: songs, source: router.currentRun?.source, play: router.playPick, remove: router.removePick.map { remove in { _ in remove() } }, part: nil,
+                              controller: controller, router: router, navigate: navigate)
     }
 
     private var playingCollection: String {

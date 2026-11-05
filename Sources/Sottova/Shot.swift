@@ -166,11 +166,6 @@ struct ShotReady: ViewModifier {
                 try? Data(String(popover?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
                 return
             }
-            if defaults.bool(forKey: "shotNameCollection") {
-                let popover = NSApp.windows.first { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }
-                try? Data(String(popover?.windowNumber ?? 0).utf8).write(to: ShotEnv.root.appending(path: "ready"))
-                return
-            }
             if let kind = defaults.string(forKey: "shotContextMenu"), let window {
                 window.makeKeyAndOrderFront(nil)
                 let navigate = Navigate { router.open($0, in: controller) }
@@ -185,7 +180,7 @@ struct ShotReady: ViewModifier {
                 } else if kind == "song", let song = controller.catalog.songs.first(where: { $0.title == "Goldberg Variations: Aria" }) {
                     let titles = (defaults.string(forKey: "shotPicked") ?? song.title).components(separatedBy: "|")
                     let picked = controller.catalog.songs.filter { titles.contains($0.title) }
-                    entries = MenuEntry.song(song, picked: picked, play: router.playPick, remove: nil, part: nil, naming: {},
+                    entries = MenuEntry.song(song, picked: picked, play: router.playPick, remove: nil, part: nil,
                                              controller: controller, router: router, navigate: navigate)
                 }
                 let menu = NSMenu(entries)

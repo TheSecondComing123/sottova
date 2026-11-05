@@ -40,7 +40,6 @@ struct LibraryLine: View {
     @State private var hovering = false
     @State private var lifted = false
     @State private var menuOpen = false
-    @State private var naming = false
 
     private var id: String { key ?? song.id }
 
@@ -110,11 +109,10 @@ struct LibraryLine: View {
         .opacity(lifted || liftedPick.contains(id) ? 0.4 : 1)
         .onDragSessionUpdated { lifted = $0.phase.lifted }
         .sottovaMenu(open: { menuOpen = $0 }) {
-            MenuEntry.song(song, picked: picked, source: source, play: { router.playRow(id) }, remove: remove, part: part, naming: { naming = true },
+            MenuEntry.song(song, picked: picked, source: source, play: { router.playRow(id) }, remove: remove, part: part,
                            controller: controller, router: router, navigate: navigate)
                 + (more?() ?? [])
         }
-        .popover(isPresented: $naming, arrowEdge: .bottom) { NameCollection(songs: picked, open: $naming, name: MenuEntry.name(for: picked, controller: controller)) }
     }
 
     /// Plain words: a click on a row picks it, wherever it lands. Go to is in the right-click and the Song menu.
@@ -441,7 +439,6 @@ struct PickActions: View {
     var source: String?
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
-    @State private var naming = false
 
     private var songs: [Song] { picked.map { list[$0] } }
 
@@ -456,7 +453,7 @@ struct PickActions: View {
             ThemeLink(text: "Play next", color: Theme.muted) { controller.playNext(songs, source: source) }
                 .role(.body)
             Menu {
-                ForEach(Array(MenuEntry.collections(songs, name: "", controller: controller) { naming = true }.enumerated()), id: \.offset) { _, entry in
+                ForEach(Array(MenuEntry.collections(songs, controller: controller, router: router).enumerated()), id: \.offset) { _, entry in
                     if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
                 }
             } label: {
@@ -472,61 +469,11 @@ struct PickActions: View {
             .menuIndicator(.hidden)
             .buttonStyle(.plain)
             .fixedSize()
-            .popover(isPresented: $naming, arrowEdge: .bottom) { NameCollection(songs: songs, open: $naming, name: MenuEntry.name(for: songs, controller: controller)) }
-            #if SHOT
-            .onAppear { naming = UserDefaults.standard.bool(forKey: "shotNameCollection") }
-            #endif
             if songs.count == 1, let song = songs.first {
                 ThemeLink(text: "Trim…", color: Theme.muted) { router.trimming = song }
                     .role(.body)
             }
         }
-    }
-}
-
-/// Asks what a new collection of `songs` is called, makes it and opens it.
-struct NameCollection: View {
-    let songs: [Song]
-    @Binding var open: Bool
-    @Environment(Controller.self) private var controller
-    @Environment(\.navigate) private var navigate
-    @State private var name: String
-    @FocusState private var typing: Bool
-
-    /// Named before the field takes focus, so the name comes up selected and typing replaces it.
-    init(songs: [Song], open: Binding<Bool>, name: String) {
-        (self.songs, _open, _name) = (songs, open, State(initialValue: name))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(songs.count == 1 ? "New collection with this song" : "New collection with these \(songs.count) songs")
-                .role(.body)
-                .foregroundStyle(Theme.muted)
-            TextField("Name", text: $name, prompt: Text(""))
-                .role(.body)
-                .foregroundStyle(Theme.text)
-                .focused($typing)
-                .defaultFocus($typing, true)
-                .onSubmit(create)
-                .onExitCommand { open = false }
-                .modifier(FieldLook(focused: typing))
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                ThemeButton(title: "Cancel") { open = false }
-                ThemeButton(title: "Create", primary: true, action: create)
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(14)
-        .frame(width: 280)
-    }
-
-    private func create() {
-        let name = name.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return }
-        open = false
-        controller.newPlaylist(named: name, songs: songs).map { navigate(.playlist($0)) }
     }
 }
 

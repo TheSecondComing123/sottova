@@ -262,8 +262,8 @@ struct SilenceChoices: View {
 /// "Add to collection ▸" for a page's •••, as the right-click has it.
 private struct AddToCollection: View {
     let songs: [Song]
-    let name: String
     @Environment(Controller.self) private var controller
+    @Environment(Router.self) private var router
 
     var body: some View {
         Menu("Add to collection") {
@@ -271,7 +271,7 @@ private struct AddToCollection: View {
                 Button(playlist.name) { controller.add(songs, to: playlist.id) }
             }
             if !controller.playlists.isEmpty { Divider() }
-            Button("New collection") { controller.newPlaylist(named: name, songs: songs) }
+            Button("New collection…") { MenuEntry.newCollection(songs, controller: controller, router: router) }
         }
     }
 }
@@ -305,7 +305,7 @@ struct AlbumCollection: View {
                         Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
                         Divider()
                         Button("Play next") { controller.playNext(album.songs) }
-                        AddToCollection(songs: album.songs, name: album.title)
+                        AddToCollection(songs: album.songs)
                         Divider()
                         Button("Start at…") { router.alarm = .new(.album(id)) }
                         SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.setAlbumGaps($0, for: album) }
