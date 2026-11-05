@@ -85,13 +85,24 @@ struct NowScreenTests {
         #expect(c.nowScreen(silent: false).title == "A piece")
     }
 
-    @Test func pausedInSilenceSaysPaused() async throws {
+    @Test func pausedInSilenceSaysTheNextPieceIsHeld() async throws {
         let (c, _) = try await playing()
         while c.status != .resting { c.advance(0.5) }
         c.toggle()
         let screen = c.nowScreen()
-        #expect((screen.title, screen.sub) == ("Silence", "Paused"))
+        #expect(screen.title == "Holding")
+        #expect(screen.sub.hasSuffix("waits for Play"))
         #expect(screen.action == nil)
+    }
+
+    /// You've had your quiet: Play brings the next piece, not the rest of the countdown.
+    @Test func playInAHeldSilenceStartsTheNextPiece() async throws {
+        let (c, _) = try await playing()
+        while c.status != .resting { c.advance(0.5) }
+        c.toggle()
+        c.toggle()
+        #expect(c.machine.restRemaining == nil)
+        #expect(c.status == .playing)
     }
 
     @Test(arguments: [(Hold.away, "away"), (.call, "call"), (.busy, "busy"), (.media, "playing")])

@@ -1850,7 +1850,8 @@ public final class Controller {
             failures = 0
             command(.start)
         case .paused:
-            command(.resume)
+            // a held silence has had its quiet: Play means the next piece, not the rest of the countdown
+            if case .resting = machine.phase { command(.skip) } else { command(.resume) }
         case .playing, .resting:
             command(.pause)
             pausedByHand = .now
