@@ -272,6 +272,7 @@ struct SottovaCommands: Commands {
                 router.toggleQueue()
             }
             .keyboardShortcut("u", modifiers: [.command, .option])
+            .disabled(controller.tracks.isEmpty)
             Divider()
             // ⌘↑ and ⌘↓ move a text field's cursor, so they step aside while typing
             Button("Volume up") { controller.volume = min(controller.volume + 0.1, 1) }
