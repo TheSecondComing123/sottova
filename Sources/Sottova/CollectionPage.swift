@@ -182,28 +182,6 @@ private struct CollectionActions<Extras: View>: View {
     }
 }
 
-/// Three dots, quieter than the buttons beside it: the rest of what a collection does.
-struct CollectionMenu<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        Menu {
-            content
-        } label: {
-            Ph.dotsThree.icon(size: 14)
-                .foregroundStyle(Theme.muted)
-                .frame(width: 24, height: 24)
-                .contentShape(.rect)
-                .hoverable(radius: 4)
-        }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .accessibilityLabel("more")
-    }
-}
-
 /// Play, the same word and width whatever's going, as the title bar has the pause: sounding, it has nothing to do.
 struct PlayButton: View {
     let songs: [Song]
@@ -323,7 +301,7 @@ struct AlbumCollection: View {
                     .accessibilityAddTraits(.isHeader)
             } actions: {
                 CollectionActions(songs: album.songs) {
-                    CollectionMenu {
+                    MoreMenu {
                         Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
                         Divider()
                         Button("Play next") { controller.playNext(album.songs) }
@@ -665,7 +643,7 @@ struct YourCollection: View {
     }
 
     private func menu(_ playlist: Playlist, songs: [Song]) -> some View {
-        CollectionMenu {
+        MoreMenu {
             Button("Choose cover…") { router.coverFor = .playlist(pid) }
             if !songs.isEmpty {
                 SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
@@ -1011,7 +989,7 @@ private struct PartHeading: View {
             .frame(height: 22)
             .overlay(alignment: .trailing) {
                 let shown = hovering && !editing
-                CollectionMenu {
+                MoreMenu {
                     ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
                         if case .action(let action) = entry.kind { Button(entry.title, action: action) } else { Divider() }
                     }
@@ -1207,7 +1185,7 @@ private struct CollectionCard: View {
             HStack(alignment: .top, spacing: 4) {
                 TileCaption(title: collection.title, detail: hours ?? (songs.isEmpty ? "no songs yet" : nil))
                 Spacer(minLength: 0)
-                TileDots(title: collection.title, entries: entries)
+                MoreMenu(label: "more for \(collection.title)") { MenuEntries(entries: entries) }
                     .revealed(shown)
             }
             .contentShape(.rect)
@@ -1240,28 +1218,6 @@ private struct CollectionCard: View {
         case .album(let album): navigate(.album(album.id))
         case .yours(let playlist): navigate(.playlist(playlist.id))
         }
-    }
-}
-
-/// A tile's right-click, behind three dots that show on hover.
-private struct TileDots: View {
-    let title: String
-    let entries: [MenuEntry]
-
-    var body: some View {
-        Menu { MenuEntries(entries: entries) } label: {
-            Ph.dotsThree.icon(size: 14)
-                .foregroundStyle(Theme.muted)
-                .frame(width: 24, height: 24)
-                .contentShape(.rect)
-                .hoverable(radius: 4)
-        }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .help("more")
-        .accessibilityLabel("more for \(title)")
     }
 }
 

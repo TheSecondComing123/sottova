@@ -1037,7 +1037,7 @@ private struct DayRow: View {
                 .role(.body).frame(height: 24).fixedSize()
                 .accessibilityLabel("Edit \(alarm.name)")
                 .revealed(shown || picked)
-            RowDots(alarm: alarm, entries: entries)
+            MoreMenu(label: "more for \(alarm.name)") { MenuEntries(entries: entries) }
             IconButton(icon: .x, weight: .bold, help: "delete \(alarm.name)", size: 24) { controller.removeAlarm(alarm.id) }
                 .revealed(shown)
         }
@@ -1051,27 +1051,6 @@ private struct DayRow: View {
     }
 
     private var entries: [MenuEntry] { RowActions(alarm: alarm, controller: controller, router: router, navigate: navigate).entries }
-}
-
-private struct RowDots: View {
-    let alarm: Alarm
-    let entries: [MenuEntry]
-
-    var body: some View {
-        Menu { MenuEntries(entries: entries) } label: {
-            Ph.dotsThree.icon(size: 14)
-                .foregroundStyle(Theme.muted)
-                .frame(width: 24, height: 24)
-                .contentShape(.rect)
-                .hoverable(radius: 4)
-        }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .help("more")
-        .accessibilityLabel("more for \(alarm.name)")
-    }
 }
 
 /// A day that isn't today, on one line: the words it has room for, all of them behind the menu.
@@ -1099,7 +1078,7 @@ private struct OtherLine: View {
                     }
                 }
                 Spacer(minLength: 0)
-                RowDots(alarm: alarm, entries: entries)
+                MoreMenu(label: "more for \(alarm.name)") { MenuEntries(entries: entries) }
             }
             .frame(height: 24)
             .daysOffPopover(alarm)

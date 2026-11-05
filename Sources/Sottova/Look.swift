@@ -166,6 +166,30 @@ struct ThemeButton: View {
     }
 }
 
+/// ••• : the rest of what something does, behind a native menu, with IconButton's round plate.
+struct MoreMenu<Content: View>: View {
+    var label = "more"
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            Ph.dotsThree.icon(size: 14)
+                .foregroundStyle(Theme.muted)
+                .frame(width: 24, height: 24)
+                .contentShape(.rect)
+                .hoverable(radius: 12)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("more")
+        .accessibilityLabel(label)
+    }
+}
+
 /// `.lnk` in the mock, the accent on the one thing to do next; with `underlined`, `.u`: running text you can click.
 struct ThemeLink: View {
     let text: String
