@@ -340,7 +340,7 @@ struct SongList: View {
     }
 
     private func count(of shown: Int, in all: Int, picked: Int, filtered: Bool) -> String {
-        if picked > 0 { return "\(picked) picked" }
+        if picked > 0 { return "\(picked) selected" }
         if filtered { return shown == 0 ? "" : "\(shown) of \(all)" }
         return Format.count(all, "song")
     }

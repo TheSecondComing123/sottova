@@ -51,7 +51,7 @@ struct QueuePanel: View {
                     .dropDestination(for: URL.self) { urls, _ in queue(urls, at: 0) }
             } else {
                 HStack(spacing: 8) {
-                    Text("\(selected.count) picked")
+                    Text("\(selected.count) selected")
                         .role(.small)
                         .foregroundStyle(Theme.muted)
                         .monospacedDigit()
