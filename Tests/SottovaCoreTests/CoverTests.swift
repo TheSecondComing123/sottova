@@ -83,4 +83,22 @@ struct CoverTests {
         #expect(try Data(contentsOf: url) == first)
         #expect(c.playlistCovers[id] != nil)
     }
+
+    @Test func aCoverUndoThatFailsSaysSoAndLeavesNoRedo() throws {
+        let c = Controller(storage: temp(), playlistFolder: temp())
+        let id = try #require(c.newPlaylist(named: "Night"))
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        c.undo = undo
+        undo.beginUndoGrouping()
+        c.setCover(wideImage(), credit: nil, forPlaylist: id)
+        undo.endUndoGrouping()
+        let new = try Data(contentsOf: Controller.coverURL(forPlaylist: id))
+        c.trash = { _ in throw CocoaError(.fileWriteNoPermission) }
+        undo.undo()
+        #expect(try Data(contentsOf: Controller.coverURL(forPlaylist: id)) == new)
+        #expect(c.notice?.undoable == false)
+        #expect(c.notice?.text.hasPrefix("couldn't put Night's cover back") == true)
+        #expect(!undo.canRedo)
+    }
 }

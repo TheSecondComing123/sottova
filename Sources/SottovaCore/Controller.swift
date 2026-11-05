@@ -1184,7 +1184,13 @@ public final class Controller {
                 try FileManager.default.moveItem(at: fresh, to: url)
             }
         } catch {
-            problem = "couldn't save the cover: \(error.localizedDescription)"
+            if let undo, undo.isUndoing || undo.isRedoing {
+                notice = Notice("couldn't put \(title)'s cover back: \(error.localizedDescription)", undoable: false)
+                // its redo would only say the cover changed
+                if let noticeUndo { undo.removeAllActions(withTarget: noticeUndo) }
+            } else {
+                problem = "couldn't save the cover: \(error.localizedDescription)"
+            }
             return
         }
         reread(self)
