@@ -125,7 +125,7 @@ struct CollectionFrame<Name: View, Actions: View, Songs: View>: View {
                 VStack(alignment: .leading, spacing: 6) {
                     let setting = gaps?.gaps(over: controller.yourSettings) ?? controller.yourSettings
                     let range = setting.crossfade ? "\(TypedDuration.format(setting.crossfadeSec)) overlap" : Format.range(setting).replacingOccurrences(of: "–", with: " to ")
-                    SilenceChoices(title: title, chosen: gaps, choose: chooseGaps, label: "Between songs: \(setting.name), \(range)", inline: true)
+                    SilenceChoices(title: title, chosen: gaps, choose: chooseGaps, label: "Between songs: \(setting.name), \(range)")
                         .fixedSize()
                         .foregroundStyle(Theme.muted)
                         .accessibilityLabel("Between songs")
@@ -212,55 +212,29 @@ struct ShuffleButton: View {
     }
 }
 
-/// The silence a collection plays with, in its menu: yours, a preset, or typed for it alone.
+/// The silence a collection plays with, under its name: yours, a preset, or typed for it alone.
 struct SilenceChoices: View {
     let title: String
     let chosen: SottovaCore.Settings?
     let choose: (SottovaCore.Settings?) -> Void
-    var label = "Silence between songs"
-    var inline = false
+    let label: String
     @Environment(Controller.self) private var controller
     @Environment(Router.self) private var router
 
     var body: some View {
-        if inline {
-            Menu {
-                entries
-            } label: {
-                HStack(spacing: 4) {
-                    Text(label)
-                    Ph.caretDown.icon(.bold, size: 8)
-                }
-                .role(.body)
-                .foregroundStyle(Theme.muted)
+        Menu {
+            MenuEntries(entries: MenuEntry.silence(chosen, for: (title, choose), controller: controller, router: router))
+        } label: {
+            HStack(spacing: 4) {
+                Text(label)
+                Ph.caretDown.icon(.bold, size: 8)
             }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-        } else {
-            Menu(label) { entries }
+            .role(.body)
+            .foregroundStyle(Theme.muted)
         }
-    }
-
-    private var entries: some View {
-        MenuEntries(entries: MenuEntry.silence(chosen, for: (title, choose), controller: controller, router: router))
-    }
-}
-
-/// "Add to collection ▸" for a page's •••, as the right-click has it.
-private struct AddToCollection: View {
-    let songs: [Song]
-    @Environment(Controller.self) private var controller
-    @Environment(Router.self) private var router
-
-    var body: some View {
-        Menu("Add to collection") {
-            ForEach(controller.playlists) { playlist in
-                Button(playlist.name) { controller.add(songs, to: playlist.id) }
-            }
-            if !controller.playlists.isEmpty { Divider() }
-            Button("New collection…") { MenuEntry.newCollection(songs, controller: controller, router: router) }
-        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
     }
 }
 
@@ -289,21 +263,7 @@ struct AlbumCollection: View {
                     .accessibilityAddTraits(.isHeader)
             } actions: {
                 CollectionActions(songs: album.songs) {
-                    MoreMenu {
-                        Button("Make it yours") { controller.makeYours(album).map { navigate(.playlist($0)) } }
-                        Divider()
-                        Button("Play next") { controller.playNext(album.songs) }
-                        AddToCollection(songs: album.songs)
-                        Divider()
-                        Button("Start at…") { router.alarm = .new(.album(id)) }
-                        SilenceChoices(title: album.title, chosen: controller.albumSettings[id]) { controller.setAlbumGaps($0, for: album) }
-                        Divider()
-                        Button("Choose cover…") { router.coverFor = .album(id) }
-                        if album.artist != "Various Artists" {
-                            Divider()
-                            Button("Go to \(album.artist)") { navigate(.artist(album.artist)) }
-                        }
-                    }
+                    MoreMenu { MenuEntries(entries: MenuEntry.album(album, controller: controller, router: router, navigate: navigate)) }
                 }
             } songs: { narrow in
                 let columns = CollectionColumns(songs: album.songs, narrow: narrow)
@@ -363,7 +323,7 @@ struct YourCollection: View {
                     CollectionActions(songs: songs, source: pid) {
                         HStack(spacing: 8) {
                             ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
-                            menu(playlist, songs: songs)
+                            menu(playlist)
                         }
                     }
                 } else {
@@ -378,7 +338,7 @@ struct YourCollection: View {
                             } else {
                                 ThemeButton(title: "Add songs", icon: .plus, iconWeight: .bold) { addRequests += 1 }
                             }
-                            menu(playlist, songs: songs)
+                            menu(playlist)
                         }
                     }
                 }
@@ -629,24 +589,8 @@ struct YourCollection: View {
         }
     }
 
-    private func menu(_ playlist: Playlist, songs: [Song]) -> some View {
-        MoreMenu {
-            Button("Choose cover…") { router.coverFor = .playlist(pid) }
-            if !songs.isEmpty {
-                SilenceChoices(title: playlist.name, chosen: playlist.gaps) { controller.setGaps($0, for: pid) }
-                Button("Start at…") { router.alarm = .new(.playlist(pid)) }
-            }
-            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: pid)]) }
-            Divider()
-            Button("Move to Trash") {
-                if controller.alarmsLost(trashing: playlist).isEmpty {
-                    router.leave(.playlist(pid))
-                    controller.trashPlaylist(pid)
-                } else {
-                    router.trashing = pid
-                }
-            }
-        }
+    private func menu(_ playlist: Playlist) -> some View {
+        MoreMenu { MenuEntries(entries: MenuEntry.yours(playlist, controller: controller, router: router, navigate: navigate, renaming: renaming)) }
     }
 
     private func newPartFromPick(_ playlist: Playlist) {
