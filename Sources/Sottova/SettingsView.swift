@@ -53,7 +53,7 @@ struct SettingsView: View {
             .scrollIndicatorsFlash(onAppear: true)
             .overlayScrollers()
         }
-        .overlay(alignment: .bottom) { Toast(main: false).environment(controller).padding(.bottom, 16).padding(.horizontal, 16) }
+        .overlay(alignment: .bottom) { Toast().environment(controller).padding(.bottom, 16).padding(.horizontal, 16) }
         .frame(width: 620)
         // with the title bar this stretches up under; every row one line, more folders scroll
         .frame(minHeight: 460, idealHeight: 460, maxHeight: .infinity)

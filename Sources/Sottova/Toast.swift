@@ -3,8 +3,6 @@ import SottovaCore
 
 /// What was just done, at the foot of the page, with Undo. A newer one takes its place.
 struct Toast: View {
-    /// The main window's also shows while Sottova is in the background; Settings' only while it's in front.
-    var main = true
     @Environment(Controller.self) private var controller
     @Environment(\.controlActiveState) private var activeState
     @Environment(\.undoManager) private var undoManager
@@ -15,8 +13,8 @@ struct Toast: View {
 
     var body: some View {
         ZStack {
-            // in one window at a time, so one timer takes it down
-            if let notice = controller.notice, activeState == .key || main && activeState == .inactive {
+            // only in the window in front, so one timer takes it down and hover there holds it
+            if let notice = controller.notice, activeState == .key {
                 bar(notice)
                     // restarts on leaving, so it never goes while you're reaching for Undo
                     .task(id: hovering) {
@@ -34,6 +32,8 @@ struct Toast: View {
         .animation(Theme.curve(0.2), value: controller.notice?.id)
         // the old toast's hover would hold the new one up for good
         .onChange(of: controller.notice?.id) { hovering = false }
+        // and so would one left when the window went behind
+        .onChange(of: activeState) { hovering = false }
         // so one doesn't wait to show when the window opens again
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
             if (note.object as? NSWindow)?.frameAutosaveName == "main" { controller.notice = nil }
