@@ -102,14 +102,14 @@ struct CoverPicker: View {
             HStack(spacing: 12) {
                 if let failure { Text(failure).role(.small).foregroundStyle(Theme.text) }
                 Spacer()
-                Button("Cancel") {
+                Button("Cancel", role: .cancel) {
                     saveTask?.cancel()
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
-                .buttonStyle(SecondaryStyle())
+                .buttonStyle(ThemeButtonStyle())
                 Button(saving ? "Saving…" : "Use cover", action: save)
-                    .buttonStyle(PrimaryStyle())
+                    .buttonStyle(ThemeButtonStyle(primary: true))
                     // while typing a search, return searches
                     .keyboardShortcut(typing ? nil : .defaultAction)
                     .disabled((picked == nil && file == nil) || saving)
@@ -177,7 +177,7 @@ struct CoverPicker: View {
                 .onChange(of: typing) { _, focused in router.typing = focused }
                 .accessibilityLabel("Search paintings")
             Button("Search", action: search)
-                .buttonStyle(SecondaryStyle())
+                .buttonStyle(ThemeButtonStyle())
                 .disabled(searching || query.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.horizontal, 12)

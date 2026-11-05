@@ -75,15 +75,17 @@ struct SilenceSheet: View {
             row("Overlap") { overlap }
             HStack(spacing: 8) {
                 if let name = edit.replacing {
-                    ThemeButton(title: "Delete") {
+                    Button("Delete", role: .destructive) {
                         controller.deletePreset(name)
                         router.presetEdit = nil
                     }
+                    .buttonStyle(ThemeButtonStyle())
                 }
                 Spacer(minLength: 0)
-                ThemeButton(title: "Cancel") { router.presetEdit = nil }
+                Button("Cancel", role: .cancel) { router.presetEdit = nil }
+                    .buttonStyle(ThemeButtonStyle())
                     .keyboardShortcut(.cancelAction)
-                ThemeButton(title: "Save", primary: true) {
+                Button("Save") {
                     guard let saved else { return }
                     if let collection = edit.collection {
                         collection.apply(saved)
@@ -92,6 +94,7 @@ struct SilenceSheet: View {
                     }
                     router.presetEdit = nil
                 }
+                .buttonStyle(ThemeButtonStyle(primary: true))
                 .keyboardShortcut(.defaultAction)
                 .disabled(saved == nil)
             }

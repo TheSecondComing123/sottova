@@ -140,7 +140,6 @@ struct ThemeButton: View {
     var icon: Ph?
     var iconWeight = Ph.IconWeight.fill
     let action: () -> Void
-    @State private var hovering = false
     /// `.large` beside a large title, as on Now.
     @Environment(\.controlSize) private var size
 
@@ -149,8 +148,35 @@ struct ThemeButton: View {
         Button(action: action) {
             HStack(spacing: large ? 7 : 6) {
                 if let icon { icon.icon(iconWeight, size: large ? 13 : 11) }
-                Text(title).role(large ? .item : .body)
+                Text(title)
             }
+        }
+        .buttonStyle(ThemeButtonStyle(primary: primary, on: on))
+    }
+}
+
+/// ThemeButton's look, for a button with its own label, role and shortcut, as a sheet's are.
+struct ThemeButtonStyle: ButtonStyle {
+    var primary = false
+    var on = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        Drawn(label: configuration.label, primary: primary, on: on)
+            .modifier(Press(pressed: configuration.isPressed, scale: 0.98))
+    }
+
+    /// A style can't hold the hover; a view can.
+    private struct Drawn<Label: View>: View {
+        let label: Label
+        let primary: Bool
+        let on: Bool
+        @State private var hovering = false
+        @Environment(\.controlSize) private var size
+
+        var body: some View {
+            let large = size == .large
+            label
+                .role(large ? .item : .body)
                 .foregroundStyle(primary ? Theme.onPrimary : on ? Theme.primary : Theme.text)
                 .padding(.horizontal, large ? 14 : 11)
                 .frame(height: large ? 30 : 24)
@@ -160,9 +186,8 @@ struct ThemeButton: View {
                     if !primary { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(on ? Theme.primary : Theme.stroke, lineWidth: on ? 1 : 0.5) }
                 }
                 .animation(Theme.reveal(hovering), value: hovering)
+                .onHover { hovering = $0 }
         }
-        .buttonStyle(PressStyle(scale: 0.98))
-        .onHover { hovering = $0 }
     }
 }
 
@@ -297,44 +322,6 @@ struct CheckBox: View {
             }
         }
         .frame(width: 14, height: 14)
-    }
-}
-
-/// `.btn.def` as a style, for buttons with their own label and shortcut.
-struct PrimaryStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var enabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .role(.body)
-            .foregroundStyle(enabled ? Theme.onPrimary : Theme.disabled)
-            .padding(.horizontal, 11)
-            .frame(height: 24)
-            .background(enabled ? AnyShapeStyle(Theme.primary) : AnyShapeStyle(Theme.selection), in: .rect(cornerRadius: Radius.small))
-            .contentShape(.rect)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
-            .opacity(reduceMotion && configuration.isPressed ? 0.75 : 1)
-            .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
-    }
-}
-
-/// `.btn` as a style.
-struct SecondaryStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .role(.body)
-            .foregroundStyle(Theme.text)
-            .padding(.horizontal, 11)
-            .frame(height: 24)
-            .background(Theme.selection, in: .rect(cornerRadius: Radius.small))
-            .overlay { RoundedRectangle(cornerRadius: Radius.small).strokeBorder(Theme.stroke, lineWidth: 0.5) }
-            .contentShape(.rect)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
-            .opacity(reduceMotion && configuration.isPressed ? 0.75 : 1)
-            .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
     }
 }
 

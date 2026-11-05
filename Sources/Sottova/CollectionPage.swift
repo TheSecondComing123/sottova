@@ -811,7 +811,7 @@ private struct AddHit: View {
                         .multilineTextAlignment(.center)
                 } else {
                     Button("Add", action: add)
-                        .buttonStyle(SecondaryStyle())
+                        .buttonStyle(ThemeButtonStyle())
                         .accessibilityLabel("Add \(song.title)")
                 }
             }

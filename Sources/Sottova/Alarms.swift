@@ -209,20 +209,20 @@ struct AlarmSheet: View {
                         controller.removeAlarm(old.id)
                         dismiss()
                     }
-                    .buttonStyle(SecondaryStyle())
+                    .buttonStyle(ThemeButtonStyle())
                     .help("⌘Z brings it back")
                 }
                 if let alarm {
                     Button(preview.playing == alarm.id ? "Stop" : "Hear it") { preview.toggle(alarm, controller: controller) }
-                        .buttonStyle(SecondaryStyle())
+                        .buttonStyle(ThemeButtonStyle())
                         .help(alarm.whileHere ? "a few seconds at its volume" : "a few seconds at the volume it rises to")
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(SecondaryStyle())
+                    .buttonStyle(ThemeButtonStyle())
                 Button(editing ? "Save" : "Schedule", action: save)
-                .buttonStyle(PrimaryStyle())
+                .buttonStyle(ThemeButtonStyle(primary: true))
                 .keyboardShortcut(.defaultAction)
                 .disabled(alarm == nil)
             }

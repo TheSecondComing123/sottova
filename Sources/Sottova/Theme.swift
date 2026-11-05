@@ -185,15 +185,25 @@ extension View {
 /// Presses down a little, like a real button. Wide targets get a smaller scale so they don't visibly shrink.
 struct PressStyle: ButtonStyle {
     var scale: CGFloat = 0.96
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.modifier(Press(pressed: configuration.isPressed, scale: scale))
+    }
+}
+
+/// PressStyle's press, for a style that draws its own button.
+struct Press: ViewModifier {
+    let pressed: Bool
+    let scale: CGFloat
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .opacity(enabled ? (reduceMotion && configuration.isPressed ? 0.75 : 1) : 0.4)
+    func body(content: Content) -> some View {
+        content
+            .opacity(enabled ? (reduceMotion && pressed ? 0.75 : 1) : 0.4)
             .contentShape(.rect)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? scale : 1)
-            .animation(Theme.press(configuration.isPressed), value: configuration.isPressed)
+            .scaleEffect(pressed && !reduceMotion ? scale : 1)
+            .animation(Theme.press(pressed), value: pressed)
     }
 }
 
