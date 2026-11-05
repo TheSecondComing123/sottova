@@ -1094,7 +1094,12 @@ public final class Controller {
 
     /// Takes effect the next time the song starts; nil plays the whole file again.
     public func setTrim(_ trim: Trim?, for path: String) {
+        let before = trims[path]
+        guard trim != before else { return }
         trims[path] = trim
+        undo?.registerUndo(withTarget: self) { $0.setTrim(before, for: path) }
+        let name = called([path])
+        did("Trim \(name)", trim == nil ? "\(name) plays whole again" : "Trimmed \(name)", back: "Put \(name) back as it was")
         guard trimsWritable, let url = storage?.appending(path: "trims.json") else { return }
         do {
             try JSONEncoder().encode(trims).write(to: url, options: .atomic)
@@ -1136,38 +1141,55 @@ public final class Controller {
     public func setCover(_ data: Data, credit: String?, forAlbum id: String) {
         guard let album = catalog.albumsByID[id], let first = album.songs.first else { return }
         let url = URL(filePath: first.id).deletingLastPathComponent().appending(path: "cover.jpg")
-        guard replaceCover(at: url, with: data, credit: credit) else { return }
-        for song in album.songs {
-            library.entries[song.id]?.meta = nil
+        let songs = album.songs.map(\.id)
+        replaceCover(at: url, with: data, credit: credit, of: album.title) { controller in
+            for song in songs {
+                controller.library.entries[song]?.meta = nil
+            }
+            controller.analyzePending()
         }
-        analyzePending()
     }
 
     /// Writes the picture beside the playlist's file, as "<name>.jpg".
     public func setCover(_ data: Data, credit: String?, forPlaylist id: String) {
-        guard replaceCover(at: Self.coverURL(forPlaylist: id), with: data, credit: credit) else { return }
-        loadPlaylistCovers()
+        guard let name = playlists.first(where: { $0.id == id })?.name else { return }
+        replaceCover(at: Self.coverURL(forPlaylist: id), with: data, credit: credit, of: name) { $0.loadPlaylistCovers() }
     }
 
     public static func coverURL(forPlaylist id: String) -> URL {
         URL(filePath: id).deletingPathExtension().appendingPathExtension("jpg")
     }
 
-    private func replaceCover(at url: URL, with data: Data, credit: String?) -> Bool {
+    private func replaceCover(at url: URL, with data: Data, credit: String?, of title: String, reread: @escaping (Controller) -> Void) {
+        do {
+            putCover(try CoverFile.jpeg(data, credit: credit), at: url, of: title, reread: reread)
+        } catch {
+            problem = "couldn't save the cover: \(error.localizedDescription)"
+        }
+    }
+
+    /// Puts these bytes where the cover goes, or takes it away. The one there goes to the Trash, and its bytes stay here for undo.
+    private func putCover(_ bytes: Data?, at url: URL, of title: String, reread: @escaping (Controller) -> Void) {
         // written beside it first, so a picture that can't be written leaves the old one where it is
         let fresh = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).new")
         defer { try? FileManager.default.removeItem(at: fresh) }
+        let old: Data?
         do {
-            try CoverFile.write(data, to: fresh, credit: credit)
-            if FileManager.default.fileExists(atPath: url.path) {
+            try bytes?.write(to: fresh)
+            old = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
+            if old != nil {
                 try trash(url)
             }
-            try FileManager.default.moveItem(at: fresh, to: url)
-            return true
+            if bytes != nil {
+                try FileManager.default.moveItem(at: fresh, to: url)
+            }
         } catch {
             problem = "couldn't save the cover: \(error.localizedDescription)"
-            return false
+            return
         }
+        reread(self)
+        undo?.registerUndo(withTarget: self) { $0.putCover(old, at: url, of: title, reread: reread) }
+        did("Change cover", "Changed the cover of \(title)", back: "Put \(title)'s cover back as it was")
     }
 
     private func loadPlaylistCovers() {

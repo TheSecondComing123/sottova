@@ -108,6 +108,10 @@ public enum PaintingSearch {
 /// cover.jpg: a centered square, at most 1200 px, with the painting's credit in its IPTC so it travels with the file.
 public enum CoverFile {
     public static func write(_ data: Data, to url: URL, credit: String?) throws {
+        try jpeg(data, credit: credit).write(to: url, options: .atomic)
+    }
+
+    public static func jpeg(_ data: Data, credit: String?) throws -> Data {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let full = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
         else { throw CocoaError(.fileReadCorruptFile) }
@@ -124,7 +128,7 @@ public enum CoverFile {
         }
         CGImageDestinationAddImage(destination, square, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw CocoaError(.fileWriteUnknown) }
-        try (jpeg as Data).write(to: url, options: .atomic)
+        return jpeg as Data
     }
 
     public static func credit(at url: URL) -> String? {

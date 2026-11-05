@@ -481,6 +481,38 @@ struct UndoTests {
         #expect(c.albumSettings[album.id] == minecraft)
     }
 
+    @Test func aSavedOrClearedTrimUndoesAndStaysSaved() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sottova-undo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        func saved() throws -> [String: Trim] {
+            try JSONDecoder().decode([String: Trim].self, from: Data(contentsOf: dir.appending(path: "trims.json")))
+        }
+        let c = Controller(storage: dir)
+        let path = "/m/Weep you no more.flac"
+        var undo = undoing(c) { c.setTrim(Trim(start: 3), for: path) }
+        #expect(undo.undoActionName == "Trim Weep you no more")
+        #expect(c.notice?.text == "Trimmed Weep you no more")
+        undo.undo()
+        #expect(c.trims[path] == nil)
+        #expect(c.notice?.text == "Put Weep you no more back as it was")
+        #expect(try saved().isEmpty)
+        undo.redo()
+        #expect(c.trims[path] == Trim(start: 3))
+
+        undo = undoing(c) { c.setTrim(nil, for: path) }
+        #expect(c.notice?.text == "Weep you no more plays whole again")
+        undo.undo()
+        #expect(c.trims[path] == Trim(start: 3))
+        #expect(try saved()[path] == Trim(start: 3))
+        undo.redo()
+        #expect(c.trims[path] == nil)
+
+        // saving what's already there isn't a change
+        let shown = c.notice?.id
+        undo = undoing(c) { c.setTrim(nil, for: path) }
+        #expect(c.notice?.id == shown)
+    }
+
     @Test func aQueueEditDoesntUndoOverWhatChangedSince() {
         let c = Controller(storage: nil)
         c.playNext(["/1", "/2", "/3"].map(song))
