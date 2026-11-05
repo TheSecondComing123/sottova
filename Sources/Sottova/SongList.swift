@@ -565,12 +565,9 @@ private struct PersonTile: View {
         let count = person.songs == 1 ? "1 song" : "\(person.songs) songs"
         Button(action: open) {
             HStack(spacing: 12) {
-                if let artwork = person.artwork {
-                    Artwork(key: artwork, size: 40, radius: 3, outlined: true)
-                        .accessibilityLabel("album artwork from \(person.name)'s songs")
-                } else {
-                    Color.clear.frame(width: 40, height: 40)
-                }
+                Artwork(key: person.artwork, size: 40, radius: 3, outlined: true)
+                    .accessibilityLabel("album artwork from \(person.name)'s songs")
+                    .accessibilityHidden(person.artwork == nil)
                 Text(person.name)
                     .font(Role.item.font)
                     .foregroundStyle(Theme.text)
